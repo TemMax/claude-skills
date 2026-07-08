@@ -26,12 +26,41 @@ The skills always reply to the user in the language the user writes in.
 /plugin install agent-orchestration@temmax-skills
 ```
 
-Skills are then invoked automatically when relevant, or explicitly:
+## Usage
+
+There are two ways to invoke the skills.
+
+**Automatic (primary).** The skills trigger on their own: each skill's
+description is always in Claude's context, and a matching request loads the
+skill automatically — just ask in plain text:
 
 ```
-/agent-orchestration:orchestrating-multi-model
-/agent-orchestration:orchestrating-sonnet-only
+Decompose this into agents and run in parallel: <task>
+Orchestrate this task across subagents: <task>
+Run this in sonnet-only mode: <task>
 ```
+
+**Explicit slash command.** Guarantees the skill loads, and lets you force a
+specific configuration (e.g. the sonnet-only experiment on a task where Claude
+would pick multi-model). Everything after the skill name is passed as the task
+description:
+
+```
+/agent-orchestration:orchestrating-multi-model Add multi-currency support to the pricing module
+/agent-orchestration:orchestrating-sonnet-only Refactor the API client layer
+```
+
+Type `/orch` and let autocomplete fill in the namespaced name.
+
+**What to expect.** The orchestrator does not jump straight to code. It runs
+research → decisions → plan, then shows you a table (task | model | effort |
+rationale) and waits for your approval before launching the executor waves.
+After each wave it reviews the results by running tests and reading diffs —
+executor self-reports are never trusted. The model dossiers in `references/`
+load on demand when a routing call needs justification.
+
+To verify the plugin is installed, run `/plugin` and look for
+`agent-orchestration` with both skills listed.
 
 ## Local development
 
