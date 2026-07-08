@@ -1,0 +1,13 @@
+{
+  "name": "temmax-skills",
+  "owner": {
+    "name": "TemMax"
+  },
+  "plugins": [
+    {
+      "name": "agent-orchestration",
+      "source": "./",
+      "description": "Multi-agent orchestration skills: decompose coding work into parallel executor agents, route tasks to models, write closed task prompts, review results."
+    }
+  ]
+}
