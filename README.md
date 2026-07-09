@@ -1,17 +1,29 @@
 # claude-skills
 
 A Claude Code plugin with multi-agent orchestration skills. The orchestrator model
-(Fable 5) researches, plans, writes closed task prompts, and reviews; executor
-subagents (Haiku 4.5 / Sonnet 5 / Opus 4.8) implement. Every rule in these skills
-is derived from the models' official Anthropic system cards and battle-tested with
-RED/GREEN agent runs (baseline failures reproduced, then verified fixed).
+researches, plans, writes closed task prompts, and reviews; executor subagents
+(Haiku 4.5 / Sonnet 5 / Opus 4.8) implement. Two orchestrator variants are
+covered: Fable 5 and Opus 4.8. Every rule in these skills is derived from the
+models' official Anthropic system cards and battle-tested with RED/GREEN agent
+runs (baseline failures reproduced, then verified fixed).
 
 ## Skills
 
-| Skill | When to use |
-|---|---|
-| `orchestrating-multi-model` | Default orchestration: executors are Haiku 4.5, Sonnet 5, and Opus 4.8. Model routing, effort selection, task-prompt template, review checklist. |
-| `orchestrating-sonnet-only` | The sonnet-only experiment: no Opus executors. Tests the hypothesis that task-spec quality substitutes for model horsepower. |
+| Skill | Orchestrator | When to use |
+|---|---|---|
+| `orchestrating-multi-model` | Fable 5 | Default orchestration: executors are Haiku 4.5, Sonnet 5, and Opus 4.8. Model routing, effort selection, task-prompt template, review checklist. |
+| `orchestrating-sonnet-only` | Fable 5 | The sonnet-only experiment: no Opus executors. Tests the hypothesis that task-spec quality substitutes for model horsepower. |
+| `orchestrating-multi-model-opus` | Opus 4.8 | Same multi-model setup when your session runs on Opus 4.8 instead of Fable 5. Adds Opus-specific orchestrator mitigations (monitoring claims, caveat propagation, long-horizon goal-keeping). |
+| `orchestrating-sonnet-only-opus` | Opus 4.8 | The sonnet-only experiment with an Opus 4.8 orchestrator — the orchestrator itself is the configuration's honest verifier. |
+
+**Recommendation for the `-opus` skills: run the Opus 4.8 orchestrator session at
+`xhigh` reasoning effort; `high` is the floor when latency-bound — never medium or
+below for orchestration.** Grounding from the Opus 4.8 system card: SWE-bench Pro
+peaks at xhigh (69.8, p. 196), deep-research agentic scores rise monotonically
+through max (DRACO 80.4, p. 208), Anthropic's own multi-agent harnesses ran the
+orchestrator at max effort (p. 214), and higher effort roughly halves
+prompt-injection susceptibility (p. 80). Low/medium effort on Opus 4.8 is
+executor territory (its minimum effort already matches Opus 4.7's maximum).
 
 Each skill ships with `references/model-dossiers.md` — per-model dossiers with
 benchmark numbers, documented failure modes, and page references to the system
@@ -38,6 +50,7 @@ skill automatically — just ask in plain text:
 Decompose this into agents and run in parallel: <task>
 Orchestrate this task across subagents: <task>
 Run this in sonnet-only mode: <task>
+Orchestrate this on Opus as the orchestrator: <task>
 ```
 
 **Explicit slash command.** Guarantees the skill loads, and lets you force a
@@ -48,6 +61,8 @@ description:
 ```
 /agent-orchestration:orchestrating-multi-model Add multi-currency support to the pricing module
 /agent-orchestration:orchestrating-sonnet-only Refactor the API client layer
+/agent-orchestration:orchestrating-multi-model-opus Add multi-currency support to the pricing module
+/agent-orchestration:orchestrating-sonnet-only-opus Refactor the API client layer
 ```
 
 Type `/orch` and let autocomplete fill in the namespaced name.
@@ -79,6 +94,12 @@ skills/
     SKILL.md
     references/model-dossiers.md
   orchestrating-sonnet-only/
+    SKILL.md
+    references/model-dossiers.md
+  orchestrating-multi-model-opus/
+    SKILL.md
+    references/model-dossiers.md
+  orchestrating-sonnet-only-opus/
     SKILL.md
     references/model-dossiers.md
 ```

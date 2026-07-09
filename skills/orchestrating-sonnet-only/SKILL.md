@@ -1,9 +1,9 @@
 ---
 name: orchestrating-sonnet-only
-description: 'Use when running the sonnet-only orchestration experiment — orchestrating parallel development work through Workflow subagents restricted to Sonnet 5 and Haiku 4.5 (no Opus executors), decomposing coding tasks into agent waves, writing closed task prompts, picking Sonnet effort, or reviewing executor results. Triggers: "sonnet-only", "эксперимент без opus", "разбей на sonnet-агентов", "experiment without opus", "decompose into sonnet agents". Do NOT use when Opus 4.8 is available as an executor (use orchestrating-multi-model instead).'
+description: 'Use when running the sonnet-only orchestration experiment with the orchestrator itself on Fable 5 — orchestrating parallel development work through Workflow subagents restricted to Sonnet 5 and Haiku 4.5 (no Opus executors), decomposing coding tasks into agent waves, writing closed task prompts, picking Sonnet effort, or reviewing executor results. Triggers: "sonnet-only", "эксперимент без opus", "разбей на sonnet-агентов", "experiment without opus", "decompose into sonnet agents". Do NOT use when the orchestrator runs on Opus 4.8 (use orchestrating-sonnet-only-opus) or when Opus 4.8 is available as an executor (use orchestrating-multi-model instead).'
 metadata:
   author: https://github.com/TemMax
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # Orchestrating Sonnet-Only Development
