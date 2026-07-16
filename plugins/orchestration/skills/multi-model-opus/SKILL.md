@@ -1,9 +1,9 @@
 ---
-name: orchestrating-multi-model-opus
-description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5, and Opus 4.8 with the orchestrator itself running on Opus 4.8 (not Fable 5) — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Recommendation: run the Opus 4.8 orchestrator session at xhigh reasoning effort (high is the floor; never medium or below for orchestration). Triggers: "opus orchestrator", "orchestrate on opus", "оркестратор на opus", "разбей на агентов через opus". Do NOT use when the orchestrator is Fable 5 (use orchestrating-multi-model) or for the sonnet-only experiment (use orchestrating-sonnet-only-opus).'
+name: multi-model-opus
+description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5, and Opus 4.8 with the orchestrator itself running on Opus 4.8 (not Fable 5) — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Recommendation: run the Opus 4.8 orchestrator session at xhigh reasoning effort (high is the floor; never medium or below for orchestration). Triggers: "opus orchestrator", "orchestrate on opus", "оркестратор на opus", "разбей на агентов через opus". Do NOT use when the orchestrator is Fable 5 (use multi-model) or for the sonnet-only experiment (use sonnet-only-opus).'
 metadata:
   author: https://github.com/TemMax
-  version: 1.2.0
+  version: 1.3.0
 ---
 
 # Orchestrating Multi-Model Development (Opus 4.8 Orchestrator)

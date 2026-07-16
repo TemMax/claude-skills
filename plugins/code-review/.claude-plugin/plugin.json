@@ -1,0 +1,18 @@
+{
+  "name": "code-review",
+  "displayName": "Code Review Skills",
+  "version": "1.0.0",
+  "description": "Critical, evidence-based code review skills for Claude Code: review uncommitted working-tree changes or a GitHub PR (reading its description and all comment threads first), produce a tiered findings table (Blocker → Nit) — with Fable 5 and Opus 4.8 reviewer variants. Grounded in Anthropic system cards.",
+  "author": {
+    "name": "TemMax",
+    "url": "https://github.com/TemMax"
+  },
+  "repository": "https://github.com/TemMax/claude-skills",
+  "keywords": [
+    "code-review",
+    "pull-request",
+    "review",
+    "critical-review",
+    "quality"
+  ]
+}

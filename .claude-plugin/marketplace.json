@@ -5,9 +5,14 @@
   },
   "plugins": [
     {
-      "name": "agent-orchestration",
-      "source": "./",
+      "name": "orchestration",
+      "source": "./plugins/orchestration",
       "description": "Multi-agent orchestration skills: decompose coding work into parallel executor agents, route tasks to models, write closed task prompts, review results."
+    },
+    {
+      "name": "code-review",
+      "source": "./plugins/code-review",
+      "description": "Critical code review skills for uncommitted changes or a GitHub PR, with Fable 5 and Opus 4.8 reviewer variants."
     }
   ]
 }
