@@ -1,49 +1,73 @@
 # claude-skills
 
-A Claude Code plugin marketplace (`temmax-skills`) with two plugins. Every rule
-in these skills is derived from the models' official Anthropic system cards and
-battle-tested with RED/GREEN agent runs (baseline failures reproduced, then
-verified fixed).
+A Claude Code plugin marketplace (`temmax-skills`) with two plugins — one skill
+each. Every rule in these skills is derived from the models' official Anthropic
+system cards and battle-tested with RED/GREEN agent runs (baseline failures
+reproduced, then verified fixed).
 
-- **`orchestration`** — the orchestrator model researches, plans, writes
-  closed task prompts, and reviews; executor subagents (Haiku 4.5 / Sonnet 5 /
-  Opus 4.8) implement. Two orchestrator variants: Fable 5 and Opus 4.8.
+- **`orchestration`** — the orchestrator model researches, plans, writes closed
+  task prompts, and reviews; executor subagents (Haiku 4.5 / Sonnet 5 /
+  Opus 4.8) implement.
 - **`code-review`** — critical, evidence-based review of uncommitted changes or
-  a GitHub PR, performed by the session's own model. Two reviewer variants:
-  Fable 5 and Opus 4.8.
+  a GitHub PR, performed by the session's own model.
 
-## Plugin: orchestration
+Each skill works on **whatever model the session runs on**: it reads its own
+model identity and loads the matching profile from `references/`. There is no
+`-opus` variant to pick between any more.
 
-| Skill | Orchestrator | When to use |
+| Plugin | Skill | What it does |
 |---|---|---|
-| `multi-model` | Fable 5 | Default orchestration: executors are Haiku 4.5, Sonnet 5, and Opus 4.8. Model routing, effort selection, task-prompt template, review checklist. |
-| `sonnet-only` | Fable 5 | The sonnet-only experiment: no Opus executors. Tests the hypothesis that task-spec quality substitutes for model horsepower. |
-| `multi-model-opus` | Opus 4.8 | Same multi-model setup when your session runs on Opus 4.8 instead of Fable 5. Adds Opus-specific orchestrator mitigations (monitoring claims, caveat propagation, long-horizon goal-keeping). |
-| `sonnet-only-opus` | Opus 4.8 | The sonnet-only experiment with an Opus 4.8 orchestrator — the orchestrator itself is the configuration's honest verifier. |
+| `orchestration` | `multi-model` | Model routing, effort selection, task-prompt template, wave planning, review checklist. |
+| `code-review` | `critical-review` | Scope detection, PR description+threads protocol, tiered findings table (Blocker → Nit). |
 
-**Recommendation for the `-opus` skills: run the Opus 4.8 orchestrator session at
-`xhigh` reasoning effort; `high` is the floor when latency-bound — never medium or
-below for orchestration.** Grounding from the Opus 4.8 system card: SWE-bench Pro
-peaks at xhigh (69.8, p. 196), deep-research agentic scores rise monotonically
-through max (DRACO 80.4, p. 208), Anthropic's own multi-agent harnesses ran the
-orchestrator at max effort (p. 214), and higher effort roughly halves
-prompt-injection susceptibility (p. 80). Low/medium effort on Opus 4.8 is
-executor territory (its minimum effort already matches Opus 4.7's maximum).
+## How the model routing works
 
-Each orchestration skill ships with `references/model-dossiers.md` — per-model
-dossiers with benchmark numbers, documented failure modes, and page references
-to the system cards (loaded on demand for contested routing calls).
+Claude Code states the session model in the system prompt ("You are powered by
+the model named X. The exact model ID is Y"). Step 0 of each skill maps that ID
+to exactly one profile file and forbids reading the others:
 
-## Plugin: code-review
-
-| Skill | Reviewer | When to use |
+| Model ID | orchestration profile | code-review profile |
 |---|---|---|
-| `critical-review` | Fable 5 | Critical review of uncommitted changes or a GitHub PR: scope detection, PR description+threads protocol, tiered findings table (Blocker → Nit). |
-| `critical-review-opus` | Opus 4.8 | Same critical review when the session runs on Opus 4.8. Adds Opus-specific reviewer mitigations (untrusted PR content, goal-keeping, effort floor). |
+| `claude-fable-5` | `references/orchestrator-fable-5.md` | `references/reviewer-fable-5.md` |
+| `claude-opus-4-8` (any context suffix, e.g. `[1m]`) | `references/orchestrator-opus-4-8.md` | `references/reviewer-opus-4-8.md` |
+| anything else | none — model-agnostic rules only, and the skill says so | same |
 
-Each review skill ships with `references/reviewer-dossier.md` — the
-review-relevant system-card facts (judge properties, honesty rates, reviewer
-failure modes).
+The profile carries everything that is genuinely model-specific: the session's
+reasoning-effort guidance, amendments to the numbered process steps, and the
+model's own documented failure modes. The shared body carries everything else.
+
+**Why the split matters.** Merging the variants naively — leaving an
+unconditional "run this session at xhigh reasoning effort" in the shared
+overview — made a Fable 5 orchestrator adopt Opus 4.8's effort directive in 3 of
+3 test runs, reasoning that "the imperative is phrased generically", and import
+Opus-specific process amendments along with it. A model with no profile at all
+hedged instead of falling back cleanly. With the effort directive scoped inside
+the profile, a model-ID gate on each profile, and an explicit fallback row, 14
+of 14 runs across Fable 5, Opus 4.8 and Sonnet 5 loaded the right profile,
+refused the wrong one, and applied the right effort.
+
+The Opus profile also **self-checks the session effort**: Step 0 surfaces the
+live value via the `${CLAUDE_EFFORT}` substitution, and the profile halts an
+orchestration started at `medium` or below with a request to restart higher
+(review notes the shortfall rather than halting). If the substitution ever fails
+to expand, the skill treats effort as unknown and proceeds — verified across 10
+runs (medium halts, high notes the floor, xhigh proceeds silently, an unexpanded
+placeholder degrades gracefully, Fable never false-warns).
+
+**Recommendation for Opus 4.8 sessions:** run the orchestrator at `xhigh`
+reasoning effort; `high` is the floor when latency-bound. Grounding from the
+Opus 4.8 system card: SWE-bench Pro peaks at xhigh (69.8, p. 196), deep-research
+agentic scores rise monotonically through max (DRACO 80.4, p. 208), Anthropic's
+own multi-agent harnesses ran the orchestrator at max effort (p. 214), and
+higher effort roughly halves prompt-injection susceptibility (p. 80). Low/medium
+effort on Opus 4.8 is executor territory (its minimum effort already matches
+Opus 4.7's maximum). No equivalent level is pinned for Fable 5 — that
+measurement does not exist for it, and the Fable profile says so explicitly.
+
+Both skills also ship a dossier (`references/model-dossiers.md`,
+`references/reviewer-dossier.md`) with benchmark numbers, documented failure
+modes, and page references to the system cards — loaded on demand for contested
+calls.
 
 All skills always reply to the user in the language the user writes in.
 
@@ -66,44 +90,49 @@ skill automatically — just ask in plain text:
 ```
 Decompose this into agents and run in parallel: <task>
 Orchestrate this task across subagents: <task>
-Run this in sonnet-only mode: <task>
-Orchestrate this on Opus as the orchestrator: <task>
+Разбей на агентов и запусти параллельно: <задача>
 Review my uncommitted changes critically
 Сделай критическое ревью ПР #42
 ```
 
-**Explicit slash command.** Guarantees the skill loads, and lets you force a
-specific configuration (e.g. the sonnet-only experiment on a task where Claude
-would pick multi-model). Everything after the skill name is passed as the task
-description:
+**Explicit slash command.** Guarantees the skill loads. Everything after the
+skill name is passed as the task description:
 
 ```
 /orchestration:multi-model Add multi-currency support to the pricing module
-/orchestration:sonnet-only Refactor the API client layer
-/orchestration:multi-model-opus Add multi-currency support to the pricing module
-/orchestration:sonnet-only-opus Refactor the API client layer
-/code-review:critical-review
-/code-review:critical-review-opus <PR number optional>
+/code-review:critical-review <PR number optional>
 ```
 
 Type `/orch` or `/code` and let autocomplete fill in the namespaced name.
 
-**What to expect from orchestration.** The orchestrator does not jump straight
-to code. It runs research → decisions → plan, then shows you a table (task |
-model | effort | rationale) and waits for your approval before launching the
-executor waves. After each wave it reviews the results by running tests and
-reading diffs — executor self-reports are never trusted. The model dossiers in
-`references/` load on demand when a routing call needs justification.
+**What to expect from orchestration.** The orchestrator loads its profile, then
+runs research → decisions → plan, shows you a table (task | model | effort |
+rationale) and waits for your approval before launching the executor waves.
+After each wave it reviews the results by running tests and reading diffs —
+executor self-reports are never trusted.
 
-**What to expect from review.** The reviewer detects the scope (a named PR, a
-PR opened this session, uncommitted changes, or the session's own commits),
-reads the PR description and every comment thread first when reviewing a PR,
-verifies findings by running what is cheap, and delivers a short summary plus
-one findings table tiered Blocker / Important / Medium / Low / Nit. The review
-is read-only — fixes happen only when you ask afterwards.
+**What to expect from review.** The reviewer loads its profile, detects the
+scope (a named PR, a PR opened this session, uncommitted changes, or the
+session's own commits), reads the PR description and every comment thread first
+when reviewing a PR, verifies findings by running what is cheap, and delivers a
+short summary plus one findings table tiered Blocker / Important / Medium / Low
+/ Nit. The review is read-only — fixes happen only when you ask afterwards.
 
 To verify the plugins are installed, run `/plugin` and look for
 `orchestration` and `code-review` with their skills listed.
+
+## Migration from 1.x
+
+This release (orchestration 1.4.0, code-review 1.1.0) collapsed the per-model
+skill variants and dropped the sonnet-only experiment:
+
+| Before | After |
+|---|---|
+| `multi-model`, `multi-model-opus` | `multi-model` (loads its own profile) |
+| `critical-review`, `critical-review-opus` | `critical-review` (loads its own profile) |
+| `sonnet-only`, `sonnet-only-opus` | removed |
+
+The `-opus` slash commands no longer exist. Use the base name on any model.
 
 ## Local development
 
@@ -123,23 +152,17 @@ plugins/
     skills/
       multi-model/
         SKILL.md
-        references/model-dossiers.md
-      sonnet-only/
-        SKILL.md
-        references/model-dossiers.md
-      multi-model-opus/
-        SKILL.md
-        references/model-dossiers.md
-      sonnet-only-opus/
-        SKILL.md
-        references/model-dossiers.md
+        references/
+          orchestrator-fable-5.md
+          orchestrator-opus-4-8.md
+          model-dossiers.md
   code-review/
     .claude-plugin/plugin.json
     skills/
       critical-review/
         SKILL.md
-        references/reviewer-dossier.md
-      critical-review-opus/
-        SKILL.md
-        references/reviewer-dossier.md
+        references/
+          reviewer-fable-5.md
+          reviewer-opus-4-8.md
+          reviewer-dossier.md
 ```

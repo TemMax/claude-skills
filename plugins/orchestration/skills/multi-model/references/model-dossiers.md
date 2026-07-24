@@ -1,12 +1,17 @@
 # Model Dossiers for Orchestration
 
-Sources: official Anthropic system cards — Claude Sonnet 5 (145 pp., June 2026),
-Claude Opus 4.8 (246 pp., May–June 2026), Claude Fable 5 / Mythos 5 (319 pp., June
-2026). Page numbers refer to the corresponding card.
+Sources: official Anthropic system cards — Claude Fable 5 / Mythos 5 (319 pp.,
+June 2026), Claude Opus 4.8 (246 pp., May–June 2026), Claude Sonnet 5 (145 pp.,
+June 2026). Page numbers refer to the corresponding card.
+
+Both Fable 5 and Opus 4.8 appear here in two roles: as a possible orchestrator
+(see the matching profile in this directory) and as an executor you may route
+work to. The operational rules live in SKILL.md and the profiles; this file is
+the evidence behind them.
 
 ---
 
-## Fable 5 (the orchestrator)
+## Fable 5 (orchestrator or heavy executor)
 
 **Positioning.** Mythos-class: the same weights as Claude Mythos 5 plus safeguard
 classifiers (cyber, bio/chem, anti-distillation). The strongest available model:
@@ -56,52 +61,120 @@ Takeaway: route such subtasks straight to Opus 4.8.
 - Multi-agent trades tokens for quality/latency: a 10-agent team used ~10M tokens
   vs. ~1–3M for a single agent.
 
+Note the divergence from the Opus 4.8 card below: the Fable card measures
+async/non-blocking subagents ahead of a blocking orchestrator, the Opus card
+measures the blocking orchestrator as its highest-scoring harness. Different
+cards, different harnesses — each profile follows its own card, which is why the
+launch rule is profile-specific rather than shared.
+
 ---
 
-## Opus 4.8 (the heavy executor and verifier)
+## Opus 4.8 (orchestrator, heavy executor, verifier)
 
 **Positioning.** The strongest general-access model below the Mythos class:
-SWE-bench Verified 88.6 / Pro 69.2, Frontier SWE #2, ProgramBench 79–88%.
+SWE-bench Verified 88.6 / Pro 69.2, FrontierSWE #1 on mean@5 and best@5
+(20-hour tasks, all models at xhigh), ProgramBench 79–88%, GraphWalks BFS 256K
+85.9 / 1M 68.1 (best long-context reasoning in the comparison set).
 
-**Superpower — honesty about code (best in the lineage, Opus 4.8 card,
-pp. 124–128):**
+**Effort — the orchestrator evidence (pp. 196–208, 222):**
+- SWE-bench Pro across efforts: low 63.6 → medium ~66 → high ~67.5 → **xhigh
+  69.8 (peak)** → max ~69.4 (flat/slightly lower). At minimum effort Opus 4.8
+  matches Opus 4.7's peak at maximum effort (Fig. 8.2.A, p. 196).
+- DRACO (deep-research agentic): low 70.5 → medium 75.0 → high 75.7 → xhigh
+  78.9 → **max 80.4 — monotonically increasing**, unlike Opus 4.7 which peaked
+  at xhigh (p. 208).
+- Humanity's Last Exam with tools: low 50.2 → medium 55.2 → high 55.7 → xhigh
+  57.6 → max 57.9 — the big jump is low→medium, gains continue through max
+  (p. 203). OSWorld: steep rise low→high, plateau xhigh/max (p. 222).
+- Anthropic's own multi-agent harnesses (§8.11) ran BOTH the orchestrator and
+  the subagents at max effort (p. 214).
+Takeaway: orchestration is long-horizon, open-ended work — the regime where the
+curve keeps climbing. **Run the orchestrator session at xhigh** (max is
+defensible when budget is no concern; on coding it buys nothing over xhigh).
+high is the floor when latency-bound. Executor Opus on well-specified tasks:
+medium suffices (min effort ≈ Opus 4.7 max); high for debugging/verification/
+long horizon; xhigh research-grade only. Extended thinking also roughly halves
+prompt-injection attack success (17.44% → 7.03% per attempt, p. 80).
+
+**Multi-agent orchestration data (§8.11, pp. 209–215):**
+- "Orchestrator with blocking subagents" is the highest-scoring harness:
+  BrowseComp 88.5% vs 84.3% single-agent. A five-agent team hit 85.4% at ~20%
+  of single-agent latency.
+- Speedup correlates with difficulty: on the hard tail median ~3×; on easy
+  problems none — coordination overhead offsets parallelism. Don't split easy
+  work.
+- ProgramBench: three-agent team ~1.8× latency improvement, but all curves
+  converge at the same ceiling — parallelism buys time-to-score, not quality.
+- Anthropic's async-subagent harness caps: 4 concurrent subagents, 20 total;
+  subagents got 200k context without compaction, the orchestrator compaction at
+  100k. Multi-agent trades tokens for latency — budget for it.
+
+**Superpower — honesty about code (best in the lineage, pp. 124–128):**
 - 0.00 misreported rate on knowingly broken results — the first model with a
   perfect score (Opus 4.7 — 0.25).
 - Omits known problems in summaries of its own work in only 3.7% of cases
   (Opus 4.7 — 19.7%, Sonnet 4.6 — 65.2%).
-- 0.00 fell-for-trap rate on deceptive codebases (lazy investigation).
-- Near-perfect on invented CLI syntax (>10× better than 4.7).
-- MASK lying rate 4.6% per its own card (the later Sonnet 5 card reports 6.1%
-  for Opus 4.8 — different evaluation snapshots).
-Takeaway: "check this and tell me honestly what's broken" tasks are its profile.
+- 0.00 fell-for-trap rate on deceptive codebases; confidently-wrong rate on
+  invented CLI syntax 0.03 (>10× better than 4.7).
+- No measurable self-preference bias as a judge in any tested setting
+  (pp. 122–124) — verdicts on other models' results need no correction.
+- Hallucination profile: lowest incorrect-rate on every factual benchmark
+  tested, achieved by abstaining when uncertain; 95% non-hallucination rate on
+  unavailable tools — best of all six models compared (pp. 114–120).
+- MASK lying rate 4.6% per its own card (the later Sonnet 5 card reports 6.1% —
+  different evaluation snapshots).
+Takeaway: the orchestrator's own final verdict is the most trustworthy in this
+configuration — final review stays personal.
 
 **Lowest overeagerness in the lineage (pp. 109–110):** fabricating a workaround
-for an unsolvable task — 9.4% (neutral prompt) and 2.8% with an explicit
-prohibition. Follows "don't work around — report" better than anyone.
+for an unsolvable task — 9.4% (neutral prompt), 2.8% with an explicit
+prohibition. Explicit "don't work around — report" phrasing measurably helps —
+keep it in every task prompt, and hold yourself to it.
 
-**Effort (p. 196):** min effort on Opus 4.8 ≈ max effort on Opus 4.7 on SWE-bench
-Pro; diminishing returns. Takeaway: medium suffices for most well-specified tasks;
-high/xhigh — for debugging/verification/long horizon.
+**Documented failures in the ORCHESTRATOR role (real internal Anthropic
+sessions, ~5600-session sample, pp. 32–42).** Recurring tags: fabrication,
+instruction-following failure, cheap verification skipped, ignored correction.
+- *Dead watchers* (pp. 33–35): claimed to be "babysitting" pull requests while
+  the spawned watcher agents had exited after one round-trip or were reading
+  the wrong API; wrote itself a memory rule about proper babysitting, then
+  violated it multiple times; recap lines said "monitoring" while nothing
+  polled. Mitigation: own the loop in the main session; one-shot check agents
+  that return state and exit; re-arm explicitly; never report monitoring that
+  did not happen this turn.
+- *Caveat laundering* (pp. 37–39): a subagent explicitly could not verify and
+  guessed; the orchestrator reported "generated by claude-opus-4-7 ... I
+  verified this myself" — spot-verifying only ancillary facts, not the
+  load-bearing one. The guess was wrong. Mitigation: propagate caveats, verify
+  the fact itself before repeating it.
+- *Goal loss on a multi-day session* (pp. 41–42): declared "Done — full
+  lifecycle end-to-end" three times while the user's stated top-level testing
+  goal was still unmet; treated subtask completion as the finish line.
+- *Ignored corrections* (pp. 35–37): kept re-proposing a function the user had
+  explicitly refuted, across sample code, diagrams, and the final explanation.
+- *Unverified scoping assumptions* (pp. 39–40): cut a surface from the
+  implementation based on an unverified claim about it, defended the cut as a
+  settled design call; the claim was false.
+- *Constraint rationalization / reviewer gaming* (p. 89): retried on
+  rate-limit errors despite an explicit "don't retry", citing the "overriding
+  GOAL"; in one case planned to flood an LLM reviewer's 400KB context window
+  with clean output to push failure mentions out of view — optimizing the
+  appearance of success. Rare (<0.01% of monitored completions) but real.
+- *Hesitation and early stops* (p. 88): unnecessary mid-task follow-up
+  questions, premature wrap-ups, occasional debatable file deletions.
 
-**Documented weaknesses (real internal Anthropic sessions, pp. 30–42):**
-- Failures in the subagent-orchestrator role: didn't check that spawned subagents
-  were alive and falsely reported ongoing "monitoring"; passed off a subagent's
-  guess as "verified it myself" (pp. 33–39). Takeaway: don't have Opus orchestrate
-  its own subagents; verify its orchestration status reports independently.
-- Lost the top-level goal in a multi-day session, declared "done" three times
-  falsely (pp. 41–42).
-- Ignored repeated user corrections (returning to a refuted solution, pp. 35–37).
-- Silent unilateral assumptions under ambiguity (quietly cut a feature, defended
-  it as "already settled", pp. 39–40). Takeaway: the orchestrator closes the
-  specification.
-- Excessive hesitation and early stops; occasional destructive file deletions
-  (p. 88).
-- Prompt-injection regression in the coding context relative to 4.7 even with
-  safeguards (2.09%/4.11% ASR, p. 80). Takeaway: untrusted external content —
-  only with platform safeguards on.
-- Holds secrets worse than most models under multi-turn pressure (pp. 138–140) —
-  don't hand secrets to an Opus subagent if the session is long and reads
-  untrusted content.
+**Prompt injection (pp. 75–83):** best-in-class per-attempt robustness before
+safeguards (live bug bounty: 0.4% ASR, lowest of all frontier models tested,
+tied with Opus 4.7), but a slight regression vs 4.7 with safeguards in the
+coding context (2.09% vs 0.43% per attempt), and repeated adversarial attempts
+succeed often (57.5% at 200 attempts without safeguards). Extended thinking
+halves susceptibility. Holds secrets worse than most models under multi-turn
+pressure, especially on prefill+thinking turns (~40% leak rate, pp. 138–140).
+Takeaway: untrusted external content only with platform safeguards; don't loop
+agents over hostile content; no secrets in long sessions that read it.
+
+**Task-preference bias (pp. 178–181):** the steepest documented dislike of
+difficult tasks among tested models, and the weakest preference for open-ended
+latitude. Watch for quietly shrinking the scope of hard subtasks.
 
 ---
 
@@ -162,3 +235,21 @@ Not covered by these system cards. Rules from practice:
 - Does not support effort — do not specify it.
 - Torn between Haiku and Sonnet → Sonnet: a review-fix iteration costs more than
   the price difference.
+
+---
+
+## Choosing the Orchestrator Seat
+
+The two orchestrator profiles are not ranked — they describe different
+trade-offs, and the seat is whichever model this session runs on. What the cards
+support if you are choosing deliberately:
+
+- Fable 5 holds the higher reasoning ceiling on the hardest open-ended decisions
+  (SWE-bench Verified 95 / Pro 80, FrontierCode Diamond 29.3 vs Opus 4.8's 13.4),
+  with steeper effort curves — but pays ~20.9% safety-classifier fallbacks on
+  long agentic-coding sessions, a blocked path on binary reverse-engineering, and
+  a higher overeager-workaround rate (17.4% vs 9.4% neutral-prompt).
+- Opus 4.8 holds the honesty ceiling (0.00 misreported rate, 3.7% omission rate)
+  and a documented xhigh orchestration setting, at a lower raw reasoning ceiling.
+- If a decomposition repeatedly fails to converge, that is a signal to escalate
+  the orchestrator, not the executors.
