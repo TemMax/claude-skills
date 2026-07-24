@@ -1,10 +1,10 @@
 # Reviewer Dossier
 
-Sources: official Anthropic system cards — Claude Opus 4.8 (246 pp., May–June
-2026), Claude Fable 5 / Mythos 5 (319 pp., June 2026). Page numbers refer to
-the corresponding card. Only the facts relevant to reviewing one's own code
-are collected here; the orchestration skills carry the full per-model
-dossiers.
+Sources: official Anthropic system cards — Claude Opus 5 (193 pp., July 2026),
+Claude Opus 4.8 (246 pp., May–June 2026), Claude Fable 5 / Mythos 5 (319 pp.,
+June 2026). Page numbers refer to the corresponding card. Only the facts
+relevant to reviewing one's own code are collected here; the orchestration
+skills carry the full per-model dossiers.
 
 ---
 
@@ -62,3 +62,40 @@ detected at the start — re-check it before delivering the verdict.
 **Premature wrap-ups (p. 88).** Excessive hesitation, unnecessary mid-task
 questions, and early stops are documented. Takeaway: the review needs no user
 input between scope detection and the final table.
+
+---
+
+## Opus 5 as a reviewer of its own code
+
+Source: Claude Opus 5 system card (193 pp., July 2026).
+
+**Prompt injection — best-in-class, and its edge for untrusted PR content.**
+Coding-context attack success 0.18% with probes vs Opus 4.8's 2.09% (~11×
+better), and the Opus 4.8 no-thinking regression is gone (p. 75). Takeaway: it
+resists instructions embedded in PR text far better than any prior Opus — but
+**effort/thinking does NOT move the injection number on Opus 5** (deltas are
+noise, p. 75–76); the harness probe layer does, so never raise effort as a
+mitigation. Live web fetches are riskier than diff text (browser injection
+3.70% raw, p. 77) — rely on platform probes there.
+
+**Effort — do not push to max.** Review runs well at high; max triggers
+documented overthinking / self-verification loops (p. 82) that leave a review
+unfinished.
+
+**Overconfidence (p. 85) and confident-then-retract, elevated on pilot traffic
+(p. 81).** Takeaway: do not trust a confident verdict; every finding carries a
+file:line and a concrete failure scenario.
+
+**Recall-as-truth (p. 87).** Treats recalled library/system behavior as ground
+truth when it cannot verify it, and factual hallucination is ~6% higher than
+Opus 4.8 (p. 107). Takeaway: re-derive every judgment from the diff and source,
+never from memory.
+
+**Self-preference bias as a judge is unmeasured** — no equivalent of Opus
+4.8's zero-bias result. Takeaway: reviewing its own code is fine only via
+re-derivation from the artifact, not on a bias-free-judge presumption.
+
+**Parity, not superiority, on flagging planted flaws (p. 108)**, but the first
+Claude model to saturate the lazy-investigation eval (p. 110): investigate
+thoroughly before concluding "clean." Responses run long and disclosures can be
+over-dramatic (pp. 3, 94) — findings only, depth over volume.

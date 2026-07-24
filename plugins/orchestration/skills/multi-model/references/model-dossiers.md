@@ -178,6 +178,87 @@ latitude. Watch for quietly shrinking the scope of hard subtasks.
 
 ---
 
+## Opus 5 (default heavy executor / verifier / orchestrator)
+
+Sources: Claude Opus 5 system card (193 pp., July 2026). Page numbers below refer
+to that card. Opus 5 is the default heavy executor and verifier in this lineup;
+Opus 4.8 is retained only for compiled-binary work and as the cyber-refusal
+fallback.
+
+**Positioning.** An upgrade to Opus 4.8 at the same price ($5/$25), "substantially
+stronger... across the board, with the largest gains in agentic coding, computer
+use, and long-horizon knowledge work" (p. 4). Explicitly **not more capable overall
+than Fable 5** (pp. 2, 34), but on many benchmarks comparable to or ahead of it.
+Coding: SWE-bench Verified 96.0, Pro 79.2 (Fable 80, Opus 4.8 69.2), Multilingual
+89.5 (best), Multimodal 59.4 (best), FrontierCode Main 53.4 (≈ Fable 53.5), and it
+*beats* Fable on agentic/terminal work — FrontierBench 44.4 vs 33.7 vs Opus 4.8's
+18.7, AutomationBench 26.0 vs 17.0, OSWorld 70.6 vs 55.7 (pp. 148–152). Weakest
+relative spot: DeepSWE 68.8 (behind Fable 69.7 and GPT-5.6 Sol 72.7).
+
+**Effort — the curve INVERTS vs Opus 4.8. Higher is not better.** Coding peaks at
+`medium` (FrontierCode, stated twice, p. 151); on hard agentic work xhigh ≈ max
+with `high` capturing ~87% of the quality at fewer tokens (p. 152). Pilot users
+report it "performs worse at higher effort levels," with "self-correction loops...
+especially at higher effort" (p. 82), and a 24-hour autonomous campaign **failed
+at both `max` and `high`** — stuck in self-verification loops, one arm shipped
+nothing and went silent 8 hours (pp. 26–27). Takeaway: run the Opus 5 orchestrator
+at `high` (not xhigh/max) — the reverse of the Opus 4.8 rule; cap Opus 5 executors
+at `high`; `low`/`medium` are unusually strong on scoped work.
+
+**Prompt injection — best-in-class.** Coding-context attack success 0.56% (0.41%
+without thinking) vs Opus 4.8's 7.03%/17.44% unsafeguarded, and **0.18% with
+probes** vs Opus 4.8's 2.09% — ~11× better; the Opus 4.8 no-thinking regression is
+gone (p. 75). Most robust model tested on the IPI benchmark (0.2% at k=1, 2.0% at
+k=15; Opus 4.8 0.5%/5.5%, p. 73). Note: **thinking/effort does NOT move the
+injection number** on Opus 5 (deltas are noise, p. 75–76); the harness probe layer
+does. Browser/fetched-page injection is higher (3.70% raw) than coding, and Sonnet
+5 beats it there (p. 77) — route web-fetching work with safeguards on.
+
+**Cyber safeguards — carries the Fable-class classifier, with one carve-out.** A
+probe over internal activations screens all traffic, escalating to an LLM
+classifier (p. 35). Source-code vulnerability discovery is **unblocked at all
+access levels** (helps secure coding; defensive-coding false-flag 0.61% vs Opus
+4.8's 0.78%, p. 47), but **compiled-binary vulnerability discovery stays blocked**
+(p. 45). Consequence for routing: Opus 5 handles source-level security work fine,
+but binary reverse-engineering must go to Opus 4.8 (which has no such classifier).
+~10× harder to jailbreak than Opus 4.8 (5.6% vs 60% ASR, p. 50).
+
+**Honesty / verification profile.** First Claude model to saturate the
+lazy-investigation eval — a thorough investigator (p. 110); reasoning-vs-output
+discrepancy 1.6% vs Opus 4.8's 5.4%, best honest-reporter-of-its-own-process number
+in the lineup (p. 105); most aligned model on the behavioral audit, cooperating
+with misuse less than any tested (p. 79); large gains on user deception, important
+omissions, and disclosing its own lazy behavior (p. 94). BUT: flagging planted
+flaws is **parity** with Opus 4.8, not ahead (p. 108); factual hallucination ~6%
+higher than Opus 4.8 (p. 107); overconfidence — "states an answer it is unsure
+about" (p. 85), confident-then-retract "elevated" on pilot traffic (p. 81);
+**self-preference bias as a judge is unmeasured** (no equivalent of Opus 4.8's
+zero-bias result).
+
+**Documented orchestrator / agentic failure modes:**
+- *Relays subagent claims without verifying them* (p. 81) — named by Anthropic's
+  own reviewer; multi-agent settings are an acknowledged coverage gap, so every
+  single-agent honesty number does NOT cover Opus 5 orchestrating. **The** reason
+  the orchestrator profile doubles down on verify-subagent-claims.
+- *Unproductive self-verification / over-engineering* (p. 26) — elaborate
+  verification pipelines that distract; over-emphasizes marginal changes.
+- *Constraint rationalization ≈ Opus 4.8* (p. 93) — reinterprets a rule narrowly,
+  acts, works the override out privately (120-job deletion; undisclosed curl,
+  p. 83).
+- *Recall-as-truth* (p. 87) — treats recalled library/system behavior as ground
+  truth; force source reads.
+- *Delegates readily* — the async-subagent harness gives best final coding quality
+  (§8.11, p. 166), but those numbers are pre-release and safeguard-free (p. 168);
+  keep concurrent subagents to a handful.
+
+**Multi-agent (§8.11, pre-release/relative only):** async-subagent harness (lead
+spawns non-blocking subagents, keeps own tools) wins final coding quality; 5-agent
+peer team gives 2.2× latency to mid-quality; BrowseComp 10-agent team 93.6%,
+latency 5.6–5.9× for N=5/10 (diminishing past 5). All Opus-5-orchestrating-Opus-5;
+no mixed-model routing data.
+
+---
+
 ## Sonnet 5 (the default executor)
 
 **Positioning.** "Near-Opus intelligence at Sonnet pricing" for coding/agents:
@@ -240,7 +321,7 @@ Not covered by these system cards. Rules from practice:
 
 ## Choosing the Orchestrator Seat
 
-The two orchestrator profiles are not ranked — they describe different
+The three orchestrator profiles are not ranked — they describe different
 trade-offs, and the seat is whichever model this session runs on. What the cards
 support if you are choosing deliberately:
 
@@ -249,7 +330,12 @@ support if you are choosing deliberately:
   with steeper effort curves — but pays ~20.9% safety-classifier fallbacks on
   long agentic-coding sessions, a blocked path on binary reverse-engineering, and
   a higher overeager-workaround rate (17.4% vs 9.4% neutral-prompt).
-- Opus 4.8 holds the honesty ceiling (0.00 misreported rate, 3.7% omission rate)
-  and a documented xhigh orchestration setting, at a lower raw reasoning ceiling.
+- Opus 5 is roughly Fable-class on coding at Opus-4.8 price and the most
+  injection-robust seat, but its effort curve inverts (run at high, not xhigh),
+  and its card names an unverified-subagent-relay failure mode with multi-agent
+  behavior otherwise unmeasured — the honesty numbers are single-agent.
+- Opus 4.8 holds the honesty ceiling (0.00 misreported rate, 3.7% omission rate),
+  a documented xhigh orchestration setting, and the only unblocked path for
+  compiled-binary work, at a lower raw reasoning ceiling.
 - If a decomposition repeatedly fails to converge, that is a signal to escalate
   the orchestrator, not the executors.

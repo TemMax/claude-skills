@@ -3,7 +3,7 @@ name: critical-review
 description: 'Use when driving a critical, evidence-based review of uncommitted working-tree changes or a GitHub PR, produced by this session''s own model — including when the code under review was written by this very session. Works on whatever model this reviewing session runs on; it loads the matching reviewer profile itself. Triggers: "сделай ревью", "проревьюй изменения", "ревью ПР", "review my changes", "review this PR", "critical review", "review uncommitted changes". Do NOT use for reviewing another agent''s output inside an orchestration wave (the orchestration plugin skills own that checklist).'
 metadata:
   author: https://github.com/TemMax
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # Reviewing Changes Critically
@@ -17,6 +17,7 @@ profile file:
 | Your model ID | Read this file |
 |---|---|
 | `claude-fable-5` | `${CLAUDE_SKILL_DIR}/references/reviewer-fable-5.md` |
+| `claude-opus-5` (any context-window suffix) | `${CLAUDE_SKILL_DIR}/references/reviewer-opus-5.md` |
 | `claude-opus-4-8` (any context-window suffix, e.g. `[1m]`) | `${CLAUDE_SKILL_DIR}/references/reviewer-opus-4-8.md` |
 | anything else | no profile exists — use the model-agnostic rules below only, and say in the summary which model you are and that no profile matched |
 
@@ -38,9 +39,11 @@ it** — authorship grants no leniency and no shortcuts.
 
 Fable 5's system card documents no self-preference bias as a judge, and Opus
 4.8's documents the lineage's most honest verifier (0.00 misreported rate on
-knowingly broken results) — the model CAN be trusted to judge its own output,
-but only if it re-derives every claim from the code instead of recalling
-intentions.
+knowingly broken results) — those models CAN be trusted to judge their own
+output, but only if they re-derive every claim from the code instead of
+recalling intentions. Opus 5's self-preference bias is unmeasured, so it earns
+no such presumption — it re-derives every claim or it has nothing. Whatever the
+model, re-derivation from the artifact is the load-bearing rule.
 
 Always reply to the user in the language the user writes in — this skill being in
 English does not mean English replies.
@@ -191,8 +194,9 @@ that thread.
 
 ## References
 
-- `references/reviewer-fable-5.md`, `references/reviewer-opus-4-8.md` — the
-  reviewer profiles. Load exactly one, per Step 0.
+- `references/reviewer-fable-5.md`, `references/reviewer-opus-5.md`,
+  `references/reviewer-opus-4-8.md` — the reviewer profiles. Load exactly one,
+  per Step 0.
 - `references/reviewer-dossier.md` — the review-relevant excerpts from the
   official system cards, with page references: judge properties, honesty
   rates, documented reviewer failure modes. Load it to justify a contested

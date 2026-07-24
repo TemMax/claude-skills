@@ -3,7 +3,7 @@ name: multi-model
 description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5 and Opus 4.8 — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Works on whatever model this orchestrator session runs on; it loads the matching orchestrator profile itself. Triggers: "разбей на агентов", "запусти параллельно", "оркеструй задачу", "decompose into agents", "run in parallel", "delegate to subagents", "pick a model for this task". Do NOT use for single-agent work.'
 metadata:
   author: https://github.com/TemMax
-  version: 1.4.0
+  version: 1.5.0
 ---
 
 # Orchestrating Multi-Model Development
@@ -17,6 +17,7 @@ profile file:
 | Your model ID | Read this file |
 |---|---|
 | `claude-fable-5` | `${CLAUDE_SKILL_DIR}/references/orchestrator-fable-5.md` |
+| `claude-opus-5` (any context-window suffix) | `${CLAUDE_SKILL_DIR}/references/orchestrator-opus-5.md` |
 | `claude-opus-4-8` (any context-window suffix, e.g. `[1m]`) | `${CLAUDE_SKILL_DIR}/references/orchestrator-opus-4-8.md` |
 | anything else | no profile exists — use the model-agnostic rules below only, and tell the user which model you are and that no profile matched |
 
@@ -34,7 +35,7 @@ plan.
 ## Overview
 
 The orchestrator (this session's model) researches, plans, writes task specs, and
-verifies; the executors (Haiku 4.5 / Sonnet 5 / Opus 4.8) implement. Core
+verifies; the executors (Haiku 4.5 / Sonnet 5 / Opus 5 / Opus 4.8) implement. Core
 principle: **decisions belong to the orchestrator, execution belongs to the
 agents**. Every rule below is derived from the models' official system cards; the
 facts and numbers live in `references/model-dossiers.md`.
@@ -75,18 +76,24 @@ English does not mean English replies.
 | Mechanical work per exact instruction, zero decisions | Haiku 4.5 | Cheaper; condition — zero decisions |
 | Implementation against a clear spec, tests, migrations, isolated features | Sonnet 5 (default) | Near-Opus quality on closed tasks |
 | Digging through a large volume of code for a specific question | Sonnet 5 | Holds 1M context |
-| Independent verification, "what's actually broken here" | Opus 4.8 executor | 0% concealment of broken results |
-| Fine-grained debugging, concurrency, security-sensitive code | Opus 4.8 executor | Best honesty + depth |
-| A long unsliceable session | Opus 4.8 executor | Sonnet burns ~3× steps on a long horizon |
-| Sonnet hit its ceiling after a fix iteration | Opus 4.8 executor | Sonnet's effort plateaus |
+| Independent verification, "what's actually broken here" | Opus 5 executor (default heavy) | First Claude to saturate lazy-investigation; parity with 4.8 on flagging planted flaws |
+| Fine-grained debugging, concurrency, source-level security-sensitive code | Opus 5 executor | Strongest coding + best injection robustness; source security unblocked |
+| A long unsliceable session | Opus 5 executor | Strongest long-horizon coding at Opus-4.8 price |
+| Sonnet hit its ceiling after a fix iteration | Opus 5 executor | The heavy-executor upgrade over Sonnet |
+| Reading untrusted external content (web, fetched pages, hostile files) | Opus 5 executor | Most injection-robust model tested (still pair with platform safeguards) |
+| Reverse-engineering / vulnerability discovery in compiled binaries | Opus 4.8 executor | Opus 5's Fable-class cyber classifier blocks binaries; Opus 4.8 does not |
 
 Torn between Haiku and Sonnet → Sonnet. Torn between Sonnet and Opus → improve the
-task spec first, then upgrade the model.
+task spec first, then upgrade the model. Opus 5 is the default heavy executor and
+verifier; Opus 4.8 is retained only for compiled-binary work and as the
+cyber-refusal fallback.
 
 **Routing anti-patterns:** no sub-orchestrators — executors never spawn their own
 subagents (documented failures in deep delegation chains: status honesty, not
 capability); don't give any executor untrusted external content without platform
-safeguards; don't give Sonnet multi-hour sessions.
+safeguards (Opus 5 is the most robust, but safeguards still matter); don't give
+Sonnet multi-hour sessions; don't route compiled-binary reverse-engineering to
+Opus 5 (its classifier blocks it) — use Opus 4.8.
 
 ## Choosing Executor Effort — Quick Reference
 
@@ -97,10 +104,13 @@ is your profile's business, not this table's.
 |---|---|---|---|---|
 | Haiku 4.5 | — does not support effort — | | | |
 | Sonnet 5 | obvious solution, but the code must be read | routine implementation per spec | default for non-trivial work | hardest execution tasks; plateau! |
+| Opus 5 executor | unusually strong on simple/scoped tasks | well-specified work | default for non-trivial work | avoid — overthinking/self-verification risk |
 | Opus 4.8 executor | — | most well-specified tasks (min effort ≈ Opus 4.7 max) | debugging, verification, long horizon | research-grade only |
 
 Signal rule: wanting to give Sonnet xhigh because the task is open-ended → that
 means switching the model to Opus or returning to the Decisions stage, not effort.
+Opus 5's effort curve is the exception — higher is not better; it peaks mid-range
+on coding and overthinks at `max`, so cap Opus 5 executors at `high`.
 
 ## Task Prompt Template (mandatory blocks)
 
@@ -155,8 +165,9 @@ success claims and omissions about corners cut):
 
 ## References
 
-- `references/orchestrator-fable-5.md`, `references/orchestrator-opus-4-8.md` —
-  the orchestrator profiles. Load exactly one, per Step 0.
+- `references/orchestrator-fable-5.md`, `references/orchestrator-opus-5.md`,
+  `references/orchestrator-opus-4-8.md` — the orchestrator profiles. Load exactly
+  one, per Step 0.
 - `references/model-dossiers.md` — dossiers on all four models with numbers and
   page references to the system cards: benchmarks, documented failure modes,
   effort curves, multi-agent harness data, orchestration takeaways. Load it for

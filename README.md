@@ -6,7 +6,7 @@ system cards and battle-tested with RED/GREEN agent runs (baseline failures
 reproduced, then verified fixed).
 
 - **`orchestration`** — the orchestrator model researches, plans, writes closed
-  task prompts, and reviews; executor subagents (Haiku 4.5 / Sonnet 5 /
+  task prompts, and reviews; executor subagents (Haiku 4.5 / Sonnet 5 / Opus 5 /
   Opus 4.8) implement.
 - **`code-review`** — critical, evidence-based review of uncommitted changes or
   a GitHub PR, performed by the session's own model.
@@ -29,8 +29,19 @@ to exactly one profile file and forbids reading the others:
 | Model ID | orchestration profile | code-review profile |
 |---|---|---|
 | `claude-fable-5` | `references/orchestrator-fable-5.md` | `references/reviewer-fable-5.md` |
+| `claude-opus-5` (any context suffix) | `references/orchestrator-opus-5.md` | `references/reviewer-opus-5.md` |
 | `claude-opus-4-8` (any context suffix, e.g. `[1m]`) | `references/orchestrator-opus-4-8.md` | `references/reviewer-opus-4-8.md` |
 | anything else | none — model-agnostic rules only, and the skill says so | same |
+
+Opus 5 is the **default heavy executor and verifier**; Opus 4.8 is retained only
+for compiled-binary reverse-engineering (Opus 5's Fable-class cyber classifier
+blocks it) and as the cyber-refusal fallback. Opus 5's effort rule **inverts**
+Opus 4.8's — higher effort makes it *worse* on long-horizon work (documented
+overthinking / self-verification loops), so its profile runs at `high`, not
+`xhigh`, and its effort self-check flags too-*high*, not too-low. Its card also
+names an unverified-subagent-relay failure mode, so the Opus 5 orchestrator
+profile doubles down on verifying subagent claims. Grounded in the Claude Opus 5
+system card (193 pp., July 2026).
 
 The profile carries everything that is genuinely model-specific: the session's
 reasoning-effort guidance, amendments to the numbered process steps, and the
