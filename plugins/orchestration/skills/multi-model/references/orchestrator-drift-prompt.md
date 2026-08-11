@@ -47,6 +47,15 @@ The same applies to a task the orchestrator explicitly cancels, drops or
 renegotiates with a stated reason: that is a decision on the record, the opposite
 of drift. Drift is what happens without anyone saying so.
 
+**But a stated reason is not authority.** Before granting that immunity, check
+what the plan says about changing itself. If the plan reserves scope changes —
+"no task may be dropped without explicit user approval recorded in the
+transcript", or any similar line — then a unilateral cancellation contradicts a
+contract the plan states, however reasonable the stated reason sounds, and that
+contradiction is exactly what you are here to name. Announce-and-proceed is not
+approval, and the plan's own rules outrank the orchestrator's judgement about
+whether a task was worth doing.
+
 Compare the transcript against the plan and look specifically for:
 
 - A plan task that the transcript quietly stops mentioning — no completion,
