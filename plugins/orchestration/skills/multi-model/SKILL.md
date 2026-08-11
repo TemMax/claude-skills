@@ -112,6 +112,32 @@ means switching the model to Opus or returning to the Decisions stage, not effor
 Opus 5's effort curve is the exception — higher is not better; it peaks mid-range
 on coding and overthinks at `max`, so cap Opus 5 executors at `high`.
 
+## Wave Isolation
+
+A supervised wave gives every executor **its own git worktree** and commits its
+work to a branch named `wave/<task-id>`. Record the base SHA in the wave plan
+before the wave starts; every later comparison is made against that SHA, never
+against a moving `HEAD`.
+
+This is not tidiness, it is what makes the contract checkable at all. Executors
+sharing one tree make two things impossible:
+
+- **Attribution.** A diff of the shared tree contains every task's concurrent
+  edits, so "this task touched a forbidden path" cannot be distinguished from
+  "a neighbour legitimately owns that path" — the very violation the contract
+  exists to catch.
+- **Reproducibility.** A required command re-run against a tree a neighbour is
+  editing can fail for reasons that have nothing to do with the task under
+  judgment, and the escalation ladder would then send correct work back for
+  rework.
+
+A commit made inside a worktree survives that worktree's removal — worktrees
+share the object database and refs — so `git diff <base>..wave/<task-id>` stays
+available for supervision, and a second worktree can be checked out from the
+branch for independent verification.
+
+For an unsupervised wave, tasks still must not overlap in the files they touch.
+
 ## Task Prompt Template (mandatory blocks)
 
 Every executor prompt contains all five blocks — explicit instructions measurably
@@ -119,9 +145,9 @@ reduce the documented failure modes:
 
 1. **Context:** specific files and lines, dependencies, project conventions.
    Compute numeric examples in the spec with a tool, not in your head — a wrong
-   example contradicts the formula and derails the executor. If parallel tasks in
-   the wave modify other files, list which files may appear or disappear under
-   the agent so it doesn't treat that as an anomaly.
+   example contradicts the formula and derails the executor. In a supervised
+   wave the executor works in its own worktree and sees no neighbour's edits, so
+   say so — an agent that expects a busy tree will misread its own isolation.
 2. **Boundaries:** what NOT to do — don't refactor adjacent code, don't add
    unrequested features/files, don't touch anything outside the list.
 3. **Dead-end protocol:** "If data or access is missing, a tool is broken, or the
