@@ -26,6 +26,12 @@ check "control-flow sketch is present" \
 check "proportionality rule is stated" \
   "grep -q 'skip the supervisor model' $F"
 # Bracketed patterns on purpose: this file must not contain the words it forbids.
+check "the orchestrator opens the plan at launch" \
+  "grep -q 'Write the wave plan file' $F"
+check "the orchestrator closes the plan at completion" \
+  "grep -q 'Set the wave plan.*status: done' $F"
+check "the user never edits the lifecycle by hand" \
+  "grep -q 'You own both transitions' $F"
 check "no third-party reference implementation is named" \
   "! grep -riq '[k]ent\|[r]espawn' $F"
 

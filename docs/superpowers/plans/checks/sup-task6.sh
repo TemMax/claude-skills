@@ -4,9 +4,9 @@ fail=0
 check() { if eval "$2"; then echo "PASS  $1"; else echo "FAIL  $1"; fail=1; fi; }
 S=plugins/orchestration/skills/multi-model/SKILL.md
 
-check "skill frontmatter is 1.7.0" "grep -q '^  version: 1.7.0$' $S"
-check "plugin.json is 1.7.0" \
-  "grep -q '\"version\": \"1.7.0\"' plugins/orchestration/.claude-plugin/plugin.json"
+check "skill frontmatter is 1.7.1" "grep -q '^  version: 1.7.1$' $S"
+check "plugin.json is 1.7.1" \
+  "grep -q '\"version\": \"1.7.1\"' plugins/orchestration/.claude-plugin/plugin.json"
 check "plugin.json stays valid JSON" \
   "python3 -c 'import json; json.load(open(\"plugins/orchestration/.claude-plugin/plugin.json\"))'"
 check "description no longer omits Opus 5 as an executor" \

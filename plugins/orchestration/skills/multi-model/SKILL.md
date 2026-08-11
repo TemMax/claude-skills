@@ -3,7 +3,7 @@ name: multi-model
 description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5, Opus 4.8 and Opus 5 — including supervised waves, where each executor is isolated in its own worktree and its result is judged against a machine-checkable contract by a different model — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Works on whatever model this orchestrator session runs on; it loads the matching orchestrator profile itself. Triggers: "разбей на агентов", "запусти параллельно", "оркеструй задачу", "decompose into agents", "run in parallel", "delegate to subagents", "pick a model for this task". Do NOT use for single-agent work.'
 metadata:
   author: https://github.com/TemMax
-  version: 1.7.0
+  version: 1.7.1
 ---
 
 # Orchestrating Multi-Model Development
@@ -61,13 +61,19 @@ English does not mean English replies.
    like) — otherwise it silently goes stale: if you froze a file for everyone,
    assign it to someone explicitly.
 4. **Table.** Before launching, show the user: task | model | effort | rationale.
-5. **Launch.** Independent tasks — in parallel via Workflow.
-6. **Review** (see the checklist below). Fixes — as one concrete list. Two misses
+5. **Write the wave plan file** (see Wave Plan Artifact) with `status: active`,
+   and record the base SHA. You do this, not the user — the plan's lifecycle is
+   yours to open and close, and nobody should have to hand-edit a field to make
+   supervision work.
+6. **Launch.** Independent tasks — in parallel via Workflow.
+7. **Review** (see the checklist below). Fixes — as one concrete list. Two misses
    in the same place — fix the task spec, don't repeat the prompt.
-7. **The final end-to-end review is the orchestrator's own.** Before it you may
+8. **The final end-to-end review is the orchestrator's own.** Before it you may
    launch an Opus verifier, but the verdict is the orchestrator's.
-8. **Completion.** At most 3 iterations per task, then escalation. At the end a
-   summary: done / verified / remaining.
+9. **Completion.** At most 3 iterations per task, then escalation. At the end a
+   summary: done / verified / remaining. **Set the wave plan's `status: done`**
+   in the same breath — an open plan keeps the drift hook paying for a wave that
+   ended.
 
 ## Model Routing — Quick Reference
 
@@ -168,6 +174,11 @@ tasks:
     branch: wave/http-retry
     contract: {...}
 ```
+
+**You own both transitions.** Write the file with `status: active` at step 5 and
+set `status: done` at step 9. The user never edits it: a supervision layer that
+depends on someone remembering to flip a field by hand is a supervision layer
+that will be off when it matters.
 
 Without this file "deviation" has no referent: there is nothing to deviate
 from. It is a file rather than something you hold in context because a wave
