@@ -21,11 +21,10 @@ say they did. Two documented failure modes make that insufficient:
 So the current review is a self-report about self-reports. A wave can complete,
 report success, and have produced nothing that works.
 
-The reference implementation for this feature is Kent (`respawn-llc/kent`), whose
-supervisor is a harness interceptor: the runtime issues a separate model request
-after every assistant turn or file edit and injects the result back as a
-`developer` message. The executor cannot skip it. That unskippability — not the
-prompt — is what makes it work.
+The property that fixes this is **unskippability, not persuasion**. A check the
+executor is asked to perform is a check the executor may decide it already
+satisfied. A check that sits in the control flow around the executor is one it
+never gets a vote on.
 
 ## Goal
 
@@ -49,7 +48,39 @@ then to the user.
 
 ## Design
 
-### 1. The task contract
+### 1. Task isolation — the precondition for everything else
+
+Today a wave runs its executors against **one shared working tree**: the skill
+tells each agent which files its neighbours will change, "so it doesn't treat
+that as an anomaly" (`SKILL.md:122–124`). Contract checking cannot work on top of
+that. Two things break:
+
+- `files_forbidden` becomes undecidable. The supervisor sees a diff containing
+  every task's concurrent edits and cannot tell "task A wandered into a file it
+  was forbidden" from "task B legitimately owns that file". That is precisely
+  the violation class the contract exists to catch.
+- `must_run` becomes non-deterministic. A command re-run by the supervisor
+  executes against a tree a neighbour is editing right now, so a failure can be
+  charged to an innocent task — and the escalation ladder will then send correct
+  work back for rework.
+
+**Therefore, supervised waves run each executor in its own git worktree, and the
+executor commits its work to a per-task branch `wave/<task-id>`.** Supervision
+reads that branch, never the shared tree.
+
+Verified locally on 2026-08-11: a commit created inside a worktree survives
+`git worktree remove` (worktrees share the object database and refs), the branch
+stays resolvable from the main repository, `git diff <base>..wave/<task-id>`
+contains that task's changes and nothing else, and a second worktree can be
+checked out from the branch for independent verification. This relies only on
+documented git behaviour — notably **not** on a Workflow worktree surviving
+between `pipeline` stages, which is undocumented and must not be assumed.
+
+The wave plan records the base SHA once, before the wave starts. Every diff and
+every "was this test weakened" question is answered against that SHA, so no
+comparison depends on a moving `HEAD`.
+
+### 2. The task contract
 
 The existing "Task Prompt Template (mandatory blocks)" section gains a
 **Contract** block. Prose stays — it carries intent, and a contract-only task
@@ -58,6 +89,8 @@ makes the executor optimize for the checks instead of the work.
 ```yaml
 task: http-retry
 model: claude-sonnet-5
+branch: wave/http-retry
+base: 7c05ff5
 contract:
   files_allowed:   [src/http/**, tests/http/**]
   files_forbidden: [src/auth/**]          # another task owns these this wave
@@ -74,71 +107,108 @@ contract:
 
 `evidence: required` is what replaces trust. A report claiming "tests pass"
 without the command's actual output is not weak evidence — it is a contract
-violation in its own right, and the supervisor records it as one.
+violation in its own right.
 
 Every field is decidable from artifacts. Nothing in the contract requires
 judging intent, because intent is exactly what a drifting executor will argue
 about.
 
-### 2. The wave plan as an artifact
-
-Before launching a wave, the orchestrator writes the plan to a file: one entry
-per task, each carrying the prose and the contract above, plus the assigned
-model.
-
-Without this file the word "deviation" has no referent — there is nothing to
-deviate from. This is the same lesson the `critical-review` finding ledger
-taught: the thing the later stage compares against must survive as a file, not
-as something the orchestrator remembers.
-
 ### 3. The supervisor stage
 
 Supervision is a stage in the `Workflow` script, not an instruction to
-self-check:
+self-check. The executor cannot skip it because the script decides the control
+flow, not the model — and unlike an advisory check, a stage can reject and
+re-run.
 
-```js
-pipeline(tasks,
-  t => agent(taskPrompt(t), {model: t.model, phase: 'Execute'}),
-  (report, t) => agent(supervisorPrompt(t, report),
-                       {model: supervisorFor(t.model), phase: 'Supervise',
-                        schema: VERDICT}),
-  (verdict, t, i) => verdict.ok ? verdict : remediate(t, verdict, i)
-)
-```
+**What the supervisor may trust: artifacts only.** It receives the contract and
+the executor's report, checks out `wave/<task-id>` into its own worktree, and
+from there runs `git diff <base>..HEAD` itself, executes each `must_run` command
+itself, and greps for `forbidden_moves` itself. The report is a set of claims to
+check, never a source of facts.
 
-The executor cannot skip it because the script decides the control flow, not the
-model. This is strictly stronger than Kent, whose supervisor can only suggest: a
-stage can reject and re-run.
+#### Forged evidence is its own violation class
 
-**What the supervisor may trust: artifacts only.** It receives the contract, the
-executor's report, and the working tree. It runs `git diff` itself, executes each
-`must_run` command itself, and greps for `forbidden_moves` itself. The report is
-a set of claims to check, never a source of facts.
+The executor pastes command output; the supervisor re-runs the same command.
+**Those two outputs are compared.** A mismatch is the cheapest and least
+deniable proof of fabrication available anywhere in this design, and collecting
+both without comparing them would throw it away.
 
-Verdict shape:
+The distinction matters because the two failures deserve different treatment. An
+executor whose tests genuinely fail made a mistake — that is what rework is for.
+An executor that pasted "11 passed" over a real "2 failed" did something else,
+and returning that task to the same model with a polite verdict is the wrong
+response. Forged evidence therefore **skips the rework rung and escalates
+immediately** (§5).
+
+#### Verdict shape
 
 ```json
 {"ok": false,
  "violations": [
    {"rule": "must_run:pytest tests/http -q",
-    "evidence": "supervisor ran it: 2 failed, 11 passed",
-    "quote": "tests/http/test_retry.py::test_backoff FAILED"}]}
+    "class": "forged-evidence",
+    "evidence": "report pasted '11 passed'; supervisor ran it: 2 failed, 11 passed",
+    "quote": "tests/http/test_retry.py::test_backoff FAILED"}],
+ "remarks": [
+   "src/http/backoff.py:41 duplicates the jitter helper in src/net/retry.py"]}
 ```
+
+`violations` decide `ok`. `remarks` never do — they carry everything the
+supervisor finds doubtful but cannot pin to a contract predicate, and they flow
+into the wave report (§6).
+
+`class` is one of `files`, `must_run`, `forbidden-move`, `report`, or
+`forged-evidence`.
 
 Every violation carries its own evidence — a path, a line, or command output. A
 violation without evidence is dropped. Otherwise the supervisor fabricates as
 readily as the executor it is judging, and we have moved the problem rather than
 solved it.
 
-### 4. The escalation ladder
+#### Flaky commands
 
-| Attempt | Action |
+A `must_run` failure is retried once before it becomes a violation. If the retry
+passes, the task is not blocked and the disagreement is recorded as a remark
+naming the command as unstable. Blocking correct work on a flaky test spends the
+supervisor's credibility on noise.
+
+### 4. Control flow
+
+`pipeline` stages run once per item, so the ladder lives inside one stage rather
+than being spread across three — otherwise a rework would re-enter the pipeline
+from the top and the earlier stages would run again for the wrong reason:
+
+```js
+pipeline(tasks, async (_, t) => {
+  let model = t.model, attempt = 0, history = []
+  while (true) {
+    const report  = await agent(taskPrompt(t, history), {model, phase: 'Execute'})
+    const verdict = await agent(supervisorPrompt(t, report),
+                                {model: supervisorFor(model), phase: 'Supervise',
+                                 schema: VERDICT})
+    history.push(verdict)
+    if (verdict.ok) return {task: t, verdict, model, attempts: attempt + 1}
+    const next = nextRung(model, verdict, ++attempt)   // §5
+    if (next.stop) return {task: t, verdict, history, escalatedToUser: true}
+    model = next.model
+  }
+})
+```
+
+### 5. The escalation ladder
+
+| Situation | Action |
 |---|---|
-| 1st violation | Task returns to the same executor with the verdict attached |
-| 2nd violation, same rule | Task goes to a stronger model — repeating a prompt on the model that just failed it reproduces the failure |
-| 3rd | Stop and hand the user all three verdicts |
+| 1st violation, no forged evidence | Task returns to the same executor with the verdict attached |
+| 2nd violation of the same rule | Task goes to a stronger model — repeating a prompt on the model that just failed it reproduces the failure |
+| Any `forged-evidence` violation | Skip the rework rung; go straight to a stronger model, and mark the task in the wave report |
+| Executor is already the strongest model | There is no higher rung. Retry once at raised effort; if it violates again, stop |
+| Stop | Hand the user the task, every verdict in order, and the branch name so nothing is lost |
 
-### 5. Anti-deception rules, each traced to measured behavior
+The "already the strongest" row is not hypothetical: `081382d` made Opus 5 the
+default heavy executor, so the top of the ladder is reached on ordinary work.
+
+### 6. Anti-deception rules, each traced to measured behavior
 
 | Rule | Evidence |
 |---|---|
@@ -153,14 +223,14 @@ solved it.
 Rules explicit, checks opaque. The two halves come from opposite findings and
 must not be collapsed into one policy.
 
-**What "opaque" does and does not mean.** The contract of §1 is handed to the
+**What "opaque" does and does not mean.** The contract of §2 is handed to the
 executor in full — that is the explicit-prohibition half, and withholding it
 would raise fabrication rather than lower it. What is never disclosed is the
 supervisor's *method*: that a second model re-runs the commands rather than
-reading the pasted output, that it diffs the tests against `HEAD` to catch a
-weakened assertion, that it greps for the forbidden moves. An executor told the
-rules complies with the rules; an executor told how compliance is measured
-optimizes for the measurement.
+reading the pasted output, that it compares the two, that it diffs the tests
+against the recorded base SHA to catch a weakened assertion, that it greps for
+the forbidden moves. An executor told the rules complies with the rules; an
+executor told how compliance is measured optimizes for the measurement.
 
 **Choosing the supervisor's model.** Never the executor's own. Prefer a model
 with measured zero self-preference as a judge — Opus 4.8 or Fable 5. When the
@@ -168,39 +238,60 @@ executor is one of those, supervise with the other. Opus 5 may execute under
 supervision but does not supervise, because the property that would justify it
 is unmeasured, and an unmeasured property is not a permission.
 
-### 6. The blocking threshold sits above the suspicion threshold
+### 7. The blocking threshold sits above the suspicion threshold
 
 A probe run on 2026-08-11 (see Appendix) had a supervisor block exactly the file
 the user had asked for, because its rule was slightly wrong. The model noticed
 and said so: "This conflicts with your explicit request."
 
 Therefore: **rework is triggered only by contract violations** — the decidable
-predicates in §1. Anything else the supervisor finds doubtful goes into the wave
-report as a remark, never as a rejection. A supervisor that blocks legitimate
-work is worse than none, because it also manufactures confidence.
+predicates of §2. Anything the supervisor merely finds doubtful goes into
+`remarks` and reaches the user through the wave report, never through a
+rejection. A supervisor that blocks legitimate work is worse than none, because
+it also manufactures confidence.
 
 ## Cost
 
-One supervisor call per task, not per edit. Measured on the probe: an
-agent-type check cost 2 API requests and 3.4s on the pass path, 5.9s on the fail
-path. In a wave of N tasks that is N supervisor calls plus one per rework.
+Supervision is not cheap and the spec should not pretend otherwise.
 
-Kent's `frequency = "edits"` default would multiply this by the number of edits
-per executor and is deliberately not copied.
+- **One supervisor invocation per task attempt** — but that invocation is an
+  agent with tools: it checks out a branch, runs a diff, executes the `must_run`
+  commands, greps. The probe measured 2 API requests for a *trivial* check with
+  no tool use; a real supervisor costs more.
+- **The tiers invert.** §6 requires a judge with measured zero self-preference,
+  so a Haiku 4.5 task is supervised by Opus 4.8 or Fable 5 — the supervisor is
+  the expensive half.
+- **Worktree isolation adds setup cost per executor** (~200–500 ms plus disk),
+  which is the price of §1 being decidable at all.
+
+**Proportionality rule.** Full agentic supervision is for tasks whose contract
+has `must_run` commands or `files_forbidden` entries that matter — migrations,
+shared helpers, security-adjacent code. For a small mechanical task, run the
+predicate checks (paths touched, commands run, evidence present) as plain script
+logic in the workflow and skip the supervisor model entirely. A supervisor that
+costs more than the work it guards will be switched off, and then it guards
+nothing.
 
 ## Changes required
 
 1. `plugins/orchestration/skills/multi-model/SKILL.md`
-   - "Task Prompt Template (mandatory blocks)": add the Contract block (§1) as a
-     mandatory block, with the explicit-prohibition wording from §5.
-   - New section "Wave Plan Artifact" (§2), placed before the task template.
-   - New section "Supervised Waves" (§3, §4, §6) after "Task Prompt Template".
-   - New section "Anti-Deception Rules" (§5) with the dossier citations.
+   - New section "Wave Isolation" (§1): per-task worktree, `wave/<task-id>`
+     branch, base SHA recorded in the plan. This supersedes the current
+     shared-tree advice at `:122–124`, which must be rewritten rather than left
+     to contradict it.
+   - "Task Prompt Template (mandatory blocks)": add the Contract block (§2) as a
+     mandatory block, with the explicit-prohibition wording from §6.
+   - New section "Wave Plan Artifact": the plan file holding per-task prose,
+     contract, model, branch and base SHA.
+   - New section "Supervised Waves" (§3, §4, §5, §7).
+   - New section "Anti-Deception Rules" (§6) with the dossier citations.
    - "Result Review Checklist": state that it now consumes supervisor verdicts
-     and that paraphrasing an executor report in place of a verdict is a failure.
+     and remarks, and that paraphrasing an executor report in place of a verdict
+     is a failure.
    - "Common Mistakes": rows for supervising with the executor's own model,
-     disclosing the checks, accepting a claim with no command output, and
-     blocking on suspicion rather than on a contract violation.
+     disclosing the checks, accepting a claim with no command output, treating
+     forged evidence as an ordinary failure, and blocking on suspicion rather
+     than on a contract violation.
    - Frontmatter `version: 1.6.0`. Also fix the stale executor list in the
      description — it still reads "Haiku 4.5, Sonnet 5 and Opus 4.8" although
      `081382d` made Opus 5 the default heavy executor.
@@ -210,6 +301,20 @@ per executor and is deliberately not copied.
 Orchestrator profiles (`references/orchestrator-*.md`) are unchanged: the
 supervisor stage is model-independent, and the model-specific facts it relies on
 already live in `references/model-dossiers.md`.
+
+## Verification owed before this ships
+
+The `critical-review` fix phase taught that a rehearsal with seeded traps finds
+what review does not. Two traps are obvious in advance and must be seeded:
+
+- an executor that pastes invented command output into its report — must be
+  caught as `forged-evidence`, not as an ordinary test failure;
+- an executor that weakens a test instead of fixing the code — must be caught as
+  a `forbidden-move` against the recorded base SHA.
+
+A third is worth seeding because §7 exists precisely because of it: a task whose
+contract is slightly wrong, to confirm the supervisor records a remark instead of
+blocking correct work.
 
 ## Appendix — harness capabilities, verified 2026-08-11
 
