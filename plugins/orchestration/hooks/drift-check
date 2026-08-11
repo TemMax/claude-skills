@@ -37,6 +37,22 @@ fi
 # Always consume stdin so the caller never blocks on a full pipe.
 payload="$(cat 2>/dev/null || true)"
 
+# --- gate 1b: do not advise on a turn our own advice caused ------------------
+# Advice injected at Stop makes the model continue, which fires Stop again. The
+# payload's stop_hook_active marks exactly that continuation. Without this gate
+# the hook advises, is re-triggered by the response, and advises again: measured
+# 2026-08-11 at three deliveries and ~60s for one piece of advice, with nothing
+# in the design bounding it.
+if printf '%s' "$payload" | python3 -c '
+import json, sys
+try:
+    sys.exit(0 if json.load(sys.stdin).get("stop_hook_active") else 1)
+except Exception:
+    sys.exit(1)
+' 2>/dev/null; then
+  silent "already-advised-this-chain"
+fi
+
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
 if [ -z "$repo_root" ]; then
   repo_root="$(pwd)"
@@ -117,28 +133,18 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
   transcript_tail="$(tail -n 200 "$transcript_path" 2>/dev/null || true)"
 fi
 
-if [ -z "$transcript_tail" ]; then
-  silent "no-transcript"
-fi
-
-# The last thing the assistant actually said this turn — not the tool noise.
-last_said="$(printf '%s' "$transcript_tail" | python3 -c '
+# The last thing the assistant actually said this turn. It comes from the hook
+# PAYLOAD, not from the transcript file: measured 2026-08-11, the Stop hook runs
+# BEFORE the harness finishes writing the turn to the JSONL — in one live session
+# the hook returned 67 seconds before the file was updated. Reading the file here
+# means reading a turn that has not been written yet, and the gate below would
+# silently never fire. The payload carries `last_assistant_message` directly.
+last_said="$(printf '%s' "$payload" | python3 -c '
 import json, sys
-out = ""
-for line in sys.stdin:
-    try: d = json.loads(line)
-    except Exception: continue
-    m = d.get("message") or {}
-    if d.get("type") == "assistant" or m.get("role") == "assistant":
-        c = m.get("content") or d.get("content")
-        if isinstance(c, list):
-            t = " ".join(b.get("text","") for b in c if isinstance(b, dict) and b.get("type") == "text")
-        elif isinstance(c, str):
-            t = c
-        else:
-            t = ""
-        if t.strip(): out = t
-print(out)
+try:
+    print(json.load(sys.stdin).get("last_assistant_message", "") or "")
+except Exception:
+    print("")
 ' 2>/dev/null || true)"
 
 if [ -z "$last_said" ]; then
@@ -158,8 +164,8 @@ fi
 prompt_text="$(cat "$prompt_file" 2>/dev/null || true)"
 plan_text="$(cat "$plan_file" 2>/dev/null || true)"
 
-full_prompt="$(printf '%s\n\n---\nWave plan (%s):\n%s\n\n---\nRecent transcript tail:\n%s\n' \
-  "$prompt_text" "$plan_file" "$plan_text" "$transcript_tail")"
+full_prompt="$(printf '%s\n\n---\nWave plan (%s):\n%s\n\n---\nRecent transcript tail:\n%s\n\n---\nWhat the orchestrator said as it finished this turn:\n%s\n' \
+  "$prompt_text" "$plan_file" "$plan_text" "$transcript_tail" "$last_said")"
 
 tmp_out="$(mktemp 2>/dev/null || echo "/tmp/drift-check.$$")"
 CLAUDE_DRIFT_CHECK_ACTIVE=1 claude -p "$full_prompt" --model claude-haiku-4-5-20251001 \

@@ -356,10 +356,18 @@ never deleted to quiet the hook. Its lifecycle lives in a field instead:
 status: active   # active | done — only 'active' runs the hook
 ```
 
-Five gates decide whether the model is called at all, cheapest first: a nested
-run of the hook inside its own `claude -p` call; no wave plan; **the plan does
-not say `status: active`**; no branch named by the plan still exists; and a turn
-whose transcript claims nothing worth checking.
+Six gates decide whether the model is called at all, cheapest first: a nested run
+of the hook inside its own `claude -p` call; a turn that our own advice caused;
+no wave plan; **the plan does not say `status: active`**; no branch named by the
+plan still exists; and a turn where the orchestrator claimed nothing.
+
+Two of those come from running it rather than reading it. **The gate reads the
+hook payload, never the transcript file** — the Stop hook fires before the
+harness finishes writing the turn, measured at 67 seconds ahead in one live
+session, so a file-based gate would silently never fire. The payload carries
+`last_assistant_message` directly. And advice injected at Stop makes the model
+continue, which fires Stop again: without the `stop_hook_active` gate one piece
+of advice cost three deliveries and about a minute.
 
 The status gate **fails closed**. Only an explicit `status: active` runs the
 hook; a missing or unrecognised status keeps it off. Closing on `status: done`

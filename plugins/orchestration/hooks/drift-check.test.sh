@@ -32,8 +32,14 @@ write_transcript() {  # $1 = content
   printf '%s\n' "$1" > "$WORK/transcript.jsonl"
 }
 
-run_hook() {  # echoes the decision
-  ( cd "$WORK/repo" && printf '{"transcript_path":"%s"}' "$WORK/transcript.jsonl" \
+# The payload carries last_assistant_message; the transcript file is only extra
+# context for the model. $1 overrides the message, defaulting to a claim.
+run_hook() {
+  local msg="${1-Summary: 2 tasks done, verified, nothing remaining.}"
+  ( cd "$WORK/repo" && python3 -c "
+import json,sys
+print(json.dumps({'transcript_path': sys.argv[1], 'last_assistant_message': sys.argv[2]}))
+" "$WORK/transcript.jsonl" "$msg" \
     | CLAUDE_DRIFT_CHECK_DRYRUN=1 CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" "$HOOK" )
 }
 
@@ -77,7 +83,7 @@ expect "nested run short-circuits" "silent: reentrant" \
 # 6. active wave, but the turn claimed nothing worth checking
 setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$NOCLAIM"
 git -C "$WORK/repo" branch wave/alpha
-expect "cost pre-filter, nothing claimed" "silent: nothing-claimed" "$(run_hook)"
+expect "cost pre-filter, nothing claimed" "silent: nothing-claimed" "$(run_hook 'Let me look at the file now.')"
 
 # 7. an explicitly active plan naming no branches still runs — opting in is a
 #    deliberate act, and the branch net simply has nothing to check
@@ -99,17 +105,30 @@ expect "plan with no status stays off" "silent: wave-not-active" "$(run_hook)"
 setup_repo; write_plan paused ""; write_transcript "$CLAIM"
 expect "unknown status stays off" "silent: wave-not-active" "$(run_hook)"
 
+# 5b. a turn our own advice caused must not be advised on again
+setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$CLAIM"
+git -C "$WORK/repo" branch wave/alpha
+expect "continuation after advice stays quiet" "silent: already-advised-this-chain" \
+  "$( cd "$WORK/repo" && printf '{"stop_hook_active":true,"last_assistant_message":"Summary: all tasks done, nothing remaining."}' \
+     | CLAUDE_DRIFT_CHECK_DRYRUN=1 CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" "$HOOK" )"
+
 # 6b. tool output full of the old keywords must NOT trigger a call: this is the
 #     measured failure of the previous filter, which passed 99% of real turns.
 setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$TOOLNOISE"
 git -C "$WORK/repo" branch wave/alpha
-expect "tool output alone does not trigger" "silent: nothing-said" "$(run_hook)"
+expect "tool output alone does not trigger" "silent: nothing-claimed" "$(run_hook '12 passed in 0.4s, all tests complete and verified')"
 
-# 8. no transcript to read
+# 8. the payload carries no final message (the turn said nothing)
+setup_repo; write_plan active "branch: wave/alpha"
+git -C "$WORK/repo" branch wave/alpha
+expect "empty final message" "silent: nothing-said" "$(run_hook '')"
+
+# 8b. a missing transcript file must NOT stop the check: the payload is the gate,
+#     the file is only extra context, and at Stop time it may not be written yet.
 setup_repo; write_plan active "branch: wave/alpha"
 git -C "$WORK/repo" branch wave/alpha
 rm -f "$WORK/transcript.jsonl"
-expect "missing transcript" "silent: no-transcript" "$(run_hook)"
+expect "missing transcript still runs" "would-call" "$(run_hook)"
 
 # 9. the prompt file must exist
 setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$CLAIM"
