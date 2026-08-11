@@ -222,6 +222,160 @@ Important erodes trust exactly like a blocker marked Low.
 PR review additionally: findings that answer an existing PR thread reference
 that thread.
 
+## Post-Review Fix Protocol
+
+Everything in this section applies **only after the user, having seen the
+findings table, asked for the findings to be fixed.** Until then the review
+is read-only, as Review Method item 6 requires.
+
+### Order of operations
+
+1. **Record the starting point**: `git rev-parse HEAD`. Note whether the
+   working tree already had uncommitted changes before this phase began.
+2. **Apply and commit** the approved fixes — one logical fix per commit,
+   staging only the paths that fix touched, so pre-existing uncommitted work
+   is never swept into a fix commit. Commits are created *before the gate*,
+   because a reply cites a commit SHA and the gate must show the exact text
+   that will be published, not a placeholder.
+3. **Verify** what is cheap: build, tests, linter. A verification failure
+   halts the flow before the gate — return to the user with the output. The
+   fix commits exist locally; nothing has been pushed or posted.
+4. **Preflight** write capability (below).
+5. **Gate** — present the package once, and wait.
+6. **Execute**, only on approval, in strict order:
+   `push` → replies → resolves. Replying before the push is forbidden: the
+   reply would cite a commit that is not on the remote.
+7. **Report** facts: what was pushed, which threads were answered and
+   resolved, what failed.
+
+### The gate
+
+One confirmation covers the whole package. It shows:
+
+- the diff of all fixes, the commit messages, and their real SHAs;
+- any pre-existing uncommitted work deliberately left out of the commits;
+- what was executed and with what result; what was not verified;
+- a thread table — thread → finding → commit → **the exact reply text** →
+  `resolve` or `leave open`, with the reason;
+- threads that will receive nothing, and why;
+- any capability degradation found by preflight, stated plainly.
+
+The user approves the package as a whole, amends individual lines, or
+cancels. **Cancel is `git reset --soft <starting HEAD>`**: the fix commits
+disappear, the fixes themselves stay in the working tree for further work,
+and nothing left the machine.
+
+### Preflight
+
+The review phase already proved `gh` can read — the PR Protocol would have
+failed otherwise. What breaks here is **write** capability, and repository
+permission is the wrong instrument for measuring it. GitHub reports reply and
+resolve capability per thread, and the two differ: an account holding only
+`READ` on a repository still gets `viewerCanReply: true` on its threads. A
+repository-level proxy is wrong in both directions — a pull request author can
+act beyond `READ` on their own PR, and a locked conversation blocks action
+despite `WRITE`.
+
+```bash
+command -v gh                # binary present
+gh auth status               # authenticated
+gh api user --jq .login      # identity, also needed for the idempotency check
+```
+
+Per thread, `viewerCanReply` and `viewerCanResolve` from the ledger decide
+individually what that thread gets.
+
+**Degrade, never hard-stop.** Fixes and verification are local and reversible;
+they run regardless. Whatever part of the PR flow is impossible is dropped
+from the package, and the gate says so explicitly — including the prepared
+reply texts, so the user can paste them by hand.
+
+Preflight does not guarantee success: capability can be fine and the network
+can fail on the fourth thread of seven. So:
+
+- post one at a time;
+- stop the loop on the first failure — do not continue hoping the next
+  succeeds;
+- name every thread in the report: answered, resolved, skipped, failed;
+- **idempotency** — immediately before posting, re-run the thread query from
+  PR Protocol step 2 and skip any thread that is already `isResolved` or whose
+  latest comment author is your own `gh api user --jq .login`. GitHub has no
+  "answered" flag; authorship of the last comment is the only signal. Without
+  this check, a retry after a partial failure double-posts into a reviewer's
+  thread.
+
+### What may be answered
+
+A reply may only be posted to the thread recorded in that finding's
+provenance. Never search for a related-looking thread to answer. Findings with
+`own` provenance are communicated through the commit message, never through PR
+threads.
+
+This is the load-bearing rule of the whole phase: telling a reviewer their
+comment was addressed, when the fix was actually for something else, is worse
+than saying nothing.
+
+### Reply content
+
+One or two sentences: what changed, and the commit. No preamble, no thanks.
+
+Fully addressed:
+
+> Fixed in a3f91c2 — `parseTimeout` now falls back to the default when the
+> header is absent.
+
+Partially addressed:
+
+> Partially addressed in a3f91c2 — the null path is handled (client.kt:142),
+> but the retry-ordering part is left as-is: it needs a lock refactor beyond
+> this PR. Leaving this thread open.
+
+Include a `file:line` reference only when the fix landed somewhere other than
+the line the thread is already anchored to, as in the partial example above.
+Repeating the thread's own anchor is noise.
+
+Write the reply in the **language of the thread being answered**, not the
+language of this chat session. An English-speaking reviewer does not get a
+Russian reply.
+
+### Resolve policy
+
+Resolve only when the applied fix closes the comment completely.
+
+Everything else — a partial fix, a finding the user declined, a comment you
+disagree with — gets a reply stating the reason, and the thread **stays
+open**. Closing it is the reviewer's decision, not yours.
+
+Issue-level PR comments are not anchored to a line and have nothing to
+resolve; answer them with `gh pr comment` when they produced a finding.
+
+### Mechanics
+
+```bash
+# reply in a thread (root comment databaseId from the ledger)
+gh api repos/OWNER/REPO/pulls/NUMBER/comments/<databaseId>/replies -f body='...'
+
+# resolve a thread (node id from the ledger)
+gh api graphql \
+  -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}' \
+  -f id=PRRT_...
+```
+
+### Failure cases
+
+| Case | Behavior |
+|---|---|
+| Verification (build/tests) fails | Halt before the gate; report the output; fix commits exist locally, nothing pushed or posted |
+| User cancels at the gate | `git reset --soft <starting HEAD>`; fixes stay in the working tree; nothing left the machine |
+| No `gh`, or not authenticated | Fixes and verification still run; the gate degrades to the push only, and carries the reply texts for manual use |
+| `viewerCanResolve: false` on a thread | That thread gets its reply; its resolve is dropped from the package, with the reason stated |
+| `viewerCanReply: false` on a thread | Listed in the gate as untouchable, with its prepared text for manual use |
+| Node count ≠ `totalCount` after pagination | Stop with an explicit error; never present a partial thread inventory as complete |
+| `push` rejected (needs rebase) | Stop before replies; return to the user |
+| Thread already `isResolved`, or its latest comment is yours | Skip it, do not touch it |
+| Reply or resolve fails mid-loop | Stop the loop; report exactly which threads landed and which did not |
+| Non-PR scope (uncommitted changes) | Same protocol minus every thread step; the gate covers the fix commits and the push |
+
 ## Common Mistakes
 
 | Mistake | Consequence | Correct |
