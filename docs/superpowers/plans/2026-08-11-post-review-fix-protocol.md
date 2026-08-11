@@ -208,8 +208,10 @@ check "latest comment authors are fetched for idempotency" \
   "grep -q 'latest: comments(last:10)' $F"
 check "node count is reconciled against totalCount" \
   "grep -q 'totalCount' $F"
-check "REST is no longer used to read inline threads" \
-  "! grep -q 'pulls/<n>/comments' $F"
+# The prose deliberately names the REST endpoint to explain why it is unusable,
+# so this must match the invocation form, not any mention of the path.
+check "REST is no longer invoked to read inline threads" \
+  "! grep -q 'gh api repos/{owner}/{repo}/pulls/<n>/comments' $F"
 check "issue-level comment read is retained" \
   "grep -q 'gh pr view <n> --comments' $F"
 check "review verdict read is retained" \
@@ -239,7 +241,7 @@ FAIL  per-thread capability fields are fetched
 FAIL  root comment databaseId is fetched for replies
 FAIL  latest comment authors are fetched for idempotency
 FAIL  node count is reconciled against totalCount
-FAIL  REST is no longer used to read inline threads
+FAIL  REST is no longer invoked to read inline threads
 PASS  issue-level comment read is retained
 PASS  review verdict read is retained
 FAIL  the ledger is written to a file
