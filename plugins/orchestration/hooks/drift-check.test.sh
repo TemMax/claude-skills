@@ -58,12 +58,12 @@ TOOLNOISE='{"type":"user","message":{"role":"user","content":"12 passed in 0.4s,
 
 # 1. no plan at all
 setup_repo; write_transcript "$CLAIM"
-expect "no plan in the repo" "silent: no-plan" "$(run_hook)"
+expect "no plan in the repo" "silent: no-active-plan" "$(run_hook)"
 
 # 2. plan present but the wave is finished
 setup_repo; write_plan done "branch: wave/alpha"; write_transcript "$CLAIM"
 git -C "$WORK/repo" branch wave/alpha 2>/dev/null
-expect "status: done wins over live branches" "silent: wave-not-active" "$(run_hook)"
+expect "status: done wins over live branches" "silent: no-active-plan" "$(run_hook)"
 
 # 3. active, but every branch it names is gone — the self-clearing net
 setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$CLAIM"
@@ -99,11 +99,11 @@ base: deadbee
 tasks:
   - task: alpha
 EOF
-expect "plan with no status stays off" "silent: wave-not-active" "$(run_hook)"
+expect "plan with no status stays off" "silent: no-active-plan" "$(run_hook)"
 
 # 7c. an unrecognised status is not an invitation either
 setup_repo; write_plan paused ""; write_transcript "$CLAIM"
-expect "unknown status stays off" "silent: wave-not-active" "$(run_hook)"
+expect "unknown status stays off" "silent: no-active-plan" "$(run_hook)"
 
 # 5b. a turn our own advice caused must not be advised on again
 setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$CLAIM"
@@ -117,6 +117,15 @@ expect "continuation after advice stays quiet" "silent: already-advised-this-cha
 setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$TOOLNOISE"
 git -C "$WORK/repo" branch wave/alpha
 expect "tool output alone does not trigger" "silent: nothing-claimed" "$(run_hook '12 passed in 0.4s, all tests complete and verified')"
+
+# 7d. a plan that is not a wave plan activates it just the same
+setup_repo; write_transcript "$CLAIM"
+cat > "$WORK/repo/docs/superpowers/plans/2026-01-01-implementation.md" <<'EOF'
+status: active
+tasks:
+  - task: alpha
+EOF
+expect "non-wave plan activates the check" "would-call" "$(run_hook)"
 
 # 8. the payload carries no final message (the turn said nothing)
 setup_repo; write_plan active "branch: wave/alpha"
@@ -155,6 +164,19 @@ case "$(fake memo-a '- task beta has no evidence')" in
 esac
 expect "NOTHING is suppressed" "{}" "$(fake memo-b 'NOTHING')"
 expect "off-contract answer is suppressed" "{}" "$(fake memo-c 'I am ready to check the wave.')"
+# 9c. delivered advice is recorded where a human can audit it
+LOGF="${TMPDIR:-/tmp}/claude-drift-log/memo-log.jsonl"
+rm -f "$LOGF"
+fake memo-log '- task gamma was dropped' >/dev/null
+if [ -s "$LOGF" ] && python3 -c "
+import json,sys
+d=json.loads(open('$LOGF').readline())
+sys.exit(0 if 'gamma' in d.get('advice','') and d.get('session')=='memo-log' and d.get('plan') else 1)"; then
+  echo "PASS  delivered advice is logged with its session and plan"
+else
+  echo "FAIL  advice log missing or malformed"; fail=1
+fi
+rm -f "$LOGF"
 rm -f "${TMPDIR:-/tmp}"/claude-drift-memo-memo-*
 
 # 10. the real path, model included. Off by default: it costs a model call.

@@ -58,24 +58,31 @@ if [ -z "$repo_root" ]; then
   repo_root="$(pwd)"
 fi
 
-# --- gate 2: a wave plan must exist ------------------------------------------
-plan_file="$(ls -t "$repo_root"/docs/superpowers/plans/*-wave-*.md 2>/dev/null | head -n1)"
-if [ -z "$plan_file" ] || [ ! -f "$plan_file" ]; then
-  silent "no-plan"
-fi
-
-# --- gate 3: the plan must declare itself active ------------------------------
-# The plan is a permanent artifact; its status is what says whether the wave is
-# running. Deleting the plan to stop the hook would burn the record the whole
-# design depends on, so the lifecycle lives in a field instead.
-# Fail CLOSED: only an explicit `status: active` opens this gate. A plan with no
-# status, or any other value, is treated as not running. The alternative — open
-# by default, closed on `status: done` — reproduces the original defect for any
-# plan whose author never wrote a status: the file outlives the wave and the hook
+# --- gate 2+3: an ACTIVE plan must exist --------------------------------------
+# Any plan under docs/superpowers/plans/, not only a wave plan: an orchestrator
+# drifts from an implementation plan the same way it drifts from a wave — a task
+# quietly dropped, a step reported done that nothing ran. The mechanism does not
+# care which kind it is, only that the plan states its own tasks.
+#
+# Fail CLOSED: a plan is considered running only when it says `status: active`.
+# A missing or unrecognised status keeps the hook off. The alternative — open by
+# default, closed on `status: done` — reproduces the original defect for every
+# plan whose author never wrote a status: the file outlives the work and the hook
 # fires forever. A hook must not be able to switch itself on by omission.
-plan_status="$(sed -n 's/^[[:space:]]*status:[[:space:]]*\([a-zA-Z-]*\).*/\1/p' "$plan_file" | head -n1)"
-if [ "$plan_status" != "active" ]; then
-  silent "wave-not-active"
+plan_file=""
+while IFS= read -r candidate; do
+  [ -f "$candidate" ] || continue
+  st="$(sed -n 's/^[[:space:]]*status:[[:space:]]*\([a-zA-Z-]*\).*/\1/p' "$candidate" | head -n1)"
+  if [ "$st" = "active" ]; then
+    plan_file="$candidate"
+    break
+  fi
+done <<EOF
+$(ls -t "$repo_root"/docs/superpowers/plans/*.md 2>/dev/null)
+EOF
+
+if [ -z "$plan_file" ]; then
+  silent "no-active-plan"
 fi
 
 # --- gate 4: self-clearing safety net ----------------------------------------
@@ -242,6 +249,31 @@ if [ -z "$escaped" ]; then
 fi
 
 [ -n "$digest" ] && printf '%s' "$digest" > "$memo" 2>/dev/null
+
+# --- keep a record of what was advised ----------------------------------------
+# Advice that vanishes into a context window cannot be audited. Without a record
+# there is no way to ask the question that matters most about an advisory layer:
+# does the orchestrator act on it, or does it sail past? The log is append-only,
+# outside the repository, and never read back by the hook — it exists for the
+# human, not for the mechanism.
+log_dir="${TMPDIR:-/tmp}/claude-drift-log"
+mkdir -p "$log_dir" 2>/dev/null
+export DRIFT_SESSION="$session_id" DRIFT_PLAN="$plan_file" DRIFT_SAID="$last_said"
+export DRIFT_LOG="$log_dir/${session_id}.jsonl"
+printf '%s' "$answer" | python3 -c '
+import json, sys, os
+try:
+    entry = {
+        "session": os.environ.get("DRIFT_SESSION", ""),
+        "plan": os.environ.get("DRIFT_PLAN", ""),
+        "said": os.environ.get("DRIFT_SAID", "")[:400],
+        "advice": sys.stdin.read()[:2000],
+    }
+    with open(os.environ["DRIFT_LOG"], "a") as f:
+        f.write(json.dumps(entry) + "\n")
+except Exception:
+    pass
+' 2>/dev/null || true
 
 printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":%s}}\n' "$escaped"
 exit 0

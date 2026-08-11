@@ -356,10 +356,14 @@ never deleted to quiet the hook. Its lifecycle lives in a field instead:
 status: active   # active | done — only 'active' runs the hook
 ```
 
-Six gates decide whether the model is called at all, cheapest first: a nested run
-of the hook inside its own `claude -p` call; a turn that our own advice caused;
-no wave plan; **the plan does not say `status: active`**; no branch named by the
-plan still exists; and a turn where the orchestrator claimed nothing.
+It watches **any** plan under `docs/superpowers/plans/`, not only a wave plan: an
+orchestrator drifts from an implementation plan the same way — a task quietly
+dropped, a step reported done that nothing ran.
+
+Five gates decide whether the model is called at all, cheapest first: a nested
+run of the hook inside its own `claude -p` call; a turn that our own advice
+caused; **no plan says `status: active`**; no branch named by the plan still
+exists; and a turn where the orchestrator claimed nothing.
 
 Two of those come from running it rather than reading it. **The gate reads the
 hook payload, never the transcript file** — the Stop hook fires before the
@@ -372,8 +376,13 @@ of advice cost three deliveries and about a minute.
 The status gate **fails closed**. Only an explicit `status: active` runs the
 hook; a missing or unrecognised status keeps it off. Closing on `status: done`
 instead would have reproduced the original defect for every plan whose author
-never wrote a status — the file outlives the wave and the hook fires forever. A
+never wrote a status — the file outlives the work and the hook fires forever. A
 hook must not be able to switch itself on by omission.
+
+Delivered advice is appended to `$TMPDIR/claude-drift-log/<session>.jsonl` with
+the plan and what the orchestrator had just said. The hook never reads it back;
+it exists so the question that matters about any advisory layer — does anyone
+act on it — can be answered from evidence instead of impression.
 
 The fourth gate is the one that matters for cost. Branches disappear when their
 work is merged, so it reads the state of the work rather than anyone's
