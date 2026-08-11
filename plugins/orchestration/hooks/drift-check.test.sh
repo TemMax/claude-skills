@@ -46,8 +46,9 @@ expect() {  # $1 = label, $2 = expected, $3 = actual
   fi
 }
 
-CLAIM='{"role":"assistant","text":"task drift-hook is done and verified"}'
-NOCLAIM='{"role":"assistant","text":"looking at the file now"}'
+CLAIM='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Summary: 2 tasks done, verified, nothing remaining."}]}}'
+NOCLAIM='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me look at the file now."}]}}'
+TOOLNOISE='{"type":"user","message":{"role":"user","content":"12 passed in 0.4s, all tests complete and verified"}}'
 
 # 1. no plan at all
 setup_repo; write_transcript "$CLAIM"
@@ -97,6 +98,12 @@ expect "plan with no status stays off" "silent: wave-not-active" "$(run_hook)"
 # 7c. an unrecognised status is not an invitation either
 setup_repo; write_plan paused ""; write_transcript "$CLAIM"
 expect "unknown status stays off" "silent: wave-not-active" "$(run_hook)"
+
+# 6b. tool output full of the old keywords must NOT trigger a call: this is the
+#     measured failure of the previous filter, which passed 99% of real turns.
+setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$TOOLNOISE"
+git -C "$WORK/repo" branch wave/alpha
+expect "tool output alone does not trigger" "silent: nothing-said" "$(run_hook)"
 
 # 8. no transcript to read
 setup_repo; write_plan active "branch: wave/alpha"

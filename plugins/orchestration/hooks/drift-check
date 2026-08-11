@@ -96,10 +96,14 @@ fi
 
 # --- gate 5: cost pre-filter (a heuristic, and labelled as one) ---------------
 # Reading the transcript costs nothing; asking the model costs ~8s. Only ask when
-# the turn actually claimed something worth checking. This filters COST, not
-# correctness: a missed check in an advisory mechanism is a missed suggestion,
-# which is why a keyword gate is an acceptable trade here and would not be if the
-# hook could block.
+# the ORCHESTRATOR claimed something — drift lives in what it says, not in what
+# tools printed. Measured on 300 real sessions (2026-08-11): grepping broad
+# keywords over the 200-line tail passes 99% of turns and saves nothing, because
+# tool output and file contents are full of "done" and "passed". Matching
+# claim-shaped phrasing against the last assistant message alone passes 13%.
+# This filters COST, not correctness: a missed check in an advisory mechanism is
+# a missed suggestion, which is why a heuristic is an acceptable trade here and
+# would not be if the hook could block.
 transcript_path="$(printf '%s' "$payload" | python3 -c '
 import json, sys
 try:
@@ -117,7 +121,31 @@ if [ -z "$transcript_tail" ]; then
   silent "no-transcript"
 fi
 
-if ! printf '%s' "$transcript_tail" | grep -qiE 'done|complete|finished|verified|merged|passed|landed|shipped|task .*(result|report)'; then
+# The last thing the assistant actually said this turn — not the tool noise.
+last_said="$(printf '%s' "$transcript_tail" | python3 -c '
+import json, sys
+out = ""
+for line in sys.stdin:
+    try: d = json.loads(line)
+    except Exception: continue
+    m = d.get("message") or {}
+    if d.get("type") == "assistant" or m.get("role") == "assistant":
+        c = m.get("content") or d.get("content")
+        if isinstance(c, list):
+            t = " ".join(b.get("text","") for b in c if isinstance(b, dict) and b.get("type") == "text")
+        elif isinstance(c, str):
+            t = c
+        else:
+            t = ""
+        if t.strip(): out = t
+print(out)
+' 2>/dev/null || true)"
+
+if [ -z "$last_said" ]; then
+  silent "nothing-said"
+fi
+
+if ! printf '%s' "$last_said" | grep -qiE '\b(i|we) (ran|verified|merged|pushed|completed|finished|tested)\b|\ball (tasks|three|of them)\b|\b(wave|task|plan)\b[^.]{0,40}\b(complete|done|finished)\b|\bnothing remaining\b|\bsummary:'; then
   silent "nothing-claimed"
 fi
 
