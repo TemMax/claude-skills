@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Advisory "orchestrator drift" Stop hook.
+#
+# Reads the hook payload (JSON with a "transcript_path" field) from stdin.
+# If a wave plan exists in the repo, asks a cheap model whether the
+# orchestrator has drifted from it, and surfaces the answer as additional
+# context for the Stop event. This hook is advisory only: it must never
+# block the session and must never exit non-zero. Any failure along the
+# way (missing files, a failing/timing-out/empty model call) simply
+# results in an empty "{}" response.
+
+set -u
+
+emit_empty() {
+  printf '{}\n'
+  exit 0
+}
+
+# Always consume stdin so the caller never blocks on a full pipe, even
+# though we only care about one field from it.
+payload="$(cat 2>/dev/null || true)"
+
+# Find the repo root so the plan glob is anchored correctly regardless of
+# the hook's working directory; fall back to cwd if git is unavailable.
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -z "$repo_root" ]; then
+  repo_root="$(pwd)"
+fi
+
+# Look for a wave plan. Nothing to supervise -> silence.
+plan_file="$(ls -t "$repo_root"/docs/superpowers/plans/*-wave-*.md 2>/dev/null | head -n1)"
+if [ -z "$plan_file" ] || [ ! -f "$plan_file" ]; then
+  emit_empty
+fi
+
+# Resolve the plugin root: prefer the env var the harness sets, fall back
+# to the script's own location for standalone/manual runs.
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  plugin_root="$CLAUDE_PLUGIN_ROOT"
+else
+  plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd 2>/dev/null)"
+fi
+
+prompt_file="$plugin_root/skills/multi-model/references/orchestrator-drift-prompt.md"
+if [ -z "$plugin_root" ] || [ ! -f "$prompt_file" ]; then
+  emit_empty
+fi
+
+prompt_text="$(cat "$prompt_file" 2>/dev/null || true)"
+plan_text="$(cat "$plan_file" 2>/dev/null || true)"
+
+# Pull transcript_path out of the payload and grab a recent tail of it.
+transcript_path="$(printf '%s' "$payload" | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    print(data.get("transcript_path", "") or "")
+except Exception:
+    print("")
+' 2>/dev/null || true)"
+
+transcript_tail=""
+if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+  transcript_tail="$(tail -n 200 "$transcript_path" 2>/dev/null || true)"
+fi
+
+full_prompt="$(printf '%s\n\n---\nWave plan (%s):\n%s\n\n---\nRecent transcript tail:\n%s\n' \
+  "$prompt_text" "$plan_file" "$plan_text" "$transcript_tail")"
+
+# Call the model in the background behind a hand-rolled watchdog so we
+# never hang the session, even if `claude` itself ignores signals or the
+# host has no `timeout`/`gtimeout` binary installed.
+tmp_out="$(mktemp 2>/dev/null || echo "/tmp/drift-check.$$")"
+claude -p "$full_prompt" --model claude-haiku-4-5-20251001 >"$tmp_out" 2>/dev/null &
+claude_pid=$!
+
+(
+  sleep 110
+  kill -TERM "$claude_pid" 2>/dev/null
+) &
+watchdog_pid=$!
+
+wait "$claude_pid" 2>/dev/null
+claude_status=$?
+
+kill "$watchdog_pid" 2>/dev/null
+wait "$watchdog_pid" 2>/dev/null
+
+answer="$(cat "$tmp_out" 2>/dev/null || true)"
+rm -f "$tmp_out" 2>/dev/null
+
+if [ "$claude_status" -ne 0 ] || [ -z "$answer" ]; then
+  emit_empty
+fi
+
+escaped="$(printf '%s' "$answer" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))' 2>/dev/null || true)"
+if [ -z "$escaped" ]; then
+  emit_empty
+fi
+
+printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":%s}}\n' "$escaped"
+exit 0
