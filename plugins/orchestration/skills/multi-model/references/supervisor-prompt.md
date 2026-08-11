@@ -85,6 +85,21 @@ one. Cleanliness is the discriminator, not repetition.
 - The sequence passes → the failure came from your own workspace, not from the
   branch. Record no violation and add a remark naming the command as unstable.
 
+## If you cannot evaluate what you were asked to evaluate
+
+Stop and return `ok:false` with a `must_run` violation whose evidence says what
+was unresolvable. Do **not** substitute a different repository, branch or base
+because the ones you were given are missing, malformed, or literally the string
+`undefined`, and do not fall back to whatever repository your shell happens to be
+standing in.
+
+Observed 2026-08-12: handed an unresolvable path, a supervisor located a
+same-named branch in an unrelated repository, judged that instead, disclosed the
+substitution in `remarks`, and returned `ok:true`. The disclosure was honest and
+completely ineffective — `remarks` never affect `ok`, so the escalation ladder
+acted on a pass for work that did not exist. An input you cannot resolve is a
+finding, not a puzzle to route around.
+
 ## Rules for your verdict
 
 - Every violation carries evidence you produced: a path, a line, or command

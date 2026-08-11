@@ -262,3 +262,37 @@ not more instruction:
 
 Both are design changes with real costs, and neither should be made at the end of
 a long session. Recorded as the open question it is.
+
+## Ladder probe, 2026-08-12 — invalid, and three findings anyway
+
+The probe was meant to force the escalation ladder through all three rungs by
+giving one task an unsatisfiable contract. It took one rung and stopped, because
+the premise never reached the executors: `args` arrived as a string, so `repo`
+and `base` were the literal `undefined`. **The ladder remains untested.**
+
+That bug is one I had already hit, diagnosed and written up in this same session.
+The fix went into the workflow script that suffered it; the next script I wrote
+reproduced it from scratch. A fix that lives in one file protects one file.
+
+### The finding that matters more than the ladder
+
+Handed an unresolvable repository path, the second supervisor **substituted a
+different repository** — the session's own — found a same-named `wave/ladder`
+branch in it, evaluated that, and returned `ok:true`. It disclosed the
+substitution in `remarks`, accurately and in detail.
+
+That honesty was structurally incapable of helping. `remarks` never affect `ok`
+by design, so the disclosure went into a channel the ladder does not read, and
+the ladder acted on a pass for work that did not exist. Fixed: an input the
+supervisor cannot resolve is now itself a `must_run` violation, with an explicit
+prohibition on substituting a repository, branch or base — including falling back
+to whatever repository the shell is standing in.
+
+### And the agents were not isolated
+
+The probe script did not pass `isolation: 'worktree'`, so its agents operated
+directly in the real project repository: one created a `wave/ladder` branch there
+and left HEAD checked out on it. No content was lost — no commits beyond mine —
+but the working repository was modified by a probe that had no business touching
+it. Restored by hand. Wave Isolation is in the skill precisely for this, and the
+probe did not follow the skill it was probing.
