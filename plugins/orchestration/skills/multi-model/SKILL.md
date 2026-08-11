@@ -363,7 +363,13 @@ dropped, a step reported done that nothing ran.
 Five gates decide whether the model is called at all, cheapest first: a nested
 run of the hook inside its own `claude -p` call; a turn that our own advice
 caused; **no plan says `status: active`**; no branch named by the plan still
-exists; and a turn where the orchestrator claimed nothing.
+the plan **declares** with a `branch:` key still exists; and a turn where the
+orchestrator claimed nothing.
+
+The branch gate reads declared branches only. Matching `wave/...` anywhere in the
+text silenced any generalised plan that merely mentioned an old branch in prose —
+a wave-specific gate left in the path of a trigger that is no longer
+wave-specific.
 
 Two of those come from running it rather than reading it. **The gate reads the
 hook payload, never the transcript file** — the Stop hook fires before the
@@ -373,8 +379,12 @@ session, so a file-based gate would silently never fire. The payload carries
 continue, which fires Stop again: without the `stop_hook_active` gate one piece
 of advice cost three deliveries and about a minute.
 
-The status gate **fails closed**. Only an explicit `status: active` runs the
-hook; a missing or unrecognised status keeps it off. Closing on `status: done`
+The status gate **fails closed**, and reads only the plan's header — it stops at
+the first code fence and requires the key at column 0. Only an explicit
+`status: active` runs the hook; a missing or unrecognised status keeps it off. A
+page that documents the feature by showing the key inside a fenced yaml block
+would otherwise switch the hook on: the activate-by-omission failure in a
+different hat. Closing on `status: done`
 instead would have reproduced the original defect for every plan whose author
 never wrote a status — the file outlives the work and the hook fires forever. A
 hook must not be able to switch itself on by omission.
