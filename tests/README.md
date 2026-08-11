@@ -35,6 +35,40 @@ prompt ever saw it. A supervisor that returns `ok:true` unconditionally passes
 every other tier in this repository and fails here; so does a drift check that
 answers `NOTHING` to everything.
 
+## Repeating the guards
+
+A single model call proves a case *can* pass, not that it reliably does. The two
+false-positive guards — D3 (crying wolf on a clean run) and F3 (blocking correct
+work) — take `EVAL_REPEAT`, because those are the failures that make a
+supervision layer worse than none:
+
+```
+EVAL_REPEAT=5 ./tests/run.sh --live
+```
+
+Measured 2026-08-11 at 5 runs each: both 5/5. No flakiness observed on the cases
+where a wrong answer costs the most.
+
+## What this suite cannot tell you
+
+Worth stating plainly, because a green run is easy to over-read.
+
+- **Every fixture was written by the same mind that wrote the prompts.** They
+  test imagined failures. The three serious defects found on 2026-08-11 all came
+  from outside that imagination: a hash tool absent on another platform, a status
+  key inside a documentation fence, a wave-specific gate left in a generalised
+  path. No self-authored suite escapes its author's blind spots.
+- **One model.** Every evaluation runs on Haiku 4.5 unless `EVAL_MODEL` says
+  otherwise. The skills claim to work with Fable 5, Opus 4.8 and Opus 5 in the
+  reviewing and supervising roles; that is untested here.
+- **No adversarial fixtures.** Every case is an ordinary failure. Nobody has
+  tried to *defeat* the supervisor — pasted output differing only in whitespace,
+  or work that satisfies a contract's letter against its point. The dossiers
+  document models rules-lawyering around wording, and nothing here tests it.
+- **The escalation ladder has never executed.** Every wave task so far passed on
+  the first attempt, so rework, the forged-evidence rung-skip and the terminal
+  rung are prose that has never run.
+
 ## Adding to it
 
 A defect found in the wild earns a permanent case, in the tier that would have
