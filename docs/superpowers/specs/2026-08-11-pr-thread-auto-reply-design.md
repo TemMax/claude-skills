@@ -139,10 +139,21 @@ can fail on the fourth thread of seven. Execution rules:
 - stop the loop on the first failure; do not continue hoping the next succeeds;
 - name every thread in the report — answered, resolved, skipped, failed;
 - **idempotency**: immediately before posting, re-run the thread query and skip
-  any thread whose latest comment author is the current `gh api user` login, or
-  that is already `isResolved`. GitHub has no "answered" flag, so authorship of
-  the last comment is the signal; without it a retry after a partial failure
-  would double-post into a reviewer's thread.
+  a thread when it is already `isResolved`, or when it already contains a
+  comment by the current `gh api user` login whose body carries the marker
+  `<!-- critical-review-fix-reply -->`. Every reply this phase posts ends with
+  that marker; GitHub renders HTML comments as nothing, so readers never see it.
+
+  **Not** bare authorship of the last comment. The rehearsal on 2026-08-11
+  caught this: the authorship rule reported SKIP on all three seeded threads
+  before a single reply had been posted. The realistic failure is a PR author
+  who answered a reviewer with "will fix" before running this phase — their
+  thread would be silently skipped, the reviewer would never get the fix
+  confirmation, and the report would call it "already answered".
+
+  If a thread's `comments.totalCount` exceeds the 50 fetched, the marker may sit
+  outside the window: do not post, and list the thread for manual handling.
+  Failing to post is recoverable; double-posting is not.
 
 ### 5. Reply content
 
@@ -195,8 +206,9 @@ query($owner:String!,$repo:String!,$pr:Int!,$endCursor:String){
         nodes{
           id isResolved isOutdated path line
           viewerCanReply viewerCanResolve
-          root: comments(first:1){nodes{databaseId}}
-          latest: comments(last:10){nodes{author{login}}}
+          root: comments(first:1){nodes{databaseId body author{login}}}
+          totalComments: comments{totalCount}
+          latest: comments(last:50){nodes{author{login} body}}
         }
       }
     }
@@ -245,7 +257,8 @@ section 4 reads the field instead of inferring the answer.
 | `viewerCanReply: false` on a thread | Thread is listed in the gate as untouchable, with its prepared text for manual use |
 | Node count ≠ `totalCount` after pagination | Stop with an explicit error; do not present a partial thread inventory as complete |
 | `push` rejected (needs rebase) | Stop before replies; return to the user |
-| Thread already `isResolved`, or its latest comment is ours | Skipped, not touched |
+| Thread already `isResolved`, or already carries our marker comment | Skipped, not touched |
+| Thread has more comments than the 50 fetched | Marker may be outside the window — do not post; list for manual handling |
 | Reply or resolve fails mid-loop | Stop the loop; report exactly which threads landed and which did not |
 | Non-PR scope (uncommitted changes) | Same protocol minus all thread steps; the gate covers the fix commits and the push |
 

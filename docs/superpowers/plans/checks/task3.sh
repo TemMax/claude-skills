@@ -30,6 +30,10 @@ check "resolve requires a complete fix" \
   "grep -q 'closes the comment completely' $F"
 check "reply language follows the thread" \
   "grep -q 'language of the thread being answered' $F"
+check "replies carry the idempotency marker" \
+  "grep -q 'critical-review-fix-reply' $F"
+check "idempotency skips on the marker, not on authorship" \
+  "grep -q 'never on bare authorship' $F"
 check "failure-case table exists" \
   "grep -q 'push\` rejected (needs rebase)' $F"
 

@@ -90,7 +90,8 @@ working tree is what would ship next.
              id isResolved isOutdated path line
              viewerCanReply viewerCanResolve
              root: comments(first:1){nodes{databaseId body author{login}}}
-             latest: comments(last:10){nodes{author{login} body}}
+             totalComments: comments{totalCount}
+             latest: comments(last:50){nodes{author{login} body}}
            }
          }
        }
@@ -304,11 +305,23 @@ can fail on the fourth thread of seven. So:
   succeeds;
 - name every thread in the report: answered, resolved, skipped, failed;
 - **idempotency** — immediately before posting, re-run the thread query from
-  PR Protocol step 2 and skip any thread that is already `isResolved` or whose
-  latest comment author is your own `gh api user --jq .login`. GitHub has no
-  "answered" flag; authorship of the last comment is the only signal. Without
-  this check, a retry after a partial failure double-posts into a reviewer's
-  thread.
+  PR Protocol step 2 and skip a thread when it is already `isResolved`, or
+  when it already contains a comment authored by your own
+  `gh api user --jq .login` **whose body contains the marker**
+  `<!-- critical-review-fix-reply -->`. Without this check, a retry after a
+  partial failure double-posts into a reviewer's thread.
+
+  Skip on the marker, never on bare authorship. GitHub has no "answered"
+  flag, and "the last comment is mine" is not the same claim: a PR author who
+  answered a reviewer with "will fix" before running this phase would have
+  their thread silently skipped, the reviewer would never get the fix
+  confirmation, and the report would call it "already answered". The marker
+  identifies this phase's own replies and nothing else.
+
+  If `totalComments.totalCount` exceeds the 50 comments fetched, the marker
+  may lie outside the window: do not post to that thread. List it in the
+  report for manual handling. Failing to post is recoverable; double-posting
+  into someone's review thread is not.
 
 ### What may be answered
 
@@ -344,6 +357,11 @@ Write the reply in the **language of the thread being answered**, not the
 language of this chat session. An English-speaking reviewer does not get a
 Russian reply.
 
+Every reply ends with the marker line `<!-- critical-review-fix-reply -->`.
+GitHub renders HTML comments as nothing, so it is invisible to readers, and it
+is what the idempotency check looks for on a retry. A reply without it will be
+posted twice if the run is interrupted and restarted.
+
 ### Resolve policy
 
 Resolve only when the applied fix closes the comment completely.
@@ -378,7 +396,8 @@ gh api graphql \
 | `viewerCanReply: false` on a thread | Listed in the gate as untouchable, with its prepared text for manual use |
 | Node count ≠ `totalCount` after pagination | Stop with an explicit error; never present a partial thread inventory as complete |
 | `push` rejected (needs rebase) | Stop before replies; return to the user |
-| Thread already `isResolved`, or its latest comment is yours | Skip it, do not touch it |
+| Thread already `isResolved`, or already carries your marker comment | Skip it, do not touch it |
+| Thread has more comments than the 50 fetched | Marker may be outside the window — do not post; list it for manual handling |
 | Reply or resolve fails mid-loop | Stop the loop; report exactly which threads landed and which did not |
 | Non-PR scope (uncommitted changes) | Same protocol minus every thread step; the gate covers the fix commits and the push |
 
@@ -400,6 +419,7 @@ gh api graphql \
 | Replying before the push | The reply cites a commit that is not on the remote yet | `push` → replies → resolves, in that order |
 | Resolving a partially addressed thread | Closes a conversation the reviewer never agreed was finished | Resolve only on a complete fix; otherwise reply and leave it open |
 | Answering a thread that merely resembles the finding | A reviewer is told their comment was fixed when it was not | Reply only to the thread recorded in that finding's provenance |
+| Treating "the last comment is mine" as "already answered" | A thread the author had commented in gets silently skipped and never answered | Skip only on the `<!-- critical-review-fix-reply -->` marker |
 
 ## References
 

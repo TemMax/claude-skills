@@ -12,8 +12,10 @@ check "per-thread capability fields are fetched" \
   "grep -q 'viewerCanReply viewerCanResolve' $F"
 check "root comment databaseId is fetched for replies" \
   "grep -q 'root: comments(first:1)' $F"
-check "latest comment authors are fetched for idempotency" \
-  "grep -q 'latest: comments(last:10)' $F"
+check "latest comments are fetched for idempotency" \
+  "grep -q 'latest: comments(last:50)' $F"
+check "comment totalCount is fetched to detect a truncated window" \
+  "grep -q 'totalComments: comments{totalCount}' $F"
 check "node count is reconciled against totalCount" \
   "grep -q 'totalCount' $F"
 # The prose deliberately names the REST endpoint to explain why it is unusable,
