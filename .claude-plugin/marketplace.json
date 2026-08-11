@@ -12,7 +12,7 @@
     {
       "name": "code-review",
       "source": "./plugins/code-review",
-      "description": "Critical code review of uncommitted changes or a GitHub PR. Adapts to whichever model reviews."
+      "description": "Critical code review of uncommitted changes or a GitHub PR, plus a post-review fix phase that answers and resolves the PR threads its findings came from. Adapts to whichever model reviews."
     }
   ]
 }
