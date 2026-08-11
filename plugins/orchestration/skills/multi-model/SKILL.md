@@ -138,9 +138,29 @@ branch for independent verification.
 
 For an unsupervised wave, tasks still must not overlap in the files they touch.
 
+## Wave Plan Artifact
+
+Before launching a supervised wave, write the plan to a file — one entry per
+task, carrying the prose, the contract, the assigned model, the branch and the
+base SHA:
+
+```yaml
+base: 7c05ff5
+tasks:
+  - task: http-retry
+    model: claude-sonnet-5
+    branch: wave/http-retry
+    contract: {...}
+```
+
+Without this file "deviation" has no referent: there is nothing to deviate
+from. It is a file rather than something you hold in context because a wave
+outlives a context window, and a summarized context keeps the task list while
+losing the exact identifiers the supervisor needs.
+
 ## Task Prompt Template (mandatory blocks)
 
-Every executor prompt contains all five blocks — explicit instructions measurably
+Every executor prompt contains all six blocks — explicit instructions measurably
 reduce the documented failure modes:
 
 1. **Context:** specific files and lines, dependencies, project conventions.
@@ -160,6 +180,33 @@ reduce the documented failure modes:
    when it conflicts with "the overriding goal".
 5. **Definition of done and response format:** list of changed files, the gist of
    the changes, output of actually executed tests/linter.
+6. **Contract:** the machine-checkable half of the task. Prose carries intent;
+   the contract carries what a supervisor can decide without arguing about
+   intent.
+
+   ```yaml
+   contract:
+     files_allowed:   [src/http/**, tests/http/**]
+     files_forbidden: [src/auth/**]        # another task owns these this wave
+     must_run:
+       - cmd: pytest tests/http -q
+         evidence: required
+     forbidden_moves:
+       - weakening, deleting or skipping an existing test
+       - catching an exception to make a check pass
+     report_must_answer:
+       - Which call sites now retry?
+       - What happens after the final failed attempt?
+   ```
+
+   `evidence: required` replaces trust. A report claiming a command passed
+   without that command's actual output is not weak evidence — it is a
+   violation in its own right.
+
+   State the prohibitions explicitly and loudly. This is measured, not
+   stylistic: an explicit "don't work around it — report it" lowers fabricated
+   workarounds from 17.4% to 9.1% for Fable 5 (pp. 161–163) and from 9.4% to
+   2.8% for Opus 4.8 (pp. 109–110).
 
 For tasks with images/PDF/charts — give Sonnet code-execution access.
 
