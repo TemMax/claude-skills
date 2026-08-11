@@ -52,9 +52,14 @@ fi
 # The plan is a permanent artifact; its status is what says whether the wave is
 # running. Deleting the plan to stop the hook would burn the record the whole
 # design depends on, so the lifecycle lives in a field instead.
+# Fail CLOSED: only an explicit `status: active` opens this gate. A plan with no
+# status, or any other value, is treated as not running. The alternative — open
+# by default, closed on `status: done` — reproduces the original defect for any
+# plan whose author never wrote a status: the file outlives the wave and the hook
+# fires forever. A hook must not be able to switch itself on by omission.
 plan_status="$(sed -n 's/^[[:space:]]*status:[[:space:]]*\([a-zA-Z-]*\).*/\1/p' "$plan_file" | head -n1)"
-if [ "$plan_status" = "done" ]; then
-  silent "wave-done"
+if [ "$plan_status" != "active" ]; then
+  silent "wave-not-active"
 fi
 
 # --- gate 4: self-clearing safety net ----------------------------------------

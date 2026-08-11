@@ -353,13 +353,19 @@ contracted to do, and the thing a supervisor compares against. So the plan is
 never deleted to quiet the hook. Its lifecycle lives in a field instead:
 
 ```yaml
-status: active   # active | done
+status: active   # active | done — only 'active' runs the hook
 ```
 
 Five gates decide whether the model is called at all, cheapest first: a nested
-run of the hook inside its own `claude -p` call; no wave plan; `status: done`;
-**no branch named by the plan still exists**; and a turn whose transcript claims
-nothing worth checking.
+run of the hook inside its own `claude -p` call; no wave plan; **the plan does
+not say `status: active`**; no branch named by the plan still exists; and a turn
+whose transcript claims nothing worth checking.
+
+The status gate **fails closed**. Only an explicit `status: active` runs the
+hook; a missing or unrecognised status keeps it off. Closing on `status: done`
+instead would have reproduced the original defect for every plan whose author
+never wrote a status — the file outlives the wave and the hook fires forever. A
+hook must not be able to switch itself on by omission.
 
 The fourth gate is the one that matters for cost. Branches disappear when their
 work is merged, so it reads the state of the work rather than anyone's

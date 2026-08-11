@@ -56,7 +56,7 @@ expect "no plan in the repo" "silent: no-plan" "$(run_hook)"
 # 2. plan present but the wave is finished
 setup_repo; write_plan done "branch: wave/alpha"; write_transcript "$CLAIM"
 git -C "$WORK/repo" branch wave/alpha 2>/dev/null
-expect "status: done wins over live branches" "silent: wave-done" "$(run_hook)"
+expect "status: done wins over live branches" "silent: wave-not-active" "$(run_hook)"
 
 # 3. active, but every branch it names is gone — the self-clearing net
 setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$CLAIM"
@@ -78,10 +78,25 @@ setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$NOCLAIM"
 git -C "$WORK/repo" branch wave/alpha
 expect "cost pre-filter, nothing claimed" "silent: nothing-claimed" "$(run_hook)"
 
-# 7. a plan naming no branches falls through to the pre-filter rather than
-#    silently blocking on gate 4
+# 7. an explicitly active plan naming no branches still runs — opting in is a
+#    deliberate act, and the branch net simply has nothing to check
 setup_repo; write_plan active ""; write_transcript "$CLAIM"
-expect "plan without branches still runs" "would-call" "$(run_hook)"
+expect "explicitly active plan without branches runs" "would-call" "$(run_hook)"
+
+# 7b. THE REGRESSION THAT MATTERS: a plan with no status field at all must not
+#     switch the hook on. Open-by-default is what made the plan file a permanent
+#     trigger in the first place.
+setup_repo; write_transcript "$CLAIM"
+cat > "$WORK/repo/docs/superpowers/plans/2026-01-01-wave-test.md" <<'EOF'
+base: deadbee
+tasks:
+  - task: alpha
+EOF
+expect "plan with no status stays off" "silent: wave-not-active" "$(run_hook)"
+
+# 7c. an unrecognised status is not an invitation either
+setup_repo; write_plan paused ""; write_transcript "$CLAIM"
+expect "unknown status stays off" "silent: wave-not-active" "$(run_hook)"
 
 # 8. no transcript to read
 setup_repo; write_plan active "branch: wave/alpha"
