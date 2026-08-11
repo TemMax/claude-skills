@@ -1,6 +1,7 @@
 # Wave plan — orchestrator drift layer
 
 base: 9da3e3ab19f5ec481f869260424213f397467e2c
+status: done
 supervision: on
 supervisor model: fable (measured zero self-preference; never the executor's own)
 

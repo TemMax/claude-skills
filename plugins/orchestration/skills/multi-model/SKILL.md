@@ -161,6 +161,7 @@ base SHA:
 
 ```yaml
 base: 7c05ff5
+status: active          # active | done — the hook reads this, never the file's existence
 tasks:
   - task: http-retry
     model: claude-sonnet-5
@@ -345,18 +346,40 @@ Installing the plugin turns it on; removing the plugin turns it off. The user
 edits no settings file to enable or disable it — the hook's presence is the
 only switch.
 
-### Known limitation: the trigger is a file, not a wave
+### When the hook runs, and what it costs
 
-The hook activates when a wave plan file exists under `docs/superpowers/plans/`.
-That file outlives the wave, so in any repository that has ever run one the hook
-keeps firing — measured at roughly 20 seconds per turn on the advisory path,
-against effectively zero when no plan file is present.
+The plan is a permanent artifact — it is the record of what each executor was
+contracted to do, and the thing a supervisor compares against. So the plan is
+never deleted to quiet the hook. Its lifecycle lives in a field instead:
 
-Until the trigger is scoped to an *active* wave rather than to the presence of a
-plan, either remove the plan file when the wave is done, or leave the plugin
-uninstalled outside of waves. Do not paper over this by shortening the model
-call: the cost is the model call, and cutting it short only produces worse
-advice at the same latency.
+```yaml
+status: active   # active | done
+```
+
+Five gates decide whether the model is called at all, cheapest first: a nested
+run of the hook inside its own `claude -p` call; no wave plan; `status: done`;
+**no branch named by the plan still exists**; and a turn whose transcript claims
+nothing worth checking.
+
+The fourth gate is the one that matters for cost. Branches disappear when their
+work is merged, so it reads the state of the work rather than anyone's
+discipline: forget to flip `status` and the hook still goes quiet once the wave
+lands. Forgetting degrades to silence instead of to a permanent per-turn tax.
+
+The fifth gate is a keyword heuristic and is labelled as one in the script. It
+filters cost, not correctness — a missed check in an advisory mechanism is a
+missed suggestion. That trade would not be acceptable if the hook could block.
+
+**The latency cannot be delegated away.** Setting `async: true` on the hook was
+measured on 2026-08-11: the hook does not appear in the session log at all and
+its `additionalContext` is never delivered. Advice and asynchrony are mutually
+exclusive here, so the ~8s model call is paid inside the turn or not at all.
+Gate it; do not shorten it — the cost *is* the model call, and cutting it short
+only buys worse advice at the same price.
+
+`plugins/orchestration/hooks/drift-check.test.sh` covers all five gates offline
+via `CLAUDE_DRIFT_CHECK_DRYRUN=1`, which prints the decision instead of calling
+the model. `LIVE=1` adds the real end-to-end path.
 
 ## Anti-Deception Rules
 

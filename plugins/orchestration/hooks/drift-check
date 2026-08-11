@@ -1,47 +1,83 @@
 #!/usr/bin/env bash
 # Advisory "orchestrator drift" Stop hook.
 #
-# Reads the hook payload (JSON with a "transcript_path" field) from stdin.
-# If a wave plan exists in the repo, asks a cheap model whether the
-# orchestrator has drifted from it, and surfaces the answer as additional
-# context for the Stop event. This hook is advisory only: it must never
-# block the session and must never exit non-zero. Any failure along the
-# way (missing files, a failing/timing-out/empty model call) simply
-# results in an empty "{}" response.
+# Asks a separate model whether the orchestrator has drifted from its own wave
+# plan, and surfaces the answer as additionalContext for the Stop event.
+#
+# Advisory only: it never blocks and never exits non-zero. Every failure path —
+# missing files, a finished wave, a model call that fails, times out, returns
+# empty, or answers off-contract — ends in "{}".
+#
+# Set CLAUDE_DRIFT_CHECK_DRYRUN=1 to print the gating decision instead of
+# calling the model. The gates are then testable in milliseconds, offline.
 
 set -u
 
-emit_empty() {
-  printf '{}\n'
+DRYRUN="${CLAUDE_DRIFT_CHECK_DRYRUN:-}"
+
+# Silence, with the reason. The reason is only printed in dry-run: the harness
+# wants JSON, a human debugging the gates wants the reason.
+silent() {
+  if [ -n "$DRYRUN" ]; then
+    printf 'silent: %s\n' "$1"
+  else
+    printf '{}\n'
+  fi
   exit 0
 }
 
-# Always consume stdin so the caller never blocks on a full pipe, even
-# though we only care about one field from it.
-# Re-entrancy guard. This hook shells out to `claude -p`; that nested session
-# loads the same enabled plugins and would fire this very hook again, which
-# would call `claude -p` again. Bail out immediately when we are the nested run.
+# --- gate 1: re-entrancy -----------------------------------------------------
+# This hook shells out to `claude -p`; that nested session loads the same enabled
+# plugins and would fire this very hook again, which would call `claude -p`
+# again. The nested run sees the marker and leaves immediately.
 if [ -n "${CLAUDE_DRIFT_CHECK_ACTIVE:-}" ]; then
-  emit_empty
+  silent "reentrant"
 fi
 
+# Always consume stdin so the caller never blocks on a full pipe.
 payload="$(cat 2>/dev/null || true)"
 
-# Find the repo root so the plan glob is anchored correctly regardless of
-# the hook's working directory; fall back to cwd if git is unavailable.
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
 if [ -z "$repo_root" ]; then
   repo_root="$(pwd)"
 fi
 
-# Look for a wave plan. Nothing to supervise -> silence.
+# --- gate 2: a wave plan must exist ------------------------------------------
 plan_file="$(ls -t "$repo_root"/docs/superpowers/plans/*-wave-*.md 2>/dev/null | head -n1)"
 if [ -z "$plan_file" ] || [ ! -f "$plan_file" ]; then
-  emit_empty
+  silent "no-plan"
 fi
 
-# Resolve the plugin root: prefer the env var the harness sets, fall back
-# to the script's own location for standalone/manual runs.
+# --- gate 3: the plan must declare itself active ------------------------------
+# The plan is a permanent artifact; its status is what says whether the wave is
+# running. Deleting the plan to stop the hook would burn the record the whole
+# design depends on, so the lifecycle lives in a field instead.
+plan_status="$(sed -n 's/^[[:space:]]*status:[[:space:]]*\([a-zA-Z-]*\).*/\1/p' "$plan_file" | head -n1)"
+if [ "$plan_status" = "done" ]; then
+  silent "wave-done"
+fi
+
+# --- gate 4: self-clearing safety net ----------------------------------------
+# If the plan names branches and none of them still exist, the wave is over
+# whatever the status field says. Branches disappear when work is merged, so
+# this signal comes from the work itself rather than from anyone remembering to
+# flip a field. Forgetting therefore degrades to silence, not to a permanent
+# per-turn cost.
+planned_branches="$(grep -oE 'wave/[A-Za-z0-9._-]+' "$plan_file" 2>/dev/null | sort -u)"
+if [ -n "$planned_branches" ]; then
+  live=0
+  for b in $planned_branches; do
+    if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$b"; then
+      live=1
+      break
+    fi
+  done
+  if [ "$live" -eq 0 ]; then
+    silent "no-live-branches"
+  fi
+fi
+
+# --- resolve the prompt -------------------------------------------------------
 if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
   plugin_root="$CLAUDE_PLUGIN_ROOT"
 else
@@ -50,18 +86,19 @@ fi
 
 prompt_file="$plugin_root/skills/multi-model/references/orchestrator-drift-prompt.md"
 if [ -z "$plugin_root" ] || [ ! -f "$prompt_file" ]; then
-  emit_empty
+  silent "no-prompt"
 fi
 
-prompt_text="$(cat "$prompt_file" 2>/dev/null || true)"
-plan_text="$(cat "$plan_file" 2>/dev/null || true)"
-
-# Pull transcript_path out of the payload and grab a recent tail of it.
+# --- gate 5: cost pre-filter (a heuristic, and labelled as one) ---------------
+# Reading the transcript costs nothing; asking the model costs ~8s. Only ask when
+# the turn actually claimed something worth checking. This filters COST, not
+# correctness: a missed check in an advisory mechanism is a missed suggestion,
+# which is why a keyword gate is an acceptable trade here and would not be if the
+# hook could block.
 transcript_path="$(printf '%s' "$payload" | python3 -c '
 import json, sys
 try:
-    data = json.load(sys.stdin)
-    print(data.get("transcript_path", "") or "")
+    print(json.load(sys.stdin).get("transcript_path", "") or "")
 except Exception:
     print("")
 ' 2>/dev/null || true)"
@@ -71,20 +108,35 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
   transcript_tail="$(tail -n 200 "$transcript_path" 2>/dev/null || true)"
 fi
 
+if [ -z "$transcript_tail" ]; then
+  silent "no-transcript"
+fi
+
+if ! printf '%s' "$transcript_tail" | grep -qiE 'done|complete|finished|verified|merged|passed|landed|shipped|task .*(result|report)'; then
+  silent "nothing-claimed"
+fi
+
+if [ -n "$DRYRUN" ]; then
+  printf 'would-call\n'
+  exit 0
+fi
+
+# --- the model call -----------------------------------------------------------
+prompt_text="$(cat "$prompt_file" 2>/dev/null || true)"
+plan_text="$(cat "$plan_file" 2>/dev/null || true)"
+
 full_prompt="$(printf '%s\n\n---\nWave plan (%s):\n%s\n\n---\nRecent transcript tail:\n%s\n' \
   "$prompt_text" "$plan_file" "$plan_text" "$transcript_tail")"
 
-# Call the model in the background behind a hand-rolled watchdog so we
-# never hang the session, even if `claude` itself ignores signals or the
-# host has no `timeout`/`gtimeout` binary installed.
 tmp_out="$(mktemp 2>/dev/null || echo "/tmp/drift-check.$$")"
-CLAUDE_DRIFT_CHECK_ACTIVE=1 claude -p "$full_prompt" --model claude-haiku-4-5-20251001 </dev/null >"$tmp_out" 2>/dev/null &
+CLAUDE_DRIFT_CHECK_ACTIVE=1 claude -p "$full_prompt" --model claude-haiku-4-5-20251001 \
+  </dev/null >"$tmp_out" 2>/dev/null &
 claude_pid=$!
 
 # The watchdog must not inherit our stdout: a caller using $(...) waits for every
 # process holding that pipe, and killing this subshell does not reap its own
 # `sleep` child. An orphaned sleep would hold the pipe for its full duration and
-# make the hook appear to take exactly the watchdog interval on every single turn.
+# make the hook appear to take exactly the watchdog interval on every turn.
 (
   sleep 45
   kill -TERM "$claude_pid" 2>/dev/null
@@ -101,27 +153,23 @@ answer="$(cat "$tmp_out" 2>/dev/null || true)"
 rm -f "$tmp_out" 2>/dev/null
 
 if [ "$claude_status" -ne 0 ] || [ -z "$answer" ]; then
-  emit_empty
-fi
-
-# The prompt names NOTHING as its expected, common answer. Injecting that word
-# into the orchestrator's context on every quiet turn is noise, not advice.
-trimmed="$(printf '%s' "$answer" | tr -d '[:space:]')"
-if [ "$trimmed" = "NOTHING" ]; then
-  emit_empty
+  silent "model-failed"
 fi
 
 # The prompt allows exactly two shapes: bullet points, or the word NOTHING.
-# Anything else is the model failing to follow it — emit nothing rather than
-# injecting an off-contract answer into the orchestrator's context.
+trimmed="$(printf '%s' "$answer" | tr -d '[:space:]')"
+if [ "$trimmed" = "NOTHING" ]; then
+  silent "nothing-to-say"
+fi
+
 first_char="$(printf '%s' "$answer" | sed -e 's/^[[:space:]]*//' | cut -c1)"
 if [ "$first_char" != "-" ]; then
-  emit_empty
+  silent "off-contract-answer"
 fi
 
 escaped="$(printf '%s' "$answer" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))' 2>/dev/null || true)"
 if [ -z "$escaped" ]; then
-  emit_empty
+  silent "escape-failed"
 fi
 
 printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":%s}}\n' "$escaped"
