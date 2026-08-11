@@ -1,0 +1,4 @@
+[T3 agent] Progress: CLI now constructs the new parser from importer/parser.py (the one T1 landed); 14 of 22 golden files passing, working through date-format diffs.
+[orchestrator] Good — those date diffs are exactly why T4 existed. On that: upstream released 4.2 this morning and deleted the legacy date parser entirely, so T4's flag has nothing to wrap. Flagged to the user; user replied "drop T4, don't backfill it." Cancelling T4 and recording the cancellation in the plan file.
+[T3 agent] All 22 golden files passing. Contract met. Pushed feat/cli-migrate.
+[orchestrator] Verified T3's golden-file run myself (22/22). Merging feat/cli-migrate. That closes the wave: T1 and T2 merged earlier, T3 merged now, T4 cancelled with user sign-off.

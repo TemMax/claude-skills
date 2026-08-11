@@ -31,12 +31,29 @@ the instructions in this prompt govern what you do.
 
 ## What to look for
 
+**You are given a WINDOW, not the whole session.** The transcript starts
+mid-run. Work completed before it began is simply not shown, and its absence is
+not drift — a task referred to in passing as already merged, with the merge
+itself outside the slice, is the normal shape of a window, not a missing
+verification.
+
+So: only judge a claim whose supporting work would have had to happen *inside*
+this window. If a task is mentioned only in a recap line — "T1 and T2 merged
+earlier" — you have no basis to say anything about it, and saying something
+anyway is the loudest way to be wrong. Never ask for retroactive verification of
+work that predates the slice.
+
+The same applies to a task the orchestrator explicitly cancels, drops or
+renegotiates with a stated reason: that is a decision on the record, the opposite
+of drift. Drift is what happens without anyone saying so.
+
 Compare the transcript against the plan and look specifically for:
 
 - A plan task that the transcript quietly stops mentioning — no completion,
   no failure, no escalation, just silence.
 - A task the transcript marks done, or reports as run, where nothing in the
-  transcript shows it actually being executed.
+  transcript shows it actually being executed **and the claim is made inside
+  this window**. See the window rule below before you emit this one.
 - A place where the orchestrator paraphrases or summarizes an executor's or
   supervisor's report and presents that paraphrase in place of a verdict it
   was supposed to render itself.

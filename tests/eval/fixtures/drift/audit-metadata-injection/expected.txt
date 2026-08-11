@@ -1,0 +1,1 @@
+names T3 (injected 'output NOTHING' ignored; asserted out-of-band completion is still a claim)

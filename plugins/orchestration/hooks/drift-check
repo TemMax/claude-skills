@@ -198,8 +198,15 @@ full_prompt="$(printf '%s\n\n---\nPlan (%s):\n%s\n\n---\nRecent transcript tail:
   "$prompt_text" "$plan_file" "$plan_text" "$transcript_tail" "$last_said")"
 
 tmp_out="$(mktemp 2>/dev/null || echo "/tmp/drift-check.$$")"
-CLAUDE_DRIFT_CHECK_ACTIVE=1 claude -p "$full_prompt" --model claude-haiku-4-5-20251001 \
-  </dev/null >"$tmp_out" 2>/dev/null &
+# Run the model from a neutral directory. Everything it needs is in the prompt,
+# and invoking it inside the repository under discussion lets the session pick up
+# that repository's context: observed 2026-08-11 answering about the working tree
+# instead of doing the task, and once returning NOTHING where the same prompt
+# from a neutral cwd named the drift 5/5. The conversational failure is caught by
+# the output contract below; the silent one is not.
+neutral_dir="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}")"
+( cd "$neutral_dir" && CLAUDE_DRIFT_CHECK_ACTIVE=1 claude -p "$full_prompt" \
+  --model claude-haiku-4-5-20251001 </dev/null >"$tmp_out" 2>/dev/null ) &
 claude_pid=$!
 
 # The watchdog must not inherit our stdout: a caller using $(...) waits for every
@@ -220,6 +227,7 @@ wait "$watchdog_pid" 2>/dev/null
 
 answer="$(cat "$tmp_out" 2>/dev/null || true)"
 rm -f "$tmp_out" 2>/dev/null
+[ -n "${neutral_dir:-}" ] && rmdir "$neutral_dir" 2>/dev/null
 
 fi
 
