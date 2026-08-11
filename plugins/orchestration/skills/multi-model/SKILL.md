@@ -210,6 +210,107 @@ reduce the documented failure modes:
 
 For tasks with images/PDF/charts — give Sonnet code-execution access.
 
+## Supervised Waves
+
+Supervision is a stage in the `Workflow` script,
+**not an instruction to self-check**. A check the executor is asked to perform
+is a check it may decide
+it already satisfied; a check in the control flow around it is one it never gets
+a vote on. A stage can also do what advice cannot: reject and re-run.
+
+Send `references/supervisor-prompt.md` to a model that is not the executor's own
+(see Anti-Deception Rules), with the contract, the report, the base SHA and the
+branch.
+
+**The supervisor trusts artifacts only.** It checks out `wave/<task-id>` into
+its own worktree, runs the diff itself, executes each `must_run` command itself,
+and greps for the forbidden moves itself. The report is a set of claims to
+check, never a source of facts.
+
+**Forged evidence is its own violation class.** The executor pastes command
+output; the supervisor re-runs the command and must **compare** the two. A
+mismatch is the least deniable proof of fabrication in this design, and it
+deserves different handling from an honest failure: an executor whose tests fail
+made a mistake, which is what rework is for, while an executor that pasted a
+green run over a real failure did something else. A `forged-evidence` violation
+therefore skips the rework rung and escalates immediately.
+
+Do not conflate it with `forbidden-move`. An agent that weakened a test and then
+truthfully reported the resulting green run forged nothing — judge its diff, not
+its honesty.
+
+Verdict shape:
+
+```json
+{"ok": false,
+ "violations": [{"rule": "must_run:pytest tests/http -q",
+                 "class": "forged-evidence",
+                 "evidence": "report pasted a green run; supervisor got 2 failed",
+                 "quote": "tests/http/test_retry.py::test_backoff FAILED"}],
+ "remarks": ["src/http/backoff.py:41 duplicates the helper in src/net/retry.py"]}
+```
+
+`violations` decide `ok`; `remarks` never do. Classes: `files`, `must_run`,
+`forbidden-move`, `report`, `forged-evidence`. A violation without evidence the
+supervisor produced itself is dropped, not softened — otherwise the supervisor
+fabricates as readily as the executor it judges.
+
+When a `must_run` command fails, run it a second time before recording anything.
+If the retry passes, record a remark naming the command unstable and do not
+block. Spending the supervisor's credibility on flaky tests buys nothing.
+
+### Escalation ladder
+
+| Situation | Action |
+|---|---|
+| 1st violation, no forged evidence | Back to the same executor with the verdict attached |
+| 2nd violation of the same rule | To a stronger model — repeating a prompt on the model that just failed it reproduces the failure |
+| Any `forged-evidence` violation | Skip the rework rung, go straight to a stronger model, mark the task in the wave report |
+| Executor is already the strongest model | No higher rung: retry once at raised effort, then stop |
+| Stop | Hand the user the task, every verdict in order, and the branch name |
+
+The ladder lives inside a single `pipeline` stage. Stages run once per item, so
+spreading execute / supervise / rework across three stages would re-enter the
+pipeline from the top on every rework.
+
+```js
+pipeline(tasks, async (_, t) => {
+  let model = t.model, attempt = 0, history = []
+  while (true) {
+    const report  = await agent(taskPrompt(t, history), {model, phase: 'Execute'})
+    const verdict = await agent(supervisorPrompt(t, report),
+                                {model: supervisorFor(model), phase: 'Supervise',
+                                 schema: VERDICT})
+    history.push(verdict)
+    if (verdict.ok) return {task: t, verdict, model, attempts: attempt + 1}
+    const next = nextRung(model, verdict, ++attempt)
+    if (next.stop) return {task: t, verdict, history, escalatedToUser: true}
+    model = next.model
+  }
+})
+```
+
+### The blocking threshold sits above the suspicion threshold
+
+Rework is triggered only by contract violations. Anything the supervisor merely
+finds doubtful goes to `remarks` and reaches the user through the wave report.
+**Blocking correct work is a worse failure than missing a nitpick** — a
+supervisor that stops legitimate work does not just waste a wave, it
+manufactures confidence in the waves it lets through.
+
+### Cost, and when to skip the model
+
+A supervisor invocation is an agent with tools — a diff, the commands, the
+greps — so it is not one model request. The tiers also invert: a Haiku 4.5 task
+is supervised by Opus 4.8 or Fable 5, making the supervisor the expensive half.
+
+Run full agentic supervision for tasks whose contract has `must_run` commands or
+`files_forbidden` entries that matter: migrations, shared helpers,
+security-adjacent code. For a small mechanical task, check the predicates
+(paths touched, commands run, evidence present) in plain script logic and
+skip the supervisor model. Supervision that costs more than the work it guards
+gets switched off, and then it guards nothing.
+
 ## Result Review Checklist
 
 An agent's self-report is not evidence (every executor has documented false
