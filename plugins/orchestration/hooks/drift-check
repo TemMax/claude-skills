@@ -72,7 +72,11 @@ fi
 plan_file=""
 while IFS= read -r candidate; do
   [ -f "$candidate" ] || continue
-  st="$(sed -n 's/^[[:space:]]*status:[[:space:]]*\([a-zA-Z-]*\).*/\1/p' "$candidate" | head -n1)"
+  # Only the header counts: stop at the first code fence, and require the key at
+  # column 0. A page that DOCUMENTS the feature by showing `status: active`
+  # inside a ```yaml block must not switch the hook on — that is the
+  # activate-by-omission failure this gate exists to prevent, wearing a hat.
+  st="$(sed -n '1,40{/^```/q; s/^status:[[:space:]]*\([a-zA-Z-]*\).*/\1/p;}' "$candidate" | head -n1)"
   if [ "$st" = "active" ]; then
     plan_file="$candidate"
     break
@@ -91,7 +95,10 @@ fi
 # this signal comes from the work itself rather than from anyone remembering to
 # flip a field. Forgetting therefore degrades to silence, not to a permanent
 # per-turn cost.
-planned_branches="$(grep -oE 'wave/[A-Za-z0-9._-]+' "$plan_file" 2>/dev/null | sort -u)"
+# Only branches the plan DECLARES, via a `branch:` key. Matching bare `wave/...`
+# anywhere in the text silenced any generalised plan that merely mentioned an old
+# branch in prose: the gate is wave-specific, the trigger no longer is.
+planned_branches="$(sed -n 's/^[[:space:]-]*branch:[[:space:]]*\([A-Za-z0-9._\/-]*\).*/\1/p' "$plan_file" 2>/dev/null | sort -u)"
 if [ -n "$planned_branches" ]; then
   live=0
   for b in $planned_branches; do
@@ -187,7 +194,7 @@ else
 prompt_text="$(cat "$prompt_file" 2>/dev/null || true)"
 plan_text="$(cat "$plan_file" 2>/dev/null || true)"
 
-full_prompt="$(printf '%s\n\n---\nWave plan (%s):\n%s\n\n---\nRecent transcript tail:\n%s\n\n---\nWhat the orchestrator said as it finished this turn:\n%s\n' \
+full_prompt="$(printf '%s\n\n---\nPlan (%s):\n%s\n\n---\nRecent transcript tail:\n%s\n\n---\nWhat the orchestrator said as it finished this turn:\n%s\n' \
   "$prompt_text" "$plan_file" "$plan_text" "$transcript_tail" "$last_said")"
 
 tmp_out="$(mktemp 2>/dev/null || echo "/tmp/drift-check.$$")"
@@ -226,8 +233,10 @@ if [ "$trimmed" = "NOTHING" ]; then
   silent "nothing-to-say"
 fi
 
-first_char="$(printf '%s' "$answer" | sed -e 's/^[[:space:]]*//' | cut -c1)"
-if [ "$first_char" != "-" ]; then
+# Accept the list markers a model actually reaches for. Requiring exactly "-"
+# threw away real findings written with "*" or a number, silently.
+if ! printf '%s' "$answer" | sed -e 's/^[[:space:]]*//' | head -n1 \
+     | grep -qE '^([-*•]|[0-9]+[.)])[[:space:]]'; then
   silent "off-contract-answer"
 fi
 
@@ -238,7 +247,15 @@ fi
 # and the prompt cannot prevent it: each call is stateless. The memo is keyed by
 # session and holds a digest of the last advice actually delivered.
 memo="${TMPDIR:-/tmp}/claude-drift-memo-${session_id}"
-digest="$(printf '%s' "$answer" | shasum -a 256 2>/dev/null | cut -d' ' -f1)"
+# shasum is a perl script and is absent on many Linux images, where sha256sum is
+# the one present. Without a fallback the memo silently never writes and the
+# repeat suppression is dead while looking alive.
+digest=""
+for hasher in "shasum -a 256" "sha256sum" "openssl dgst -sha256"; do
+  command -v "${hasher%% *}" >/dev/null 2>&1 || continue
+  digest="$(printf '%s' "$answer" | $hasher 2>/dev/null | tr -d '\n' | grep -oE '[0-9a-f]{64}' | head -n1)"
+  [ -n "$digest" ] && break
+done
 if [ -n "$digest" ] && [ -f "$memo" ] && [ "$(cat "$memo" 2>/dev/null)" = "$digest" ]; then
   silent "already-said-this"
 fi
@@ -258,6 +275,7 @@ fi
 # human, not for the mechanism.
 log_dir="${TMPDIR:-/tmp}/claude-drift-log"
 mkdir -p "$log_dir" 2>/dev/null
+export DRIFT_DIGEST_OK="$([ -n "$digest" ] && echo 1 || echo 0)"
 export DRIFT_SESSION="$session_id" DRIFT_PLAN="$plan_file" DRIFT_SAID="$last_said"
 export DRIFT_LOG="$log_dir/${session_id}.jsonl"
 printf '%s' "$answer" | python3 -c '
@@ -268,9 +286,16 @@ try:
         "plan": os.environ.get("DRIFT_PLAN", ""),
         "said": os.environ.get("DRIFT_SAID", "")[:400],
         "advice": sys.stdin.read()[:2000],
+        "digest_ok": os.environ.get("DRIFT_DIGEST_OK", "") == "1",
     }
-    with open(os.environ["DRIFT_LOG"], "a") as f:
-        f.write(json.dumps(entry) + "\n")
+    path = os.environ["DRIFT_LOG"]
+    lines = []
+    if os.path.exists(path):
+        with open(path) as f:
+            lines = f.readlines()[-199:]
+    lines.append(json.dumps(entry) + "\n")
+    with open(path, "w") as f:
+        f.writelines(lines)
 except Exception:
     pass
 ' 2>/dev/null || true

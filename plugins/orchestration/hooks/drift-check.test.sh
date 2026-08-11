@@ -127,6 +127,23 @@ tasks:
 EOF
 expect "non-wave plan activates the check" "would-call" "$(run_hook)"
 
+# 7e. a page that DOCUMENTS status: active inside a fence must not activate it
+setup_repo; write_transcript "$CLAIM"
+printf '# how to write a plan\n\n```yaml\nstatus: active\n```\n' \
+  > "$WORK/repo/docs/superpowers/plans/2026-01-01-guide.md"
+expect "fenced example does not activate" "silent: no-active-plan" "$(run_hook)"
+
+# 7f. the wave-only branch gate must not silence a plan that merely mentions a
+#     wave branch in prose — the trigger is generalised, that gate is not
+setup_repo; write_transcript "$CLAIM"
+cat > "$WORK/repo/docs/superpowers/plans/2026-01-01-impl.md" <<'EOF'
+status: active
+tasks:
+  - task: rewrite the merge step
+    note: earlier work landed on wave/alpha, see that branch
+EOF
+expect "prose mention of a branch does not silence" "would-call" "$(run_hook)"
+
 # 8. the payload carries no final message (the turn said nothing)
 setup_repo; write_plan active "branch: wave/alpha"
 git -C "$WORK/repo" branch wave/alpha
@@ -164,6 +181,20 @@ case "$(fake memo-a '- task beta has no evidence')" in
 esac
 expect "NOTHING is suppressed" "{}" "$(fake memo-b 'NOTHING')"
 expect "off-contract answer is suppressed" "{}" "$(fake memo-c 'I am ready to check the wave.')"
+for marker in '* gamma dropped' '1. gamma dropped' '• gamma dropped'; do
+  case "$(fake "memo-$RANDOM" "$marker")" in
+    '{"hookSpecificOutput"'*) echo "PASS  bullet form accepted: ${marker%% *}" ;;
+    *) echo "FAIL  bullet form rejected: $marker"; fail=1 ;;
+  esac
+done
+# the memo must survive a host with no shasum, where it silently died before
+STUB="$WORK/stub"; mkdir -p "$STUB"; printf '#!/bin/sh\nexit 127\n' > "$STUB/shasum"; chmod +x "$STUB/shasum"
+nos() { ( cd "$WORK/repo" && printf '{"session_id":"nosha","last_assistant_message":"Summary: all done, nothing remaining."}' \
+  | PATH="$STUB:$PATH" CLAUDE_DRIFT_CHECK_FAKE_ANSWER='- gamma dropped' CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" "$HOOK" ); }
+rm -f "${TMPDIR:-/tmp}/claude-drift-memo-nosha"
+nos >/dev/null
+expect "repeat suppression survives a host without shasum" "{}" "$(nos)"
+rm -f "${TMPDIR:-/tmp}/claude-drift-memo-nosha"
 # 9c. delivered advice is recorded where a human can audit it
 LOGF="${TMPDIR:-/tmp}/claude-drift-log/memo-log.jsonl"
 rm -f "$LOGF"
