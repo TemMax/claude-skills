@@ -462,6 +462,36 @@ one of those, supervise with the other. Opus 5 may execute under supervision but
 does not supervise: the property that would justify it is unmeasured, and an
 unmeasured property is not a permission.
 
+## Delegating the Workflow Script Itself
+
+An executor asked to *write* a workflow script cannot read the `Workflow` tool's
+documentation — the tool is not in its prompt and not available to it. It will
+code against whatever it can infer, produce something plausible, and the script
+will be rejected at launch or, worse, run on assumptions that quietly void the
+result. Hand it these constraints in the task prompt, because it cannot discover
+them:
+
+- `meta` must be a **pure literal** — no concatenation, no variables, no template
+  strings. A wrapped description string is the most common rejection.
+- Exactly **one** `export` (the `meta` block). A second one makes the whole file
+  unparseable to the harness.
+- `Date.now()`, `new Date()` and `Math.random()` **throw** inside a script; they
+  would break resume. Timestamps come in through `args`.
+- `opts.model` takes the short names (`haiku`, `sonnet`, `opus`, `fable`), not
+  full model IDs.
+- The script's **return value** is the result. `console.log` is not a channel;
+  `log()` emits progress, not results.
+- `agent()` returns `null` when a subagent dies after retries — every call site
+  needs a guard, or one API error takes the whole wave down.
+- Pass `args` as a real JSON object. Passed as a string, `args.foo` is
+  `undefined`, and a script that does not validate its inputs will run to a
+  plausible, meaningless result.
+
+Verified 2026-08-12 the hard way: a carefully built harness, dry-run by its
+author across seven scenarios, was still rejected four times at launch for four
+different items on this list. The author was not careless — the information was
+not reachable from where it stood.
+
 ## Result Review Checklist
 
 An agent's self-report is not evidence (every executor has documented false
