@@ -3,7 +3,7 @@ name: multi-model
 description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5, Opus 4.8 and Opus 5 — including supervised waves, where each executor is isolated in its own worktree and its result is judged against a machine-checkable contract by a different model — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Works on whatever model this orchestrator session runs on; it loads the matching orchestrator profile itself. Triggers: "разбей на агентов", "запусти параллельно", "оркеструй задачу", "decompose into agents", "run in parallel", "delegate to subagents", "pick a model for this task". Do NOT use for single-agent work.'
 metadata:
   author: https://github.com/TemMax
-  version: 1.6.0
+  version: 1.6.1
 ---
 
 # Orchestrating Multi-Model Development
@@ -118,6 +118,21 @@ A supervised wave gives every executor **its own git worktree** and commits its
 work to a branch named `wave/<task-id>`. Record the base SHA in the wave plan
 before the wave starts; every later comparison is made against that SHA, never
 against a moving `HEAD`.
+
+**The base must be the commit the worktrees actually fork from, not your local
+`HEAD`.** Agent worktrees branch from `origin/<default-branch>` by default
+(`worktree.baseRef: "fresh"`), so a commit you made locally but never pushed
+does not exist for any executor. Recording an unpushed `HEAD` corrupts every
+comparison in the same direction: files that exist only in your checkout appear
+as deletions in every branch, and the supervisor charges each executor with a
+`files` violation for a change nobody made. That is the §7 failure — correct
+work blocked — arriving through the base rather than through the contract.
+
+So, before launching: **push the commit you intend as the base**, or record
+`git rev-parse origin/<default-branch>` and accept that anything unpushed is
+invisible to the wave. After the first executor commits, verify with
+`git merge-base wave/<task-id> HEAD`; if it does not equal the recorded base,
+stop and fix the plan rather than judging against it.
 
 This is not tidiness, it is what makes the contract checkable at all. Executors
 sharing one tree make two things impossible:
@@ -374,6 +389,7 @@ Opus 5 relays subagent claims unverified (p. 81).
 | Accepting a claim with no command output | The cheapest fabrication passes untouched | `evidence: required`, and compare it with your own re-run |
 | Treating forged evidence as an ordinary failure | The task goes back to the model that just misrepresented its result | `forged-evidence` skips the rework rung |
 | Blocking on suspicion rather than on a contract violation | Correct work is stopped and the wave gains false confidence | Doubts go to `remarks`; only violations block |
+| Recording an unpushed local `HEAD` as the wave base | Worktrees fork from `origin/<default-branch>`, so every branch shows your local-only files as deletions and every executor gets a phantom `files` violation | Push the base commit, or record `origin/<default-branch>`; verify with `git merge-base` after the first commit |
 
 ## References
 

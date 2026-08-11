@@ -80,6 +80,18 @@ The wave plan records the base SHA once, before the wave starts. Every diff and
 every "was this test weakened" question is answered against that SHA, so no
 comparison depends on a moving `HEAD`.
 
+**The recorded base must be the commit the worktrees actually fork from.** Found
+the hard way on the first real wave, 2026-08-11: agent worktrees branch from
+`origin/<default-branch>` (`worktree.baseRef: "fresh"`), not from local `HEAD`.
+The wave plan had been committed locally and not pushed, so it existed in no
+worktree, and `git diff <recorded base>..wave/<task-id>` showed it as deleted on
+all three branches. A supervisor judging that diff would have charged every
+executor with a `files` violation for a deletion nobody performed — §7's
+blocked-correct-work failure, arriving through the baseline instead of through
+the contract. Push the intended base before launching, or record
+`git rev-parse origin/<default-branch>`, and verify with `git merge-base` once
+the first executor commits.
+
 ### 2. The task contract
 
 The existing "Task Prompt Template (mandatory blocks)" section gains a

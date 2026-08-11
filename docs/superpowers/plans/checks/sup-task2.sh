@@ -12,6 +12,10 @@ check "branch convention is stated" \
   "grep -q 'wave/<task-id>' $F"
 check "base SHA is recorded before the wave" \
   "grep -q 'base SHA' $F"
+check "base must be the worktree fork point, not local HEAD" \
+  "grep -q 'not your local' $F"
+check "the fork point is named concretely" \
+  "grep -q 'origin/<default-branch>' $F"
 check "the old shared-tree advice is gone" \
   "! grep -q 'may appear or disappear under' $F"
 # Bracketed patterns on purpose: this file must not contain the words it forbids.
