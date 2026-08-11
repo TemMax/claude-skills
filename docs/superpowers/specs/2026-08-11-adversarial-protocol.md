@@ -296,3 +296,49 @@ and left HEAD checked out on it. No content was lost — no commits beyond mine 
 but the working repository was modified by a probe that had no business touching
 it. Restored by hand. Wave Isolation is in the skill precisely for this, and the
 probe did not follow the skill it was probing.
+
+## Ladder verified, and the rung it was missing
+
+The rebuilt probe walked all three rungs, with the trace proving it rather than
+asserting it: attempt 1 `claude-sonnet-5` (initial), attempt 2 `claude-sonnet-5`
+(rework, one verdict attached), attempt 3 `opus` at high effort (escalate, two
+verdicts attached), outcome `escalated-to-user`. The model change on the second
+rung — the only thing separating a real escalation from three reworks — is now
+evidenced by a field, not inferred from a count.
+
+The harness came from Fable, on the reasoning that whoever had broken three
+harnesses in a row should not build the fourth. It dry-ran its own control flow
+against seven scenarios, including the exact shapes of all three earlier
+failures. Four things it could not know — `meta` must be a pure literal, only one
+`export`, no `Date`/`Math.random`, short model names — surfaced at launch,
+because the Workflow tool's documentation is not reachable from where a subagent
+stands. That list now travels with the task.
+
+### What the run found that it was not looking for
+
+All three supervisors, independently, reported that the contract itself was
+unsatisfiable — the command read nothing under `files_allowed`, so no compliant
+change could ever pass it — and that escalation should target the contract rather
+than the executor. Each said it in `remarks`, which by design change nothing.
+
+The ladder had no move for this. Every rung it owned assumed executor fault, so
+it reworked an innocent executor, spent the heavy tier on it, and reported three
+failures. That is the third time today a correct signal reached a channel with no
+consequence attached.
+
+Fixed by the shape the class error taught us to prefer: the supervisor reports
+`satisfiable` as a **fact with evidence**, and the ladder branches on it in code.
+`ok:false` + `satisfiable:false` stops immediately — no rework, no escalation.
+
+The task returns to the orchestrator, which wrote the contract and owns fixing
+it. Amendments split by whether they can hide a defect: widening `files_allowed`
+or correcting a broken command is applied and recorded; removing or weakening a
+`must_run` or a `forbidden_move` requires the user's yes or no, because that edit
+makes an inconvenient check disappear and the agent proposing it is the one that
+benefits. One amendment per task — a loop that ends in a contract checking
+nothing is assembled from individually reasonable loosenings.
+
+The user edits nothing in either case. The orchestrator detects, drafts and
+applies; what reaches the user is a decision about losing a check, not a file to
+open. Twice today this design drifted into asking a human to hand-edit
+configuration, and both times that was the bug.

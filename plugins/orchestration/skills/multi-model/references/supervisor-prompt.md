@@ -100,6 +100,21 @@ completely ineffective — `remarks` never affect `ok`, so the escalation ladder
 acted on a pass for work that did not exist. An input you cannot resolve is a
 finding, not a puzzle to route around.
 
+## Was the contract satisfiable at all?
+
+When you record a `must_run` violation, also answer this, as a field on the
+verdict: `"satisfiable": true|false`, with the evidence for your answer.
+
+The question is not whether the command fails — you already established that. It
+is whether **any change `files_allowed` permits could have altered the outcome**.
+A command that reads nothing under the allowed paths, or whose only fix lies
+behind a `forbidden_move`, cannot be made to pass by any compliant work, and the
+executor in front of you did nothing wrong.
+
+Answer it as a finding, not as a judgement about what should happen next. You are
+not deciding whether to rework, escalate or stop — something else reads this field
+and decides. Your job is to say what is true and show why.
+
 ## Rules for your verdict
 
 - Every violation carries evidence you produced: a path, a line, or command
@@ -119,4 +134,5 @@ Valid JSON and nothing else. No prose before or after it.
 ```
 
 `ok` is false if and only if `violations` is non-empty. Each violation is
-`{"rule": "...", "class": "...", "evidence": "...", "quote": "..."}`.
+`{"rule": "...", "class": "...", "evidence": "...", "quote": "..."}`. A `must_run`
+violation also carries `"satisfiable": true|false` with its own evidence.
