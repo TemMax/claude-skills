@@ -3,7 +3,7 @@ name: critical-review
 description: 'Use when driving a critical, evidence-based review of uncommitted working-tree changes or a GitHub PR, produced by this session''s own model — including when the code under review was written by this very session. Works on whatever model this reviewing session runs on; it loads the matching reviewer profile itself. Triggers: "сделай ревью", "проревьюй изменения", "ревью ПР", "review my changes", "review this PR", "critical review", "review uncommitted changes". Do NOT use for reviewing another agent''s output inside an orchestration wave (the orchestration plugin skills own that checklist).'
 metadata:
   author: https://github.com/TemMax
-  version: 1.2.0
+  version: 1.3.0
 ---
 
 # Reviewing Changes Critically
