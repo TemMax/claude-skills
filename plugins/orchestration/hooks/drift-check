@@ -18,6 +18,13 @@ emit_empty() {
 
 # Always consume stdin so the caller never blocks on a full pipe, even
 # though we only care about one field from it.
+# Re-entrancy guard. This hook shells out to `claude -p`; that nested session
+# loads the same enabled plugins and would fire this very hook again, which
+# would call `claude -p` again. Bail out immediately when we are the nested run.
+if [ -n "${CLAUDE_DRIFT_CHECK_ACTIVE:-}" ]; then
+  emit_empty
+fi
+
 payload="$(cat 2>/dev/null || true)"
 
 # Find the repo root so the plan glob is anchored correctly regardless of
@@ -71,13 +78,17 @@ full_prompt="$(printf '%s\n\n---\nWave plan (%s):\n%s\n\n---\nRecent transcript 
 # never hang the session, even if `claude` itself ignores signals or the
 # host has no `timeout`/`gtimeout` binary installed.
 tmp_out="$(mktemp 2>/dev/null || echo "/tmp/drift-check.$$")"
-claude -p "$full_prompt" --model claude-haiku-4-5-20251001 >"$tmp_out" 2>/dev/null &
+CLAUDE_DRIFT_CHECK_ACTIVE=1 claude -p "$full_prompt" --model claude-haiku-4-5-20251001 </dev/null >"$tmp_out" 2>/dev/null &
 claude_pid=$!
 
+# The watchdog must not inherit our stdout: a caller using $(...) waits for every
+# process holding that pipe, and killing this subshell does not reap its own
+# `sleep` child. An orphaned sleep would hold the pipe for its full duration and
+# make the hook appear to take exactly the watchdog interval on every single turn.
 (
-  sleep 110
+  sleep 45
   kill -TERM "$claude_pid" 2>/dev/null
-) &
+) >/dev/null 2>&1 &
 watchdog_pid=$!
 
 wait "$claude_pid" 2>/dev/null
@@ -90,6 +101,21 @@ answer="$(cat "$tmp_out" 2>/dev/null || true)"
 rm -f "$tmp_out" 2>/dev/null
 
 if [ "$claude_status" -ne 0 ] || [ -z "$answer" ]; then
+  emit_empty
+fi
+
+# The prompt names NOTHING as its expected, common answer. Injecting that word
+# into the orchestrator's context on every quiet turn is noise, not advice.
+trimmed="$(printf '%s' "$answer" | tr -d '[:space:]')"
+if [ "$trimmed" = "NOTHING" ]; then
+  emit_empty
+fi
+
+# The prompt allows exactly two shapes: bullet points, or the word NOTHING.
+# Anything else is the model failing to follow it — emit nothing rather than
+# injecting an off-contract answer into the orchestrator's context.
+first_char="$(printf '%s' "$answer" | sed -e 's/^[[:space:]]*//' | cut -c1)"
+if [ "$first_char" != "-" ]; then
   emit_empty
 fi
 

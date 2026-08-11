@@ -345,6 +345,19 @@ Installing the plugin turns it on; removing the plugin turns it off. The user
 edits no settings file to enable or disable it — the hook's presence is the
 only switch.
 
+### Known limitation: the trigger is a file, not a wave
+
+The hook activates when a wave plan file exists under `docs/superpowers/plans/`.
+That file outlives the wave, so in any repository that has ever run one the hook
+keeps firing — measured at roughly 20 seconds per turn on the advisory path,
+against effectively zero when no plan file is present.
+
+Until the trigger is scoped to an *active* wave rather than to the presence of a
+plan, either remove the plan file when the wave is done, or leave the plugin
+uninstalled outside of waves. Do not paper over this by shortening the model
+call: the cost is the model call, and cutting it short only produces worse
+advice at the same latency.
+
 ## Anti-Deception Rules
 
 Each of these comes from a measured failure, not from general caution.
