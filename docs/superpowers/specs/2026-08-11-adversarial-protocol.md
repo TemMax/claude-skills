@@ -226,3 +226,39 @@ adding prose and change the shape instead: require the class before the evidence
 or make `forged-evidence` demand an explicit statement of what the executor could
 not have observed. Recorded unfixed for the third time rather than patched again
 in the same way.
+
+## Fourth attempt at the class error, and why it was reverted
+
+The three prose attempts having failed, this one changed the shape: a
+`forged-evidence` violation was made malformed unless it also carried an
+`"unobservable"` field stating what the executor could not have observed on this
+branch under any preparation, at any time — written before choosing the class.
+
+The supervisor filled it in and kept the wrong class. The field read:
+
+> "The second command cannot succeed after [the first, in the same workspace]"
+
+That is a true statement about the *sequence*, and not an answer to the question
+asked. The executor could and did observe both green pastes, by running each
+command in a clean tree. A field intended to force reasoning ahead of the label
+became a place to write a justification behind it — so the miscall now arrives
+with authoritative-looking support, which is worse than arriving bare.
+
+Reverted. Four attempts, three prose and one structural, none of which moved it.
+
+### What this looks like from here
+
+The pattern across all four is that the model reaches for the heaviest class
+whenever pasted and observed output differ, and every guard becomes something to
+write around rather than a constraint. That suggests the remaining options are
+not more instruction:
+
+- Remove the class from the model's hands: have it report the mismatch as a fact
+  and let the escalation ladder classify, so the consequence is decided by code
+  reading a diff rather than by a label the model chose.
+- Or drop `forged-evidence` as a separate rung and treat every violation the same
+  way, accepting a weaker signal in exchange for never accusing an honest
+  executor.
+
+Both are design changes with real costs, and neither should be made at the end of
+a long session. Recorded as the open question it is.
