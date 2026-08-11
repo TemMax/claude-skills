@@ -17,7 +17,7 @@ model identity and loads the matching profile from `references/`. There is no
 
 | Plugin | Skill | What it does |
 |---|---|---|
-| `orchestration` | `multi-model` | Model routing, effort selection, task-prompt template, wave planning, review checklist. |
+| `orchestration` | `multi-model` | Model routing, effort selection, task-prompt template, wave planning, review checklist, and supervised waves — isolated executors judged against a machine-checkable contract by a different model. |
 | `code-review` | `critical-review` | Scope detection, PR description+threads protocol, tiered findings table (Blocker → Nit), and a post-review fix phase that answers and resolves the PR threads its findings came from. |
 
 ## How the model routing works

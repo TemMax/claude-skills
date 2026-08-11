@@ -1,9 +1,9 @@
 ---
 name: multi-model
-description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5 and Opus 4.8 — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Works on whatever model this orchestrator session runs on; it loads the matching orchestrator profile itself. Triggers: "разбей на агентов", "запусти параллельно", "оркеструй задачу", "decompose into agents", "run in parallel", "delegate to subagents", "pick a model for this task". Do NOT use for single-agent work.'
+description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5, Opus 4.8 and Opus 5 — including supervised waves, where each executor is isolated in its own worktree and its result is judged against a machine-checkable contract by a different model — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Works on whatever model this orchestrator session runs on; it loads the matching orchestrator profile itself. Triggers: "разбей на агентов", "запусти параллельно", "оркеструй задачу", "decompose into agents", "run in parallel", "delegate to subagents", "pick a model for this task". Do NOT use for single-agent work.'
 metadata:
   author: https://github.com/TemMax
-  version: 1.5.0
+  version: 1.6.0
 ---
 
 # Orchestrating Multi-Model Development
