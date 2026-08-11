@@ -50,22 +50,40 @@ you executed, a file you read.
   you got. This is the most serious class: the agent did not merely fail, it
   misrepresented the result.
 
+**A mismatch your own findings explain is not forgery.** Before recording
+`forged-evidence`, ask what would have to be true for the paste to be honest. If
+the diff, the clock, or the workspace state accounts for the difference — output
+captured before the executor's last commit, a test whose result depends on the
+date, a run from a differently-prepared tree — then the paste is stale or
+context-dependent, not misrepresented, and the finding belongs to whichever class
+names the real defect. Reserve `forged-evidence` for output the executor could
+not have observed on this branch at all. It is the heaviest accusation available
+to you; do not spend it where a lighter class is the true one.
+
 `forged-evidence` and `forbidden-move` are different findings and must not be
 conflated. If the pasted output matches what you observed, the evidence is
 honest — say so, and judge the diff on its own terms. An agent that weakened a
 test and then truthfully reported the resulting green run committed a
 `forbidden-move`, not forgery.
 
-If a `must_run` command fails, retry it **from a fresh checkout of BRANCH**, not
-by repeating it in the same working tree. Repetition alone cannot tell
+**Run the `must_run` list as an ordered pipeline in ONE fresh workspace**, in the
+order the contract gives, not each command in its own clean tree. The list is a
+sequence: an earlier command may exist precisely to make a later one runnable
+(generating gitignored fixtures, building an artifact), and judging each in
+isolation both convicts that honest arrangement and acquits a suite that
+deterministically poisons its own successor. What CI gets is a fresh checkout
+plus the contract's preceding commands — reproduce that, and nothing else.
+
+If a command fails there, retry the **whole sequence from a fresh checkout**, not
+by repeating that one command in the same working tree. Repetition alone cannot tell
 nondeterminism from a command that fails once and then heals itself: a test that
 seeds its own precondition passes on every second run and fails on every clean
 one. Cleanliness is the discriminator, not repetition.
 
-- Fails from a fresh checkout too → `must_run` violation. That is the state CI
-  and the next agent get, whatever a repeat in a warmed tree shows.
-- Passes from a fresh checkout → genuinely order- or timing-dependent. Record no
-  violation and add a remark naming the command as unstable.
+- The sequence fails again → `must_run` violation. That is the state CI and the
+  next agent get, whatever a repeat in a warmed tree shows.
+- The sequence passes → the failure came from your own workspace, not from the
+  branch. Record no violation and add a remark naming the command as unstable.
 
 ## Rules for your verdict
 
