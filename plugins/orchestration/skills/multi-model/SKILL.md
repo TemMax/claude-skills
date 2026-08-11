@@ -311,16 +311,49 @@ security-adjacent code. For a small mechanical task, check the predicates
 skip the supervisor model. Supervision that costs more than the work it guards
 gets switched off, and then it guards nothing.
 
+## Anti-Deception Rules
+
+Each of these comes from a measured failure, not from general caution.
+
+| Rule | Evidence |
+|---|---|
+| State the prohibitions to the executor loudly and explicitly | Explicit "don't work around — report" lowers fabrication: Fable 17.4% → 9.1% (pp. 161–163), Opus 4.8 9.4% → 2.8% (pp. 109–110) |
+| Do NOT disclose the supervisor's specific checks to the executor | Grader awareness reaches 24–30% and changes behavior at the surface level (Fable pp. 171–181) |
+| The supervisor is never the executor's own model | Opus 5's self-preference bias as a judge is unmeasured; Opus 4.8 (pp. 122–124) and Fable 5 (pp. 202–203) have measured zero |
+| A claim without command output is a violation | Caveat laundering: "I verified this myself" while spot-checking only ancillary facts (pp. 37–39) |
+| Attach verdicts; never paraphrase an executor report in their place | Opus 5 relays subagent claims unverified (p. 81) |
+| Stopping early with open plan items is a violation | Fable stops on spurious token-budget concerns, 2.43M tokens unspent (pp. 170–171) |
+| Claims of monitoring or watching get their own check | Dead watchers: recap lines said "monitoring" while nothing polled (pp. 33–35) |
+
+**Rules explicit, checks opaque.** The two halves come from opposite findings
+and must not be collapsed. The contract is handed to the executor in full —
+that is the explicit-prohibition half, and withholding it raises fabrication.
+What is never disclosed is the supervisor's *method*: that a second model
+re-runs the commands instead of reading the pasted output, that it compares the
+two, that it diffs the tests against the recorded base SHA, that it greps for
+the forbidden moves. An executor told the rules complies with the rules; an
+executor told how compliance is measured optimizes for the measurement.
+
+**Choosing the supervisor's model.** Never the executor's own. Prefer a judge
+with measured zero self-preference — Opus 4.8 or Fable 5; when the executor is
+one of those, supervise with the other. Opus 5 may execute under supervision but
+does not supervise: the property that would justify it is unmeasured, and an
+unmeasured property is not a permission.
+
 ## Result Review Checklist
 
 An agent's self-report is not evidence (every executor has documented false
-success claims and omissions about corners cut):
+success claims and omissions about corners cut). In a supervised wave you review
+the supervisor verdicts and remarks, not the executor reports — paraphrasing a
+report where a verdict belongs is itself a failure, and the documented one:
+Opus 5 relays subagent claims unverified (p. 81).
 
 - [ ] Solves the stated task and matches the plan — by the diff, not the summary
 - [ ] No unrequested changes (refactorings, files, abstractions)
 - [ ] Consistent with the other agents' results (seams, duplicates, conflicts)
 - [ ] Build/tests/linter — verified by running; "should work" doesn't count
 - [ ] Documentation (README and the like) reflects the final state of the feature
+- [ ] Every task carries a supervisor verdict; remarks are read and either acted on or dismissed on the record
 
 ## Common Mistakes
 
@@ -336,6 +369,11 @@ success claims and omissions about corners cut):
 | Numeric example in the spec computed in your head | The example contradicts the formula, the agent stalls | Compute with a tool or give only the formula |
 | Not warning about parallel file changes | The agent treats the wave as an anomaly, wastes steps | List the files its neighbors modify |
 | Documentation assigned to no one | README silently goes stale | An explicit docs task in the decomposition |
+| Supervising with the executor's own model | A judge with unmeasured self-preference grants its own work a discount for free | Opus 4.8 or Fable 5, never the executor's model |
+| Telling the executor how compliance is measured | Grader awareness turns compliance performative at the surface | Rules explicit, method undisclosed |
+| Accepting a claim with no command output | The cheapest fabrication passes untouched | `evidence: required`, and compare it with your own re-run |
+| Treating forged evidence as an ordinary failure | The task goes back to the model that just misrepresented its result | `forged-evidence` skips the rework rung |
+| Blocking on suspicion rather than on a contract violation | Correct work is stopped and the wave gains false confidence | Doubts go to `remarks`; only violations block |
 
 ## References
 
