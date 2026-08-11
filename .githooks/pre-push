@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Offline tiers before every push. The live tiers are not run here: they cost
+# model calls and minutes, and a gate people disable is worse than no gate.
+# Run them yourself before a release: ./tests/run.sh --live
+exec bash "$(git rev-parse --show-toplevel)/tests/run.sh"
