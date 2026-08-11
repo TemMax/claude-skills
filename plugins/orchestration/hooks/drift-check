@@ -147,6 +147,14 @@ except Exception:
     print("")
 ' 2>/dev/null || true)"
 
+session_id="$(printf '%s' "$payload" | python3 -c '
+import json, sys
+try:
+    print(json.load(sys.stdin).get("session_id", "") or "nosession")
+except Exception:
+    print("nosession")
+' 2>/dev/null || echo nosession)"
+
 if [ -z "$last_said" ]; then
   silent "nothing-said"
 fi
@@ -161,6 +169,14 @@ if [ -n "$DRYRUN" ]; then
 fi
 
 # --- the model call -----------------------------------------------------------
+# CLAUDE_DRIFT_CHECK_FAKE_ANSWER substitutes the model's reply so the logic that
+# runs AFTER the call — the output contract and the repeat memo — is testable
+# offline, the same seam CLAUDE_DRIFT_CHECK_DRYRUN gives the gates before it.
+if [ -n "${CLAUDE_DRIFT_CHECK_FAKE_ANSWER:-}" ]; then
+  answer="$CLAUDE_DRIFT_CHECK_FAKE_ANSWER"
+  claude_status=0
+else
+
 prompt_text="$(cat "$prompt_file" 2>/dev/null || true)"
 plan_text="$(cat "$plan_file" 2>/dev/null || true)"
 
@@ -191,6 +207,8 @@ wait "$watchdog_pid" 2>/dev/null
 answer="$(cat "$tmp_out" 2>/dev/null || true)"
 rm -f "$tmp_out" 2>/dev/null
 
+fi
+
 if [ "$claude_status" -ne 0 ] || [ -z "$answer" ]; then
   silent "model-failed"
 fi
@@ -206,10 +224,24 @@ if [ "$first_char" != "-" ]; then
   silent "off-contract-answer"
 fi
 
+# --- do not say the same thing twice ------------------------------------------
+# The check has no memory across invocations, so during a live wave it would
+# hand the orchestrator the identical note on every claim-shaped turn. Repeated
+# identical advice is the fastest way to train someone to ignore an advisory,
+# and the prompt cannot prevent it: each call is stateless. The memo is keyed by
+# session and holds a digest of the last advice actually delivered.
+memo="${TMPDIR:-/tmp}/claude-drift-memo-${session_id}"
+digest="$(printf '%s' "$answer" | shasum -a 256 2>/dev/null | cut -d' ' -f1)"
+if [ -n "$digest" ] && [ -f "$memo" ] && [ "$(cat "$memo" 2>/dev/null)" = "$digest" ]; then
+  silent "already-said-this"
+fi
+
 escaped="$(printf '%s' "$answer" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))' 2>/dev/null || true)"
 if [ -z "$escaped" ]; then
   silent "escape-failed"
 fi
+
+[ -n "$digest" ] && printf '%s' "$digest" > "$memo" 2>/dev/null
 
 printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":%s}}\n' "$escaped"
 exit 0

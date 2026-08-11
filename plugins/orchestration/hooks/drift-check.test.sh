@@ -137,6 +137,26 @@ expect "missing prompt file" "silent: no-prompt" \
   "$( cd "$WORK/repo" && printf '{"transcript_path":"%s"}' "$WORK/transcript.jsonl" \
      | CLAUDE_DRIFT_CHECK_DRYRUN=1 CLAUDE_PLUGIN_ROOT="$WORK/nonexistent" "$HOOK" )"
 
+# 9b. the output contract, exercised offline through the fake-answer seam
+setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$CLAIM"
+git -C "$WORK/repo" branch wave/alpha
+fake() {
+  ( cd "$WORK/repo" && printf '{"session_id":"%s","last_assistant_message":"Summary: 2 tasks done, nothing remaining."}' "$1" \
+    | CLAUDE_DRIFT_CHECK_FAKE_ANSWER="$2" CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" "$HOOK" )
+}
+case "$(fake memo-a '- task gamma was dropped')" in
+  '{"hookSpecificOutput"'*) echo "PASS  bullet answer is delivered" ;;
+  *) echo "FAIL  bullet answer was not delivered"; fail=1 ;;
+esac
+expect "identical advice is not repeated" "{}" "$(fake memo-a '- task gamma was dropped')"
+case "$(fake memo-a '- task beta has no evidence')" in
+  '{"hookSpecificOutput"'*) echo "PASS  different advice still gets through" ;;
+  *) echo "FAIL  different advice was suppressed"; fail=1 ;;
+esac
+expect "NOTHING is suppressed" "{}" "$(fake memo-b 'NOTHING')"
+expect "off-contract answer is suppressed" "{}" "$(fake memo-c 'I am ready to check the wave.')"
+rm -f "${TMPDIR:-/tmp}"/claude-drift-memo-memo-*
+
 # 10. the real path, model included. Off by default: it costs a model call.
 if [ "${LIVE:-}" = "1" ]; then
   setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$CLAIM"

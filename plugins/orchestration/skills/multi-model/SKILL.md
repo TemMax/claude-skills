@@ -391,9 +391,17 @@ exclusive here, so the ~8s model call is paid inside the turn or not at all.
 Gate it; do not shorten it — the cost *is* the model call, and cutting it short
 only buys worse advice at the same price.
 
-`plugins/orchestration/hooks/drift-check.test.sh` covers all five gates offline
-via `CLAUDE_DRIFT_CHECK_DRYRUN=1`, which prints the decision instead of calling
-the model. `LIVE=1` adds the real end-to-end path.
+**The check does not repeat itself.** Each invocation is stateless, so during a
+live wave it would hand the orchestrator the identical note on every
+claim-shaped turn. A per-session memo holds a digest of the last advice actually
+delivered and suppresses an exact repeat; different advice still gets through.
+The prompt cannot enforce this — a stateless call has no way to know what it
+said last time.
+
+`plugins/orchestration/hooks/drift-check.test.sh` covers every gate offline via
+`CLAUDE_DRIFT_CHECK_DRYRUN=1`, which prints the decision instead of calling the
+model, and the post-call logic via `CLAUDE_DRIFT_CHECK_FAKE_ANSWER`, which
+substitutes the reply. `LIVE=1` adds the real end-to-end path.
 
 ## Anti-Deception Rules
 
