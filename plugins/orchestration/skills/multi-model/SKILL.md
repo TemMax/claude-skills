@@ -3,7 +3,7 @@ name: multi-model
 description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5, Opus 4.8 and Opus 5 — including supervised waves, where each executor is isolated in its own worktree and its result is judged against a machine-checkable contract by a different model — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Works on whatever model this orchestrator session runs on; it loads the matching orchestrator profile itself. Triggers: "разбей на агентов", "запусти параллельно", "оркеструй задачу", "decompose into agents", "run in parallel", "delegate to subagents", "pick a model for this task". Do NOT use for single-agent work.'
 metadata:
   author: https://github.com/TemMax
-  version: 1.6.1
+  version: 1.7.0
 ---
 
 # Orchestrating Multi-Model Development
@@ -325,6 +325,38 @@ security-adjacent code. For a small mechanical task, check the predicates
 (paths touched, commands run, evidence present) in plain script logic and
 skip the supervisor model. Supervision that costs more than the work it guards
 gets switched off, and then it guards nothing.
+
+## Orchestrator Drift
+
+Supervised waves guard the executors. This layer guards the orchestrator
+session itself — the loop that reads verdicts, decides rungs, and reports back
+to the user is not exempt from the same drift it polices in others.
+
+It ships as a plugin hook on `Stop`, fires once per turn, and **advises — it
+never blocks.** The advice arrives as `additionalContext`, and the orchestrator
+is expected to act on it or say why not; nothing in the mechanism can halt the
+turn or force a rework.
+
+It needs the wave plan artifact to compare the orchestrator's actual behavior
+against. With no plan file present, it stays silent — there is nothing to
+check drift against, so it produces no advice rather than guessing at one.
+
+Installing the plugin turns it on; removing the plugin turns it off. The user
+edits no settings file to enable or disable it — the hook's presence is the
+only switch.
+
+### Known limitation: the trigger is a file, not a wave
+
+The hook activates when a wave plan file exists under `docs/superpowers/plans/`.
+That file outlives the wave, so in any repository that has ever run one the hook
+keeps firing — measured at roughly 20 seconds per turn on the advisory path,
+against effectively zero when no plan file is present.
+
+Until the trigger is scoped to an *active* wave rather than to the presence of a
+plan, either remove the plan file when the wave is done, or leave the plugin
+uninstalled outside of waves. Do not paper over this by shortening the model
+call: the cost is the model call, and cutting it short only produces worse
+advice at the same latency.
 
 ## Anti-Deception Rules
 
