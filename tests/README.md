@@ -66,11 +66,12 @@ Worth stating plainly, because a green run is easy to over-read.
   from outside that imagination: a hash tool absent on another platform, a status
   key inside a documentation fence, a wave-specific gate left in a generalised
   path. No self-authored suite escapes its author's blind spots.
-- **Mostly one model.** Every evaluation runs on Haiku 4.5 unless `EVAL_MODEL`
-  says otherwise. Measured 2026-08-12: the supervisor tier also passes 9/9 on
-  Sonnet 5 (`EVAL_MODEL=claude-sonnet-5`, F1–F4 single run each). The skills
-  claim Fable 5, Opus 4.8 and Opus 5 in the reviewing and supervising roles;
-  those tiers remain untested here.
+- **Default model is the cheapest one.** Every evaluation runs on Haiku 4.5
+  unless `EVAL_MODEL` says otherwise. Measured 2026-08-12, one run per fixture:
+  the supervisor tier passes 9/9 on Sonnet 5, Opus 5 and Fable 5 as well
+  (`EVAL_MODEL=claude-sonnet-5|claude-opus-5|claude-fable-5`, F1–F4). Single
+  runs prove each model *can* judge these fixtures, not a rate; Opus 4.8 and
+  the drift tier's non-Haiku behaviour remain unmeasured.
 - **No adversarial fixtures.** Every case is an ordinary failure. Nobody has
   tried to *defeat* the supervisor — pasted output differing only in whitespace,
   or work that satisfies a contract's letter against its point. The dossiers
