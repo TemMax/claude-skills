@@ -569,9 +569,10 @@ them:
   `log()` emits progress, not results.
 - `agent()` returns `null` when a subagent dies after retries — every call site
   needs a guard, or one API error takes the whole wave down.
-- Pass `args` as a real JSON object. Passed as a string, `args.foo` is
-  `undefined`, and a script that does not validate its inputs will run to a
-  plausible, meaningless result.
+- The tool-call layer may deliver `args` as a JSON-encoded string. Parse it
+  first (`typeof args === 'string' ? JSON.parse(args) : args`), then validate —
+  the shipped runner does exactly this. A script that skips both will read
+  `args.foo` as `undefined` and run to a plausible, meaningless result.
 
 Verified 2026-08-12 the hard way: a carefully built harness, dry-run by its
 author across seven scenarios, was still rejected four times at launch for four
