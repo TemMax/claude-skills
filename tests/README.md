@@ -35,6 +35,14 @@ prompt ever saw it. A supervisor that returns `ok:true` unconditionally passes
 every other tier in this repository and fails here; so does a drift check that
 answers `NOTHING` to everything.
 
+**wave-runner (simulated)** — `tests/wave-runner.test.sh` runs the shipped
+`wave-runner.workflow.mjs` through an offline simulator
+(`tests/lib/workflow-sim.mjs`) with stubbed agents: every escalation-ladder
+rule is a deterministic assertion on the real file. Requires `node` on PATH.
+The simulator's own fidelity is the tier's trust anchor, so it has a
+self-test, and the Workflow-boundary rules (single export, literal meta, no
+Date) are pinned by static checks that each cost a launch rejection once.
+
 ## Repeating the guards
 
 A single model call proves a case *can* pass, not that it reliably does. The two
@@ -65,9 +73,17 @@ Worth stating plainly, because a green run is easy to over-read.
   tried to *defeat* the supervisor — pasted output differing only in whitespace,
   or work that satisfies a contract's letter against its point. The dossiers
   document models rules-lawyering around wording, and nothing here tests it.
-- **The escalation ladder has never executed.** Every wave task so far passed on
-  the first attempt, so rework, the forged-evidence rung-skip and the terminal
-  rung are prose that has never run.
+- **The ladder's live coverage is one boundary probe.** Its rules — rework,
+  two-strike escalation, the unsatisfiable-contract stop, the absolute cap —
+  are asserted by the simulator on the shipped file, which is exactly as
+  trustworthy as the simulator's fidelity to the real Workflow runtime. The
+  live tier (or the in-session probe, see `tests/eval/wave-insession.md`)
+  proves acceptance and one real verdict, nothing more. As of 2026-08-12 even
+  that acceptance is unproven from headless `claude -p`: `Workflow` is
+  reachable, but the CLI's own tool-call serialization stringifies the
+  object-typed `args` parameter before the runner sees it, so `wave.sh` skips
+  rather than asserting — only the in-session probe can currently exercise the
+  live boundary.
 
 ## Adding to it
 
