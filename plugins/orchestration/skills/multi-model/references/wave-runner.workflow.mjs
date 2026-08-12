@@ -49,6 +49,10 @@ if (!Array.isArray(args.tasks) || args.tasks.length === 0) {
   const seen = new Set()
   args.tasks.forEach((t, i) => {
     const at = 'tasks[' + i + ']'
+    if (!t || typeof t !== 'object') {
+      errors.push(at + ': task must be an object')
+      return
+    }
     if (typeof t.id !== 'string' || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(t.id)) {
       errors.push(at + '.id: kebab-case required')
     } else if (seen.has(t.id)) {

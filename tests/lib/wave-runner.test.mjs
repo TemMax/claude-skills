@@ -124,6 +124,16 @@ test('S8c wrong supervisor prompt text and bad model names are named', async () 
   assert.equal(calls.length, 0)
 })
 
+test('S8d a null task entry fails closed, not with a crash', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs({ tasks: [null] }),
+    agentStub: () => { throw new Error('no agent may be called') },
+  })
+  assert.equal(result.status, 'invalid-args')
+  assert.match(result.errors.join('; '), /tasks\[0\]/)
+  assert.equal(calls.length, 0)
+})
+
 let failed = 0
 for (const t of tests) {
   try { await t.fn(); console.log('ok -', t.name) }
