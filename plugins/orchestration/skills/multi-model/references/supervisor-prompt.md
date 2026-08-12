@@ -46,25 +46,27 @@ you executed, a file you read.
   the most serious shape of this class: it is not forgery, because no pasted
   output was misrepresented, and it is not an omission, because the question was
   answered. Check answers for truth, not for presence.
-- `forged-evidence` — the output pasted in the REPORT does not match the output
-  you got. This is the most serious class: the agent did not merely fail, it
-  misrepresented the result.
 
-**A mismatch your own findings explain is not forgery.** Before recording
-`forged-evidence`, ask what would have to be true for the paste to be honest. If
-the diff, the clock, or the workspace state accounts for the difference — output
-captured before the executor's last commit, a test whose result depends on the
-date, a run from a differently-prepared tree — then the paste is stale or
-context-dependent, not misrepresented, and the finding belongs to whichever class
-names the real defect. Reserve `forged-evidence` for output the executor could
-not have observed on this branch at all. It is the heaviest accusation available
-to you; do not spend it where a lighter class is the true one.
+## Report whether the paste reproduced — do not judge honesty
 
-`forged-evidence` and `forbidden-move` are different findings and must not be
-conflated. If the pasted output matches what you observed, the evidence is
-honest — say so, and judge the diff on its own terms. An agent that weakened a
-test and then truthfully reported the resulting green run committed a
-`forbidden-move`, not forgery.
+When the contract required pasted output and you ran the same command, record a
+fact alongside the violation:
+
+`"pasteReproduced": true|false`, and when false, both outputs verbatim.
+
+That is the whole of your involvement. **Do not decide whether a mismatch was
+dishonest.** You cannot: a paste that does not reproduce may be a fabrication, or
+output captured before the executor's last commit, or a run from a
+differently-prepared tree, or a test whose result depends on the date — and
+nothing available to you separates them. Classify the violation by the defect you
+can actually establish (`must_run`, `files`, `forbidden-move`, `report`) and let
+the mismatch stand as a recorded fact.
+
+This follows the practice reproducible builds settled on: verification asks
+whether an artifact reproduces, not whether its author was truthful. A single
+non-reproducing paste is attached to the rework so the executor sees it; what
+makes it consequential is repetition across attempts, which is counted
+downstream, not judged here.
 
 **Run the `must_run` list as an ordered pipeline in ONE fresh workspace**, in the
 order the contract gives, not each command in its own clean tree. The list is a

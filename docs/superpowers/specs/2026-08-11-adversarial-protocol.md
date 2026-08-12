@@ -342,3 +342,37 @@ The user edits nothing in either case. The orchestrator detects, drafts and
 applies; what reaches the user is a decision about losing a check, not a file to
 open. Twice today this design drifted into asking a human to hand-edit
 configuration, and both times that was the bug.
+
+## The class error, closed by removing the question
+
+Four attempts — three prose, one structural — failed to stop the supervisor
+labelling an honest stale paste as forgery. The fifth did not try again. It
+deleted `forged-evidence` from the taxonomy.
+
+The question was unanswerable from what a supervisor can see. A paste that does
+not reproduce may be a fabrication, output captured before the executor's last
+commit, a run from a differently-prepared tree, or a date-dependent test —
+nothing available to the supervisor separates them, so every guard became
+something to write around, and the last one became a place to justify the label
+after choosing it.
+
+Verification asks whether something reproduces, not whether its author was
+truthful. That is the answer reproducible builds arrived at, and it applies here
+unchanged: the supervisor records `pasteReproduced: true|false` with both outputs
+and classifies the violation by the defect it can establish. It renders no
+judgement about honesty because it is not in a position to.
+
+Consequence moved to where it can be earned: a single non-reproducing paste rides
+with the rework so the executor sees it; **two across attempts escalate**. Once is
+explicable, twice is a pattern, and a count is something code keeps rather than a
+label a model argues for.
+
+Cost, stated plainly: a genuinely dishonest executor now gets one rework it does
+not deserve. Against that, an honest one stops being handed the heaviest
+accusation available and stops losing its chance to fix the work — which is what
+was actually happening, repeatedly, and what four rounds of instruction could not
+prevent.
+
+Verified live: the fixture that pastes a green run over a real failure is
+convicted under `must_run`; the fixture whose evidence is honest keeps its
+`forbidden-move`; correct work is still acquitted.

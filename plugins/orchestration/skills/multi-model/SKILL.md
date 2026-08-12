@@ -254,31 +254,34 @@ its own worktree, runs the diff itself, executes each `must_run` command itself,
 and greps for the forbidden moves itself. The report is a set of claims to
 check, never a source of facts.
 
-**Forged evidence is its own violation class.** The executor pastes command
-output; the supervisor re-runs the command and must **compare** the two. A
-mismatch is the least deniable proof of fabrication in this design, and it
-deserves different handling from an honest failure: an executor whose tests fail
-made a mistake, which is what rework is for, while an executor that pasted a
-green run over a real failure did something else. A `forged-evidence` violation
-therefore skips the rework rung and escalates immediately.
+**A paste that does not reproduce is a fact, not an accusation.** The executor
+pastes command output; the supervisor re-runs the command and compares. When they
+differ it records `pasteReproduced: false` with both outputs — and stops there.
+Whether the mismatch was fabrication, output captured before the last commit, a
+differently-prepared tree, or a date-dependent test is not decidable from what a
+supervisor can see, and four attempts to make a model decide it correctly all
+failed in the same direction: the heaviest accusation, spent on honest work.
 
-Do not conflate it with `forbidden-move`. An agent that weakened a test and then
-truthfully reported the resulting green run forged nothing — judge its diff, not
-its honesty.
+Verification asks whether something reproduces, not whether its author was
+truthful — the answer reproducible builds arrived at. A single non-reproducing
+paste rides along with the rework so the executor sees it. **Repetition is what
+escalates**, and repetition is counted by the ladder, not judged by the
+supervisor.
 
 Verdict shape:
 
 ```json
 {"ok": false,
  "violations": [{"rule": "must_run:pytest tests/http -q",
-                 "class": "forged-evidence",
+                 "class": "must_run",
+                 "pasteReproduced": false,
                  "evidence": "report pasted a green run; supervisor got 2 failed",
                  "quote": "tests/http/test_retry.py::test_backoff FAILED"}],
  "remarks": ["src/http/backoff.py:41 duplicates the helper in src/net/retry.py"]}
 ```
 
 `violations` decide `ok`; `remarks` never do. Classes: `files`, `must_run`,
-`forbidden-move`, `report`, `forged-evidence`. A violation without evidence the
+`forbidden-move`, `report`. A violation without evidence the
 supervisor produced itself is dropped, not softened — otherwise the supervisor
 fabricates as readily as the executor it judges.
 
@@ -292,7 +295,7 @@ block. Spending the supervisor's credibility on flaky tests buys nothing.
 |---|---|
 | 1st violation, no forged evidence | Back to the same executor with the verdict attached |
 | 2nd violation of the same rule | To a stronger model — repeating a prompt on the model that just failed it reproduces the failure |
-| Any `forged-evidence` violation | Skip the rework rung, go straight to a stronger model, mark the task in the wave report |
+| `pasteReproduced: false` on two attempts | Escalate to a stronger model: once is explicable, twice is a pattern, and the count is the ladder's to keep |
 | Executor is already the strongest model | No higher rung: retry once at raised effort, then stop |
 | The contract cannot be satisfied | Stop immediately — no rework, no stronger model. Return the task to yourself to amend the contract (below) |
 | Stop | Hand the user the task, every verdict in order, and the branch name |
@@ -568,7 +571,7 @@ Opus 5 relays subagent claims unverified (p. 81).
 | Supervising with the executor's own model | A judge with unmeasured self-preference grants its own work a discount for free | Opus 4.8 or Fable 5, never the executor's model |
 | Telling the executor how compliance is measured | Grader awareness turns compliance performative at the surface | Rules explicit, method undisclosed |
 | Accepting a claim with no command output | The cheapest fabrication passes untouched | `evidence: required`, and compare it with your own re-run |
-| Treating forged evidence as an ordinary failure | The task goes back to the model that just misrepresented its result | `forged-evidence` skips the rework rung |
+| Asking a supervisor to judge whether a mismatch was dishonest | It cannot know, and it reaches for the heaviest label — four fixes failed the same way | Record `pasteReproduced` as a fact; let repetition across attempts carry the consequence |
 | Blocking on suspicion rather than on a contract violation | Correct work is stopped and the wave gains false confidence | Doubts go to `remarks`; only violations block |
 | Recording an unpushed local `HEAD` as the wave base | Worktrees fork from `origin/<default-branch>`, so every branch shows your local-only files as deletions and every executor gets a phantom `files` violation | Push the base commit, or record `origin/<default-branch>`; verify with `git merge-base` after the first commit |
 
