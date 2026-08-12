@@ -16,38 +16,45 @@ const MAX_ATTEMPTS_PER_TASK = 6
 
 function invalid(errors) { return { status: 'invalid-args', errors, tasks: [] } }
 
-// Fail closed: a bad wave returns named errors and spawns nothing. `args`
-// arriving as a string (the caller stringified it) has shipped twice; it dies
-// here by name instead of running to a plausible, meaningless result.
-if (typeof args !== 'object' || args === null || Array.isArray(args)) {
-  return invalid(['args must be a JSON object, not a ' +
-    (typeof args === 'string' ? 'string (the caller JSON-encoded it)' : typeof args)])
+// Fail closed: a bad wave returns named errors and spawns nothing.
+// The tool-call layer routinely delivers args as a JSON-encoded string (seen
+// from both headless -p and interactive sessions, 2026-08-12), so a string
+// that parses to an object is accepted: parse, then validate. Anything else
+// still fails closed by name.
+let wave = args
+if (typeof wave === 'string') {
+  try { wave = JSON.parse(wave) } catch (e) {
+    return invalid(['args arrived as a string and could not be parsed as JSON: ' + e.message])
+  }
+}
+if (typeof wave !== 'object' || wave === null || Array.isArray(wave)) {
+  return invalid(['args must be a JSON object, not ' + (Array.isArray(wave) ? 'an array' : typeof wave)])
 }
 
 const errors = []
-if (typeof args.base !== 'string' || !/^[0-9a-f]{7,40}$/.test(args.base)) {
+if (typeof wave.base !== 'string' || !/^[0-9a-f]{7,40}$/.test(wave.base)) {
   errors.push('base: a 7-40 char lowercase hex sha is required')
 }
-if (typeof args.repoPath !== 'string' || !args.repoPath.startsWith('/')) {
+if (typeof wave.repoPath !== 'string' || !wave.repoPath.startsWith('/')) {
   errors.push('repoPath: an absolute path is required')
 }
-if (typeof args.defaultBranch !== 'string' || args.defaultBranch === '') {
+if (typeof wave.defaultBranch !== 'string' || wave.defaultBranch === '') {
   errors.push('defaultBranch: required')
 }
-if (typeof args.supervisorPromptText !== 'string' || !args.supervisorPromptText.includes('verdict')) {
+if (typeof wave.supervisorPromptText !== 'string' || !wave.supervisorPromptText.includes('verdict')) {
   errors.push('supervisorPromptText: must be the text of references/supervisor-prompt.md (missing, or the wrong file was read)')
 }
-if (!args.supervisor || !MODELS.includes(args.supervisor.model)) {
+if (!wave.supervisor || !MODELS.includes(wave.supervisor.model)) {
   errors.push('supervisor.model: one of ' + MODELS.join('/'))
 }
-if (args.supervisor && args.supervisor.effort !== undefined && !EFFORTS.includes(args.supervisor.effort)) {
+if (wave.supervisor && wave.supervisor.effort !== undefined && !EFFORTS.includes(wave.supervisor.effort)) {
   errors.push('supervisor.effort: one of ' + EFFORTS.join('/'))
 }
-if (!Array.isArray(args.tasks) || args.tasks.length === 0) {
+if (!Array.isArray(wave.tasks) || wave.tasks.length === 0) {
   errors.push('tasks: a non-empty array is required')
 } else {
   const seen = new Set()
-  args.tasks.forEach((t, i) => {
+  wave.tasks.forEach((t, i) => {
     const at = 'tasks[' + i + ']'
     if (!t || typeof t !== 'object') {
       errors.push(at + ': task must be an object')
@@ -125,7 +132,7 @@ function renderContract(c) {
 }
 
 function executorPrompt(t) {
-  const worktree = args.repoPath + '/.worktrees/wave-' + t.id
+  const worktree = wave.repoPath + '/.worktrees/wave-' + t.id
   return [
     '# Task: ' + t.id,
     '',
@@ -138,11 +145,11 @@ function executorPrompt(t) {
     'edits; a quiet tree is expected, not a sign something is wrong.',
     '',
     '## Workspace (do this first)',
-    'Repository: ' + args.repoPath,
-    '- cd ' + args.repoPath,
-    '- git worktree add ' + worktree + ' -b wave/' + t.id + ' ' + args.base,
+    'Repository: ' + wave.repoPath,
+    '- cd ' + wave.repoPath,
+    '- git worktree add ' + worktree + ' -b wave/' + t.id + ' ' + wave.base,
     '  (if the worktree and branch already exist from a prior attempt, reuse them as they are)',
-    '- git -C ' + worktree + ' merge-base --is-ancestor ' + args.base + ' origin/' + args.defaultBranch,
+    '- git -C ' + worktree + ' merge-base --is-ancestor ' + wave.base + ' origin/' + wave.defaultBranch,
     '  (must exit 0; if it does not, STOP and report — do not pick another base)',
     'Work and commit ONLY inside ' + worktree + '.',
     '',
@@ -189,14 +196,14 @@ function reworkPrompt(t, verdict) {
 }
 
 function supervisorPrompt(t, report) {
-  return args.supervisorPromptText + [
+  return wave.supervisorPromptText + [
     '',
     '',
     'CONTRACT:',
     renderContract(t.contract),
     '',
-    'REPO: ' + args.repoPath,
-    'BASE: ' + args.base,
+    'REPO: ' + wave.repoPath,
+    'BASE: ' + wave.base,
     'BRANCH: wave/' + t.id,
     '',
     'REPORT:',
@@ -276,7 +283,7 @@ async function runTask(t) {
       if (report === null) return finish('error')
 
       const verdict = await call(supervisorPrompt(t, report),
-        { model: args.supervisor.model, effort: args.supervisor.effort ?? 'high',
+        { model: wave.supervisor.model, effort: wave.supervisor.effort ?? 'high',
           label: 'judge:' + t.id, phase: 'Wave', schema: VERDICT_SCHEMA }, rung)
       if (verdict === null) return finish('error')
 
@@ -301,10 +308,10 @@ async function runTask(t) {
 }
 
 phase('Wave')
-log('wave: ' + args.tasks.length + ' task(s) from base ' + args.base.slice(0, 7))
-const results = await pipeline(args.tasks, (t) => runTask(t))
+log('wave: ' + wave.tasks.length + ' task(s) from base ' + wave.base.slice(0, 7))
+const results = await pipeline(wave.tasks, (t) => runTask(t))
 const tasks = results.map((r, i) => r ??
-  { id: args.tasks[i].id, status: 'error', branch: 'wave/' + args.tasks[i].id, attempts: [] })
+  { id: wave.tasks[i].id, status: 'error', branch: 'wave/' + wave.tasks[i].id, attempts: [] })
 for (const t of tasks) log('task ' + t.id + ': ' + t.status)
 return {
   status: tasks.every((t) => t.status === 'ok') ? 'done' : 'partial',

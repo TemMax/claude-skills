@@ -78,12 +78,10 @@ Worth stating plainly, because a green run is easy to over-read.
   are asserted by the simulator on the shipped file, which is exactly as
   trustworthy as the simulator's fidelity to the real Workflow runtime. The
   live tier (or the in-session probe, see `tests/eval/wave-insession.md`)
-  proves acceptance and one real verdict, nothing more. As of 2026-08-12 even
-  that acceptance is unproven from headless `claude -p`: `Workflow` is
-  reachable, but the CLI's own tool-call serialization stringifies the
-  object-typed `args` parameter before the runner sees it, so `wave.sh` skips
-  rather than asserting — only the in-session probe can currently exercise the
-  live boundary.
+  proves acceptance and one real verdict, nothing more. The tool-call layer
+  delivers `args` as a JSON-encoded string in every observed environment, so
+  the runner parses before validating; the live tier asserts a real wave
+  result over that path.
 
 ## Adding to it
 

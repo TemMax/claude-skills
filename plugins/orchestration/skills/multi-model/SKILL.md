@@ -311,8 +311,9 @@ record was rejected at launch four times before it worked.
 
 1. Read `references/supervisor-prompt.md`. Workflow scripts cannot read files,
    so its full text travels inside `args.supervisorPromptText`.
-2. Invoke the runner (`args` must be a real JSON object — a string is rejected
-   by validation, which exists because that bug shipped twice):
+2. Invoke the runner (`args` should be a real JSON object; the tool-call layer often delivers it
+   as a JSON-encoded string, which the runner parses and validates — only
+   unparseable or invalid input is rejected, by name):
 
 ```
 Workflow({

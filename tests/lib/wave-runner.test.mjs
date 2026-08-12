@@ -85,13 +85,23 @@ const test = (name, fn) => tests.push({ name, fn })
 
 // ---------- S8: fail-closed validation ----------
 
-test('S8 args passed as a string → invalid-args, zero agent calls', async () => {
+test('S8 args passed as a JSON string are parsed, validated, and run', async () => {
   const { result, calls } = await runWorkflow(SCRIPT, {
     args: JSON.stringify(waveArgs()),
+    agentStub: stub({ 't-one': [V.ok()] }),
+  })
+  assert.equal(result.status, 'done')
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.ok(calls.length > 0)
+})
+
+test('S8e a string that is not valid JSON fails closed, zero agent calls', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: 'not json at all {',
     agentStub: () => { throw new Error('no agent may be called') },
   })
   assert.equal(result.status, 'invalid-args')
-  assert.match(result.errors[0], /object/)
+  assert.match(result.errors[0], /parse/i)
   assert.equal(calls.length, 0)
 })
 

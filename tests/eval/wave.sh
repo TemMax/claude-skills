@@ -67,18 +67,17 @@ PY
 section "the real Workflow boundary"
 out="$(timeout 900 claude -p "Read the JSON object in $W/args.json. Invoke the Workflow tool with scriptPath \"$RUNNER\" and that object as args — a real JSON object, not a string. When it completes, print the workflow's returned JSON verbatim and nothing else." --permission-mode bypassPermissions --model "$MODEL" </dev/null 2>/dev/null)"
 
-# Two ways headless claude -p fails to reach a real verdict, distinguished so the
-# skip message says which one happened:
-#   (a) the tool itself is absent from this harness (empty output, "no such tool");
-#   (b) the tool exists and is invoked, but the CLI's own tool-call serialization
-#       stringifies the object-typed `args` parameter before the runner ever sees
-#       it — tripping the runner's own anti-double-encoding guard. Confirmed
-#       reproducible 3/3 across Haiku and Sonnet with three prompt phrasings
-#       (2026-08-12); no wording fix available from this side of the boundary.
+# The tool-call layer routinely delivers `args` as a JSON-encoded string (seen
+# from both headless -p and interactive sessions, 2026-08-12); the runner now
+# parses a string before validating, so that no longer needs a skip branch.
+# The one remaining reason to skip is the tool itself being absent from this
+# harness (empty output, "no such tool"). If the runner still rejects the args
+# as invalid after parse-then-validate, that is a real regression, not a
+# boundary quirk — fail loudly instead of skipping.
 if [ -z "$out" ] || printf '%s' "$out" | grep -qiE 'no such tool|not available|do not have access'; then
   pass "SKIPPED: Workflow is unreachable from headless claude -p (tool absent) — the boundary is proven by the in-session probe (tests/eval/wave-insession.md), not this tier"
-elif printf '%s' "$out" | grep -q 'args must be a JSON object, not a string'; then
-  pass "SKIPPED: Workflow is reachable headless, but the CLI's own tool-call serialization stringifies the object-typed args parameter before the runner sees it (reproduced 3/3 across Haiku and Sonnet, three phrasings) — the boundary is proven by the in-session probe (tests/eval/wave-insession.md), not this tier"
+elif printf '%s' "$out" | grep -q 'invalid-args'; then
+  fail "runner rejected the wave args even after parse-then-validate" "${out:0:200}"
 else
   contains "the wave returned a status" '"status"'      "$out"
   contains "the task is in the result"  'divide-guard'  "$out"

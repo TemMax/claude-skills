@@ -2,17 +2,16 @@
 
 The simulator tier proves the ladder's semantics offline. What it cannot prove
 is the real `Workflow` launcher accepting the script and a real model driving
-it. `tests/eval/wave.sh` tries to prove that from headless `claude -p` and
-cannot: the tool is reachable, but headless `-p` serializes the object-typed
-`args` parameter into a JSON-encoded string before the runner ever sees it,
-tripping the runner's own guard against exactly that failure mode
-(`args must be a JSON object, not a string`). This was reproduced 3/3 across
-two models (Haiku, Sonnet) and three prompt phrasings on 2026-08-12 — including
-a phrasing that spelled out the object-vs-string distinction with an inline
-example — so it is a property of headless tool-call serialization, not
-something a better prompt fixes from this side of the boundary. Run this probe
-once from an interactive Claude Code session instead, where `Workflow` calls
-are not going through that headless serialization path.
+it. The tool-call layer routinely delivers the `args` parameter as a
+JSON-encoded string rather than an object — reproduced 3/3 across headless
+`claude -p` (two models, three prompt phrasings) and also seen from an
+interactive session (run wf_e9a784c4-731, 2026-08-12), where a pre-fix runner
+returned `invalid-args` for a perfectly valid wave. The runner is now
+parse-then-validate: a string that `JSON.parse`s into a valid object is
+accepted, and anything else still fails closed by name. `tests/eval/wave.sh`
+now asserts a real wave result over that path rather than skipping; this
+in-session probe remains the full-fidelity check of the actual `Workflow`
+launcher and a real model driving the ladder.
 
 1. Build the fixture repo and args file: run the fixture block of
    `tests/eval/wave.sh` by hand, or let the session do it (everything up to
@@ -35,3 +34,4 @@ are not going through that headless serialization path.
 
 | Date | Result | Notes |
 |---|---|---|
+| 2026-08-12 | launch accepted; pre-fix runner returned invalid-args (args delivered as string), which motivated parse-then-validate | run wf_e9a784c4-731, interactive session |
