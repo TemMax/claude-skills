@@ -54,6 +54,8 @@ check "remarks do not block"                   "grep -q 'remarks' $MM"
 check "the ladder has a terminal rung"         "grep -q 'already the strongest' $MM"
 check "blocking threshold above suspicion"     "grep -q 'Blocking correct work' $MM"
 check "supervisor prompt is referenced"        "grep -q 'references/supervisor-prompt.md' $MM"
+check "supervisor routing table exists"        "grep -q 'Choosing the supervisor' $MM"
+check "the judge is never the executor's own"  "grep -q 'Opus 5 never' $MM"
 check "the wave runner ships as a file" \
   "[ -f plugins/orchestration/skills/multi-model/references/wave-runner.workflow.mjs ]"
 check "SKILL points at the shipped runner"     "grep -q 'wave-runner.workflow.mjs' $MM"

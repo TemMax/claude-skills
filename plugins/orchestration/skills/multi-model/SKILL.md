@@ -249,6 +249,29 @@ Send `references/supervisor-prompt.md` to a model that is not the executor's own
 (see Anti-Deception Rules), with the contract, the report, the base SHA and the
 branch.
 
+### Choosing the supervisor — Quick Reference
+
+Two hard rules, then the table. Never the executor's own model (self-preference:
+measured zero for Opus 4.8 and Fable 5, unmeasured for Opus 5 — so Opus 5 never
+judges Opus 5). Never a weaker tier than the executor's: the judge re-runs and
+re-derives everything the executor did.
+
+| Executor | Supervisor | Effort |
+|---|---|---|
+| Haiku 4.5 | Opus 5 | high |
+| Sonnet 5 | Opus 5 | high |
+| Opus 5 | Fable 5 (fallback: Opus 4.8) | high |
+| Opus 4.8 | Opus 5 or Fable 5 | high |
+| Fable 5 (explicit ladder rung only) | Opus 5 | high |
+
+Effort is `high` across the board — the shipped runner's default — and the row
+is measured, not stylistic: on 2026-08-12 a Haiku supervisor at `medium` passed
+an unsatisfiable contract, filing its whole analysis into `remarks`. A cheaper
+judge on a mechanical task is not the economy lever; skipping the model
+entirely is (see the cost section below). All four models above judged fixtures
+F1–F4 correctly in single live runs after that fix; single runs prove "can",
+not a rate.
+
 **The supervisor trusts artifacts only.** It checks out `wave/<task-id>` into
 its own worktree, runs the diff itself, executes each `must_run` command itself,
 and greps for the forbidden moves itself. The report is a set of claims to
@@ -412,7 +435,8 @@ manufactures confidence in the waves it lets through.
 
 A supervisor invocation is an agent with tools — a diff, the commands, the
 greps — so it is not one model request. The tiers also invert: a Haiku 4.5 task
-is supervised by Opus 4.8 or Fable 5, making the supervisor the expensive half.
+is supervised by Opus 5 (see the supervisor table above), making the supervisor
+the expensive half.
 
 Run full agentic supervision for tasks whose contract has `must_run` commands or
 `files_forbidden` entries that matter: migrations, shared helpers,
