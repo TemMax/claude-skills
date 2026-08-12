@@ -60,12 +60,15 @@ function waveArgs(over = {}) {
 
 // verdictsById: taskId -> queue of verdicts, consumed one per supervisor call.
 // execNulls: taskId -> how many leading EXECUTOR calls return null (dead agent).
-function stub(verdictsById, { execNulls = {} } = {}) {
+// supNulls: taskId -> how many leading SUPERVISOR calls return null (dead agent).
+function stub(verdictsById, { execNulls = {}, supNulls = {} } = {}) {
   const q = Object.fromEntries(Object.entries(verdictsById).map(([k, v]) => [k, [...v]]))
   const nulls = { ...execNulls }
+  const supDead = { ...supNulls }
   return (prompt) => {
     const id = (prompt.match(/wave\/([a-z0-9-]+)/) ?? [])[1]
     if (prompt.startsWith(SUP)) {
+      if ((supDead[id] ?? 0) > 0) { supDead[id]--; return null }
       if (!q[id] || q[id].length === 0) throw new Error('verdict queue exhausted for ' + id)
       return q[id].shift()
     }
@@ -229,6 +232,17 @@ test('S5 satisfiable:false stops that task at once; the neighbour is untouched',
   assert.equal(result.status, 'partial')
 })
 
+test('S5b tie-break: ok:true with a satisfiable:false violation still stops the task', async () => {
+  const contradictory = { ok: true, violations: [{ rule: 'must_run: true', class: 'must_run',
+    evidence: 'command reads nothing under files_allowed', quote: '', satisfiable: false }], remarks: [] }
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [contradictory] }),
+  })
+  assert.equal(result.tasks[0].status, 'contract-unsatisfiable')
+  assert.equal(execCalls(calls, 't-one').length, 1)
+})
+
 test('S6 ladder exhausted → failed with the full attempt trace', async () => {
   const { result } = await runWorkflow(SCRIPT, {
     args: waveArgs(),
@@ -270,6 +284,28 @@ test('S7b two dead calls in a row → task error, wave survives, no supervisor c
   assert.equal(result.tasks[0].status, 'error')
   assert.equal(result.status, 'partial')
   assert.equal(supCalls(calls, 't-one').length, 0)
+})
+
+test('S7c a dead supervisor call: recorded, retried, the task still passes', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.ok()] }, { supNulls: { 't-one': 1 } }),
+  })
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.deepEqual(result.tasks[0].attempts.map((a) => a.kind), ['agent-error', 'verdict'])
+  assert.equal(supCalls(calls, 't-one').length, 2)
+  assert.equal(execCalls(calls, 't-one').length, 1)
+})
+
+test('S7d two dead supervisor calls → task error, wave survives', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [] }, { supNulls: { 't-one': 2 } }),
+  })
+  assert.equal(result.tasks[0].status, 'error')
+  assert.equal(result.status, 'partial')
+  assert.equal(supCalls(calls, 't-one').length, 2)
+  assert.equal(execCalls(calls, 't-one').length, 1)
 })
 
 let failed = 0
