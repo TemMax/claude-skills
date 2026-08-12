@@ -35,3 +35,4 @@ launcher and a real model driving the ladder.
 | Date | Result | Notes |
 |---|---|---|
 | 2026-08-12 | launch accepted; pre-fix runner returned invalid-args (args delivered as string), which motivated parse-then-validate | run wf_e9a784c4-731, interactive session |
+| 2026-08-12 | PASS end-to-end on the parse-then-validate runner: `status: done`, task `divide-guard` → `ok` on rung 0 (haiku executor + haiku supervisor, verdict `{ok:true, violations:[], remarks:[]}`), 2 agents, ~150s. Artifact verified independently of the report: branch `wave/divide-guard` exists, the diff is the correct `src/calc.py` guard, the suite passes in the worktree | run wf_e8701785-804, interactive session |
