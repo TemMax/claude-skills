@@ -337,9 +337,11 @@ Workflow({
 })
 ```
 
-The runner assembles each executor's six-block prompt from the task object, so
-the contract the executor reads and the contract the supervisor enforces are
-the same object and cannot diverge. Escalated rungs run at `high` effort.
+The runner assembles each executor's prompt from the task object — the six
+mandatory blocks of the Task Prompt Template above, plus a workspace section
+carrying the isolation instructions — so the contract the executor reads and
+the contract the supervisor enforces are the same object and cannot diverge.
+Escalated rungs run at `high` effort.
 
 3. Act on the returned statuses, task by task:
    - `ok` — merge `wave/<id>` per the wave plan.
