@@ -19,6 +19,7 @@ run() {
 
 run "structure — manifests, frontmatter, versions, prohibitions" bash tests/structure.sh
 run "contracts — the invariants behaviour depends on"            bash tests/skills-contract.sh
+run "behaviour — wave-runner reference implementation (simulated)" bash tests/wave-runner.test.sh
 
 for t in plugins/*/hooks/*.test.sh; do
   [ -e "$t" ] || continue

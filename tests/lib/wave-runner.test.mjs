@@ -134,6 +134,134 @@ test('S8d a null task entry fails closed, not with a crash', async () => {
   assert.equal(calls.length, 0)
 })
 
+// ---------- S1–S7: the ladder itself ----------
+
+test('S1 clean pass: one executor call, one supervisor call, no escalation', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.ok()] }),
+  })
+  assert.equal(result.status, 'done')
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.equal(result.tasks[0].branch, 'wave/t-one')
+  assert.equal(execCalls(calls, 't-one').length, 1)
+  assert.equal(supCalls(calls, 't-one').length, 1)
+  assert.equal(execCalls(calls, 't-one')[0].opts.model, 'sonnet')
+  assert.deepEqual(verdictAttempts(result.tasks[0]).map((a) => a.escalation), [null])
+})
+
+test('S2 rework: same model, prior verdict travels in the prompt', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.files(), V.ok()] }),
+  })
+  assert.equal(result.tasks[0].status, 'ok')
+  const ex = execCalls(calls, 't-one')
+  assert.deepEqual(ex.map((c) => c.opts.model), ['sonnet', 'sonnet'])
+  assert.match(ex[1].prompt, /Prior attempt was rejected/)
+  assert.match(ex[1].prompt, /"class": "files"/)
+})
+
+test('S3 same (class, rule) twice → next rung, model actually changes', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.files(), V.files(), V.ok()] }),
+  })
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.deepEqual(execCalls(calls, 't-one').map((c) => c.opts.model), ['sonnet', 'sonnet', 'opus'])
+  assert.deepEqual(verdictAttempts(result.tasks[0]).map((a) => a.escalation),
+    [null, 'same-rule-repeat', null])
+})
+
+test('S3b a different rule the second time also escalates, labeled rung-exhausted', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.files(), V.report(), V.ok()] }),
+  })
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.equal(verdictAttempts(result.tasks[0])[1].escalation, 'rung-exhausted')
+  assert.equal(execCalls(calls, 't-one')[2].opts.model, 'opus')
+})
+
+test('S4 two pasteReproduced:false strikes → escalation labeled paste-two-strikes', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.paste(), V.paste(), V.ok()] }),
+  })
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.equal(verdictAttempts(result.tasks[0])[1].escalation, 'paste-two-strikes')
+  assert.equal(execCalls(calls, 't-one')[2].opts.model, 'opus')
+})
+
+test('S4b second strike on a later rung skips its remaining attempt', async () => {
+  // strike 1 on rung 0, rung 0 exhausted, strike 2 on rung 1 attempt 1:
+  // rung 1 is terminal, its second attempt must be skipped → failed after 3.
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.paste(), V.files(), V.paste()] }),
+  })
+  assert.equal(result.tasks[0].status, 'failed')
+  assert.equal(execCalls(calls, 't-one').length, 3)
+  assert.equal(verdictAttempts(result.tasks[0])[2].escalation, 'paste-two-strikes')
+})
+
+test('S5 satisfiable:false stops that task at once; the neighbour is untouched', async () => {
+  const twoTasks = waveArgs({ tasks: [task({ id: 't-bad' }), task({ id: 't-good' })] })
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: twoTasks,
+    agentStub: stub({ 't-bad': [V.unsat()], 't-good': [V.ok()] }),
+  })
+  const bad = result.tasks.find((t) => t.id === 't-bad')
+  const good = result.tasks.find((t) => t.id === 't-good')
+  assert.equal(bad.status, 'contract-unsatisfiable')
+  assert.equal(execCalls(calls, 't-bad').length, 1)
+  assert.equal(good.status, 'ok')
+  assert.equal(result.status, 'partial')
+})
+
+test('S6 ladder exhausted → failed with the full attempt trace', async () => {
+  const { result } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.files(), V.report(), V.files(), V.report()] }),
+  })
+  assert.equal(result.tasks[0].status, 'failed')
+  assert.equal(verdictAttempts(result.tasks[0]).length, 4)
+  assert.deepEqual(verdictAttempts(result.tasks[0]).map((a) => a.model),
+    ['sonnet', 'sonnet', 'opus', 'opus'])
+})
+
+test('S6b absolute cap: six executor attempts, however long the ladder', async () => {
+  // 5 rungs × 2 would be 10; the queue holds exactly 6 verdicts, so a 7th
+  // supervisor call would throw and fail this test by itself.
+  const capArgs = waveArgs({ tasks: [task({ ladder: ['opus', 'opus', 'opus', 'opus'] })] })
+  const { result } = await runWorkflow(SCRIPT, {
+    args: capArgs,
+    agentStub: stub({ 't-one': [V.files(), V.report(), V.files(), V.report(), V.files(), V.report()] }),
+  })
+  assert.equal(result.tasks[0].status, 'failed')
+  assert.equal(verdictAttempts(result.tasks[0]).length, 6)
+})
+
+test('S7 one dead executor call: recorded, retried, the task still passes', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.ok()] }, { execNulls: { 't-one': 1 } }),
+  })
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.deepEqual(result.tasks[0].attempts.map((a) => a.kind), ['agent-error', 'verdict'])
+  assert.equal(execCalls(calls, 't-one').length, 2)
+})
+
+test('S7b two dead calls in a row → task error, wave survives, no supervisor call', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [] }, { execNulls: { 't-one': 2 } }),
+  })
+  assert.equal(result.tasks[0].status, 'error')
+  assert.equal(result.status, 'partial')
+  assert.equal(supCalls(calls, 't-one').length, 0)
+})
+
 let failed = 0
 for (const t of tests) {
   try { await t.fn(); console.log('ok -', t.name) }
