@@ -113,6 +113,15 @@ A command that reads nothing under the allowed paths, or whose only fix lies
 behind a `forbidden_move`, cannot be made to pass by any compliant work, and the
 executor in front of you did nothing wrong.
 
+An unsatisfiable contract still fails the verdict. Record the `must_run`
+violation with `"satisfiable": false` and return `ok:false` — the executor's
+innocence lives in that field, never in `ok:true`. A passing verdict says
+"merge this branch", and the branch's required command fails; what reads the
+`satisfiable` field cannot act on a verdict that never arrives. Observed
+2026-08-12: a supervisor moved the whole unsatisfiability analysis into
+`remarks` and passed the task — the analysis was correct, the verdict was
+wrong, and `remarks` change nothing.
+
 Answer it as a finding, not as a judgement about what should happen next. You are
 not deciding whether to rework, escalate or stop — something else reads this field
 and decides. Your job is to say what is true and show why.
@@ -123,7 +132,8 @@ and decides. Your job is to say what is true and show why.
   output. **A violation you cannot evidence must be dropped**, not softened.
 - Judge the contract as written. If the work is sound but the contract's wording
   makes you uneasy, that belongs in `remarks`. Blocking correct work is a worse
-  failure than missing a nitpick.
+  failure than missing a nitpick. Correct work means the contract's checks pass —
+  a red `must_run` is never correct work, however blameless the executor.
 - Do not comment on style, naming, or architecture. Not your job here.
 - `remarks` never affect `ok`.
 
