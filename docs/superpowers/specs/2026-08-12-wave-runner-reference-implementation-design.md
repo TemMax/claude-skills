@@ -101,6 +101,13 @@ the script does is validate; any failure returns
 - `supervisorPromptText` is non-empty and contains the string `"verdict"`
   (a sanity tripwire against passing the wrong file's text).
 
+**Amended 2026-08-12 (live evidence):** the tool-call layer delivers `args` as
+a JSON-encoded string in every observed environment — headless and interactive
+(probe runs wf_e9a784c4-731, wf_e8701785-804). The shipped runner therefore
+parses a string `args` first (guarded, failing closed on a parse error) and
+validates the result; only unparseable or invalid input is rejected. The
+original "reject strings" rule proved equivalent to rejecting every wave.
+
 ## 3. Prompt assembly (inside the script)
 
 **Executor prompt** — the six mandatory blocks from SKILL.md's template,
@@ -227,7 +234,10 @@ The simulated artifact is the shipped file itself — not a copy of its logic.
 | S5 | satisfiable:false | task `contract-unsatisfiable`; zero further executor calls for that task; other tasks unaffected |
 | S6 | ladder exhausted | task `failed`; attempt trace covers every rung; absolute cap respected |
 | S7 | agent() → null | recorded as `agent-error`, retried once, no crash; second null → `error` |
-| S8 | invalid args (string args; missing base; empty tasks) | `invalid-args` with named errors; **zero** agent calls |
+| S8 | invalid args (unparseable string; missing base; empty tasks) | `invalid-args` with named errors; **zero** agent calls |
+
+(S8 amended 2026-08-12: a *parseable* JSON string is accepted per the args
+amendment in §2; S8 now asserts the parse path and S8e the unparseable one.)
 
 **Static boundary checks** (shell, on the script file): exactly one `export`;
 `meta` block free of `${`, `+`-concatenation and identifiers; no `Date.`,

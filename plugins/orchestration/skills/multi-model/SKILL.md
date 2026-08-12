@@ -296,7 +296,7 @@ block. Spending the supervisor's credibility on flaky tests buys nothing.
 | 1st violation | Back to the same executor with the verdict attached |
 | 2nd violation of the same rule | To a stronger model — repeating a prompt on the model that just failed it reproduces the failure |
 | `pasteReproduced: false` on two attempts | Escalate to a stronger model: once is explicable, twice is a pattern, and the count is the ladder's to keep |
-| Executor is already the strongest model | No higher rung: retry once at raised effort, then stop |
+| Executor is already the strongest model | No higher rung: one rework with the verdict attached, then stop |
 | The contract cannot be satisfied | Stop immediately — no rework, no stronger model. Return the task to yourself to amend the contract (below) |
 | Stop | Hand the user the task, every verdict in order, and the branch name |
 
@@ -570,9 +570,10 @@ them:
 - `agent()` returns `null` when a subagent dies after retries — every call site
   needs a guard, or one API error takes the whole wave down.
 - The tool-call layer may deliver `args` as a JSON-encoded string. Parse it
-  first (`typeof args === 'string' ? JSON.parse(args) : args`), then validate —
-  the shipped runner does exactly this. A script that skips both will read
-  `args.foo` as `undefined` and run to a plausible, meaningless result.
+  first — guarded, failing closed with a named error when the parse throws —
+  then validate; that is what the shipped runner does. A script that skips
+  both will read `args.foo` as `undefined` and run to a plausible,
+  meaningless result.
 
 Verified 2026-08-12 the hard way: a carefully built harness, dry-run by its
 author across seven scenarios, was still rejected four times at launch for four
