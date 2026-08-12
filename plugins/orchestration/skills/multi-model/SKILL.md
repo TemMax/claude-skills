@@ -3,7 +3,7 @@ name: multi-model
 description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5, Opus 4.8 and Opus 5 — including supervised waves, where each executor is isolated in its own worktree and its result is judged against a machine-checkable contract by a different model — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Works on whatever model this orchestrator session runs on; it loads the matching orchestrator profile itself. Triggers: "разбей на агентов", "запусти параллельно", "оркеструй задачу", "decompose into agents", "run in parallel", "delegate to subagents", "pick a model for this task". Do NOT use for single-agent work.'
 metadata:
   author: https://github.com/TemMax
-  version: 1.7.1
+  version: 1.8.0
 ---
 
 # Orchestrating Multi-Model Development
@@ -293,33 +293,66 @@ block. Spending the supervisor's credibility on flaky tests buys nothing.
 
 | Situation | Action |
 |---|---|
-| 1st violation, no forged evidence | Back to the same executor with the verdict attached |
+| 1st violation | Back to the same executor with the verdict attached |
 | 2nd violation of the same rule | To a stronger model — repeating a prompt on the model that just failed it reproduces the failure |
 | `pasteReproduced: false` on two attempts | Escalate to a stronger model: once is explicable, twice is a pattern, and the count is the ladder's to keep |
 | Executor is already the strongest model | No higher rung: retry once at raised effort, then stop |
 | The contract cannot be satisfied | Stop immediately — no rework, no stronger model. Return the task to yourself to amend the contract (below) |
 | Stop | Hand the user the task, every verdict in order, and the branch name |
 
-The ladder lives inside a single `pipeline` stage. Stages run once per item, so
-spreading execute / supervise / rework across three stages would re-enter the
-pipeline from the top on every rework.
+### Running a wave — invoke the shipped runner, do not write one
 
-```js
-pipeline(tasks, async (_, t) => {
-  let model = t.model, attempt = 0, history = []
-  while (true) {
-    const report  = await agent(taskPrompt(t, history), {model, phase: 'Execute'})
-    const verdict = await agent(supervisorPrompt(t, report),
-                                {model: supervisorFor(model), phase: 'Supervise',
-                                 schema: VERDICT})
-    history.push(verdict)
-    if (verdict.ok) return {task: t, verdict, model, attempts: attempt + 1}
-    const next = nextRung(model, verdict, ++attempt)
-    if (next.stop) return {task: t, verdict, history, escalatedToUser: true}
-    model = next.model
+The ladder above is implemented once, in
+`references/wave-runner.workflow.mjs`, and covered by the deterministic
+simulator tier in `tests/`. Your job is to assemble its inputs, not to
+re-implement its rules — every hand-written wave script is a fresh chance to
+get "two strikes escalate" subtly wrong, and the one hand-written run on
+record was rejected at launch four times before it worked.
+
+1. Read `references/supervisor-prompt.md`. Workflow scripts cannot read files,
+   so its full text travels inside `args.supervisorPromptText`.
+2. Invoke the runner (`args` must be a real JSON object — a string is rejected
+   by validation, which exists because that bug shipped twice):
+
+```
+Workflow({
+  scriptPath: "<this skill's base directory>/references/wave-runner.workflow.mjs",
+  args: {
+    base: "<pushed fork-point sha>",          // see Wave Isolation above
+    defaultBranch: "main",
+    repoPath: "/abs/path/to/repo",
+    supervisorPromptText: "<text of supervisor-prompt.md>",
+    supervisor: { model: "opus", effort: "high" },
+    tasks: [{
+      id: "auth-fix",
+      description: "<the substantive ask>",
+      context: "<files, lines, conventions>",
+      contract: { files_allowed: [...], files_forbidden: [...],
+                  must_run: [{ cmd: "...", evidence: "required" }],
+                  forbidden_moves: [...], report_must_answer: [...] },
+      executor: { model: "sonnet", effort: "medium" },
+      ladder: ["opus"]      // rungs AFTER the first; omit for the routing default
+    }]
   }
 })
 ```
+
+The runner assembles each executor's six-block prompt from the task object, so
+the contract the executor reads and the contract the supervisor enforces are
+the same object and cannot diverge. Escalated rungs run at `high` effort.
+
+3. Act on the returned statuses, task by task:
+   - `ok` — merge `wave/<id>` per the wave plan.
+   - `contract-unsatisfiable` — run the amendment flow below (one amendment
+     per task; removing or weakening a check goes to the user as a yes/no),
+     then re-invoke with `resumeFromRunId`: the runner is deterministic, so
+     every unchanged task replays from cache and only the amended one runs.
+   - `failed` / `error` — hand the user the task, every verdict in order, and
+     the branch name. Do not quietly retry.
+
+Write a custom wave script only when the runner genuinely cannot express the
+wave — and then follow "Delegating the Workflow Script Itself" below, because
+every rule listed there was learned from a rejection.
 
 ### When the contract is what is broken
 
@@ -511,8 +544,11 @@ unmeasured property is not a permission.
 
 ## Delegating the Workflow Script Itself
 
-An executor asked to *write* a workflow script cannot read the `Workflow` tool's
-documentation — the tool is not in its prompt and not available to it. It will
+This applies only to the rare wave the shipped runner cannot express; the
+default path is invoking `references/wave-runner.workflow.mjs`, not writing a
+script. An executor asked to *write* a workflow script cannot read the
+`Workflow` tool's documentation — the tool is not in its prompt and not
+available to it. It will
 code against whatever it can infer, produce something plausible, and the script
 will be rejected at launch or, worse, run on assumptions that quietly void the
 result. Hand it these constraints in the task prompt, because it cannot discover
