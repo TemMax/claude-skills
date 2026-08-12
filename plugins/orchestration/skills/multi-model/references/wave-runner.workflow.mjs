@@ -265,6 +265,7 @@ async function runTask(t) {
     if (r === null) {
       attempts.push({ rung, model: opts.model, effort: opts.effort,
                       kind: 'agent-error', verdict: null, escalation: null })
+      log(t.id + ': ' + opts.label.split(':')[0] + ' died (' + opts.model + ') — retrying once')
       r = await agent(prompt, opts)
     }
     return r
@@ -278,10 +279,14 @@ async function runTask(t) {
       verdictCount++
 
       const prompt = prevVerdict ? reworkPrompt(t, prevVerdict) : executorPrompt(t)
+      log(t.id + ': ' + (prevVerdict ? 'rework' : 'executor') + ' ' + model + '/' + effort
+        + ' — rung ' + (rung + 1) + '/' + rungs.length
+        + ', attempt ' + verdictCount + '/' + MAX_ATTEMPTS_PER_TASK)
       const report = await call(prompt,
         { model, effort, label: 'exec:' + t.id, phase: 'Wave' }, rung)
       if (report === null) return finish('error')
 
+      log(t.id + ': report received — judging (' + wave.supervisor.model + ')')
       const verdict = await call(supervisorPrompt(t, report),
         { model: wave.supervisor.model, effort: wave.supervisor.effort ?? 'high',
           label: 'judge:' + t.id, phase: 'Wave', schema: VERDICT_SCHEMA }, rung)
@@ -292,15 +297,24 @@ async function runTask(t) {
       const priorVerdict = prevVerdict
       prevVerdict = verdict
       const viols = verdict.violations ?? []
+      log(t.id + ': verdict ' + (verdict.ok === true ? 'ok'
+        : 'rejected [' + viols.map((v) => v.class).join(', ') + ']'))
 
       // Priority order is load-bearing; see the spec.
       if (viols.some((v) => v.satisfiable === false)) return finish('contract-unsatisfiable')
       if (verdict.ok === true) return finish('ok')
       if (viols.some((v) => v.pasteReproduced === false)) pasteStrikes++
-      if (pasteStrikes >= 2) { attempt.escalation = 'paste-two-strikes'; break }
+      if (pasteStrikes >= 2) {
+        attempt.escalation = 'paste-two-strikes'
+        if (rung + 1 < rungs.length) log(t.id + ': escalating (paste-two-strikes) → ' + rungs[rung + 1])
+        break
+      }
       if (attemptOnRung === MAX_ATTEMPTS_PER_RUNG) {
         attempt.escalation = sameRuleRepeat(priorVerdict, verdict)
           ? 'same-rule-repeat' : 'rung-exhausted'
+        if (rung + 1 < rungs.length) {
+          log(t.id + ': escalating (' + attempt.escalation + ') → ' + rungs[rung + 1])
+        }
       }
     }
   }
