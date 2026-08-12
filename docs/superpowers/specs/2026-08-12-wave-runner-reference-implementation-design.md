@@ -132,8 +132,14 @@ existing eval fixtures compose it. The verdict is taken via `opts.schema`
 (Workflow-validated JSON) — no regex parsing:
 
 ```js
-{ ok, satisfiable, pasteReproduced, violations: [{rule, class, evidence, quote}], remarks }
+{ ok, violations: [{rule, class, evidence, quote, pasteReproduced?, satisfiable?}], remarks }
 ```
+
+(`satisfiable` and `pasteReproduced` are per-violation fields — that is what the
+adversarially-hardened supervisor prompt already emits, and the prompt is not
+edited by this work. The runner reads "any violation with `satisfiable: false`"
+and "any violation in this verdict with `pasteReproduced: false` counts one
+strike for the verdict".)
 
 ## 4. Execution flow — the ladder as code
 
