@@ -83,4 +83,17 @@ check "critical-review names the fix-phase triggers" \
 check "multi-model names Opus 5 as an executor" \
   "sed -n '3p' $MM | grep -q 'Opus 5'"
 
+SP=plugins/orchestration/skills/super-plan/SKILL.md
+
+section "super-plan: planning that lands wave-ready"
+check "the skill exists"                        "[ -f $SP ]"
+check "the lint script ships"                   "[ -f plugins/orchestration/skills/super-plan/references/plan-lint.mjs ]"
+check "lint is mandatory before the plan gate"  "grep -q 'plan-lint.mjs' $SP"
+check "same-wave file overlap is forbidden"     "grep -q 'must not share files' $SP"
+check "questions are batched, not dripped"      "grep -q 'ONE batched AskUserQuestion' $SP"
+check "status transitions stay with execution"  "grep -q 'status transitions belong' $SP"
+check "headless mode records assumptions"       "grep -q 'Assumptions (would ask)' $SP"
+check "superpowers attribution survives"        "grep -q 'Jesse Vincent' $SP"
+check "the MIT notice ships"                    "[ -f plugins/orchestration/skills/super-plan/references/LICENSE-superpowers ]"
+
 summary
