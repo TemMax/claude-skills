@@ -7,7 +7,7 @@
     {
       "name": "orchestration",
       "source": "./plugins/orchestration",
-      "description": "Multi-agent orchestration: decompose coding work into parallel executor agents, route tasks to models, write closed task prompts, review results. Adapts to whichever model orchestrates."
+      "description": "Plan and execute: wave-native planning (super-plan) with a shipped plan linter, plus supervised multi-model waves — isolated executors judged against machine-checkable contracts. Adapts to whichever model orchestrates."
     },
     {
       "name": "code-review",

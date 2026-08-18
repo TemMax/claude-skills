@@ -98,7 +98,7 @@ fi
 # Only branches the plan DECLARES, via a `branch:` key. Matching bare `wave/...`
 # anywhere in the text silenced any generalised plan that merely mentioned an old
 # branch in prose: the gate is wave-specific, the trigger no longer is.
-planned_branches="$(sed -n 's/^[[:space:]-]*branch:[[:space:]]*\([A-Za-z0-9._\/-]*\).*/\1/p' "$plan_file" 2>/dev/null | sort -u)"
+planned_branches="$(sed -n 's/^[[:space:]-]*"\{0,1\}branch"\{0,1\}:[[:space:]]*"\{0,1\}\([A-Za-z0-9._\/-]*\)"\{0,1\}.*/\1/p' "$plan_file" 2>/dev/null | sort -u)"
 if [ -n "$planned_branches" ]; then
   live=0
   for b in $planned_branches; do
