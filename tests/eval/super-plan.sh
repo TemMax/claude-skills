@@ -14,8 +14,10 @@ cd "$(dirname "$0")/../.." || exit 1
 # reliably follow this skill (prose printed before the plan content, `branch`
 # values not matching `wave/<id>`, a `ladder` array holding branch names
 # instead of short model names, and a same-wave file overlap that survived
-# to lint) across repeated runs of this same script, while Sonnet 5 passed
-# both fixtures cleanly on every run tried. See tests/README.md.
+# to lint) across repeated runs of this same script, while Sonnet 5 was
+# markedly more reliable — clean on most runs, though one run out of several
+# still produced a P2 plan that failed lint. See tests/README.md, which is
+# the authoritative honest statement of what this tier proves.
 MODEL="${EVAL_MODEL:-claude-sonnet-5}"
 SKILL=plugins/orchestration/skills/super-plan/SKILL.md
 LINT=plugins/orchestration/skills/super-plan/references/plan-lint.mjs
