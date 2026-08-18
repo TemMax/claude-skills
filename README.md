@@ -6,8 +6,9 @@ these skills is derived from the models' official Anthropic system cards, and
 the load-bearing logic ships as tested code, not prose — a wave runner, a plan
 linter, and a four-tier test suite (see `tests/README.md`).
 
-- **`orchestration`** — planning (`super-plan`) and execution (`multi-model`):
-  the orchestrator model researches, plans into contract-carrying waves, and
+- **`orchestration`** — the full pipeline: `ship` conducts planning
+  (`super-plan`) and execution (`multi-model`) into a reviewed PR. The
+  orchestrator model researches, plans into contract-carrying waves, and
   launches executor subagents (Haiku 4.5 / Sonnet 5 / Opus 5 / Opus 4.8), each
   isolated in its own worktree and judged against its contract by a different
   model.
@@ -143,6 +144,11 @@ independent judge model checks out the branch, re-runs the contract's commands
 itself and issues a verdict — executor self-reports are never trusted. Rework,
 model escalation and the unsatisfiable-contract stop are code, not judgment
 calls.
+
+**What to expect from ship.** One confirmation up front — the feature branch
+will be pushed and a PR opened — then only the link skills' own gates stop the
+flow. ship ends at a reviewed PR with its threads answered; the merge always
+stays with you.
 
 **What to expect from review.** The reviewer loads its profile, detects the
 scope (a named PR, a PR opened this session, uncommitted changes, or the
