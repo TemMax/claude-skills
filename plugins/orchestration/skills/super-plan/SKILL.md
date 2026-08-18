@@ -60,8 +60,10 @@ Read exactly one. Always reply to the user in the language the user writes in.
    fails lint is not presented to the user.
 6. **Gate 2 — plan.** Show the lint-clean plan file; one approval.
 7. **Handoff.** "Execute with multi-model (supervised waves)." The plan
-   file IS the wave-plan artifact: the json block is the runner's task
-   input, verbatim. The `status:` field stays `draft` here — status transitions belong
+   file IS the wave-plan artifact: the json block feeds the runner directly —
+   each runner task is the json entry plus its `## Task` prose as
+   `description` (the runner rejects a task without one, by name). The
+   `status:` field stays `draft` here — status transitions belong
    to execution (multi-model sets `active` at launch and
    `done` at completion), never to planning and never to the user.
 

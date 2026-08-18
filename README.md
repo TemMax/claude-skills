@@ -120,8 +120,9 @@ skill name is passed as the task description:
 ```
 
 The three chain into a pipeline: `super-plan` produces the plan file whose
-machine half is byte-for-byte the wave-runner's input, `multi-model` executes
-it in supervised waves, `critical-review` closes the loop on the result.
+machine half feeds the wave-runner directly (each task: json entry + its
+prose section as the description), `multi-model` executes it in supervised
+waves, `critical-review` closes the loop on the result.
 
 Type `/orch` or `/code` and let autocomplete fill in the namespaced name.
 

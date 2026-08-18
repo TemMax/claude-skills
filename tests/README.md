@@ -2,7 +2,9 @@
 
 ```
 ./tests/run.sh          structure + contracts + behaviour   — offline, seconds
-./tests/run.sh --live   the above plus the evaluation tiers — ~7 model calls, a few minutes
+./tests/run.sh --live   the above plus the evaluation tiers — ~a dozen model
+                        calls (supervisor, drift, wave boundary, planner —
+                        the last on Sonnet), several minutes
 ```
 
 Enable the pre-push gate once per clone:
