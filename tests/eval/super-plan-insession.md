@@ -14,3 +14,4 @@ contract amendments?).
 
 | Date | Feature | Lint on first presentation | Question batches | Execution outcome |
 |---|---|---|---|---|
+| 2026-08-18 | the `ship` conductor skill (planning its sibling) | OK: 0 errors, 2 expected creation-path warnings — clean on first presentation | 2 (one 4-fork batch; the name answer opened a legitimate follow-up batch of 1) | recorded at launch; updated when the waves land |
