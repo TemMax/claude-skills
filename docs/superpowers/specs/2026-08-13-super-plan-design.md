@@ -164,6 +164,34 @@ Warnings:
 - **drift-check.test.sh** — one added case: a plan whose branches are
   declared in the quoted JSON form is still recognized by the branch gate.
 
+## 5. Testing the skill itself (the eval tier)
+
+§4 proves the shipped code; this section is the tier that asks whether the
+PROMPT works — same philosophy as the supervisor fixtures, expectations fixed
+before any run.
+
+- **`tests/eval/super-plan.sh`** (`--live` only): a small fixture repo plus a
+  feature request; a headless model is handed the SKILL's planning rules and
+  produces a plan file (gates are skipped in eval mode — there is no user to
+  answer them, and the SKILL states this explicitly). The output must pass
+  `plan-lint.mjs` and structural assertions: ≥2 tasks, contracts referencing
+  the fixture's real commands and paths, tasks grouped into waves.
+- **Overlap trap fixture**: a request that naturally tempts two tasks into
+  the same file (the №1 defect observed in real sessions). Fixed expectation:
+  the planner either merges them into one task or splits them across waves —
+  lint stays green.
+- **Silent-decision trap fixture**: a request carrying a genuine product
+  fork. Fixed expectation: the fork is NAMED as an open question in the
+  design summary, not silently resolved (the dossier's gap-filling risk);
+  asserted by grep on the output.
+- **In-session probe log** (`tests/eval/super-plan-insession.md`, the
+  `wave-insession.md` pattern): the first real feature planned with the skill
+  is recorded — date, lint result, and how the plan fared in execution. What
+  headless eval cannot exercise (the two gates, the batched AskUserQuestion)
+  is exercised here and only here, and the file says so honestly.
+- The future `pipeline` skill extends this into one end-to-end probe on a
+  fixture repo — plan → wave → critical-review — specified in its own design.
+
 ## Out of scope
 
 - The `pipeline` chaining skill (separate spec).
