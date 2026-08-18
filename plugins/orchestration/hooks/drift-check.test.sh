@@ -74,6 +74,11 @@ setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$CLAIM"
 git -C "$WORK/repo" branch wave/alpha
 expect "active wave with a live branch" "would-call" "$(run_hook)"
 
+# 4b. same as 4, but the plan declares its branch in the quoted JSON form
+setup_repo; write_plan active '  "branch": "wave/alpha",'; write_transcript "$CLAIM"
+git -C "$WORK/repo" branch wave/alpha
+expect "quoted JSON branch is recognized" "would-call" "$(run_hook)"
+
 # 5. re-entrancy guard beats every other gate
 setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$CLAIM"
 git -C "$WORK/repo" branch wave/alpha
