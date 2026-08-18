@@ -80,11 +80,13 @@ status: draft          # draft | active | done — active is set at LAUNCH, by m
 base: pending          # filled with the pushed fork-point sha at launch
 ```
 
-**b) The machine half** — one fenced ` ```json ` block (JSON, not YAML: zero
+**b) The machine half** — one fenced block whose info string is
+`json wave-plan` (rendered as JSON, but distinguishable from ordinary
+```json snippets inside task prose, which stay legal; JSON, not YAML: zero
 dependencies to parse, and it is byte-for-byte the wave-runner's `tasks`
 input):
 
-```json
+```json wave-plan
 {
   "waves": [
     { "wave": 1,
@@ -131,7 +133,8 @@ warnings alone keep exit 0).
 
 Errors:
 - header: `status:` line present, value `draft|active|done`;
-- exactly one fenced json block that `JSON.parse`s; shape
+- exactly one fenced `json wave-plan` block that `JSON.parse`s (plain
+  ```json fences in task prose are ignored); shape
   `waves[].tasks[]`;
 - ids kebab-case, globally unique; `branch` equals `wave/<id>`;
 - `executor.model` / `ladder[]` / `supervisor.model` ∈ short names;
@@ -146,6 +149,7 @@ Errors:
 
 Warnings:
 - empty `must_run` (allowed for pure-docs tasks, but flagged);
+- empty `files_allowed` (the executor has nothing it may change);
 - with `--repo`: a `files_allowed` glob whose literal prefix matches nothing
   in the repo; a `must_run` command whose argv[0] is neither on PATH nor a
   repo-relative path.

@@ -59,7 +59,7 @@ base: pending
 
 # Plan — sample feature
 
-```json
+```json wave-plan
 { "waves": [
   { "wave": 1,
     "supervisor": { "model": "opus", "effort": "high" },
@@ -193,6 +193,11 @@ out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
 expect "empty must_run exits 0" "0" "$rc"
 contains "empty must_run warned" "must_run is empty" "$out"
 
+mutate '"files_allowed": ["docs/**"]' '"files_allowed": []'
+out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+expect "empty files_allowed exits 0" "0" "$rc"
+contains "empty files_allowed warned" "files_allowed is empty" "$out"
+
 mkdir -p "$W/repo/docs"
 mutate '"cmd": "true"' '"cmd": "definitely-not-a-real-binary-xyz"'
 out="$(node "$LINT" "$W/m.md" --repo "$W/repo" 2>&1)"; rc=$?
@@ -263,11 +268,12 @@ if (!statusMatch) {
   err('header: status must be draft|active|done, got "' + statusMatch[1] + '"')
 }
 
-// ---- machine half: exactly one fenced json block ----
-const jsonBlocks = [...text.matchAll(/```json\r?\n([\s\S]*?)\r?\n```/g)]
+// ---- machine half: exactly one `json wave-plan` fenced block; plain
+// ```json fences inside task prose are deliberately NOT matched ----
+const jsonBlocks = [...text.matchAll(/```json wave-plan\r?\n([\s\S]*?)\r?\n```/g)]
 let plan = null
 if (jsonBlocks.length !== 1) {
-  err('machine half: expected exactly one ```json block, found ' + jsonBlocks.length)
+  err('machine half: expected exactly one ```json wave-plan block, found ' + jsonBlocks.length)
 } else {
   try { plan = JSON.parse(jsonBlocks[0][1]) } catch (e) {
     err('machine half: JSON does not parse: ' + e.message)
@@ -326,6 +332,9 @@ if (plan) {
         if (!c || typeof c !== 'object') { err(tat + '.contract: required, with all five keys'); return }
         for (const k of CONTRACT_KEYS) {
           if (!Array.isArray(c[k])) err(tat + '.contract.' + k + ': array required')
+        }
+        if (Array.isArray(c.files_allowed) && c.files_allowed.length === 0) {
+          warn(tat + ' ("' + t.id + '"): files_allowed is empty — the executor has nothing it may change')
         }
         if (Array.isArray(c.must_run)) {
           if (c.must_run.length === 0) {
@@ -537,8 +546,10 @@ check "superpowers attribution survives"        "grep -q 'Jesse Vincent' $SP"
 check "the MIT notice ships"                    "[ -f plugins/orchestration/skills/super-plan/references/LICENSE-superpowers ]"
 ```
 
-Run `bash tests/skills-contract.sh` — the two `[ -f … plan-lint.mjs ]`-style
-checks pass (Task 1 shipped the file), the SKILL-grep checks FAIL.
+Run `bash tests/skills-contract.sh` — only the two plan-lint.mjs file/grep-
+target checks that Task 1 satisfied pass (`the lint script ships`, and
+nothing else): 1 of 9 green, the other eight FAIL until Steps 2–3 create
+SKILL.md and the license file.
 
 - [ ] **Step 2: Write the license file**
 
@@ -656,9 +667,11 @@ One file in `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`, three layers:
    base: pending
    ```
 
-2. **The machine half** — exactly one fenced ```json block:
+2. **The machine half** — exactly one fenced block whose info string is
+   `json wave-plan` (plain ```json fences inside task prose stay legal and
+   are ignored by the linter):
 
-   ```json
+   ```json wave-plan
    { "waves": [
      { "wave": 1,
        "supervisor": { "model": "opus", "effort": "high" },
@@ -787,6 +800,7 @@ EVAL MODE: you are running headless under an evaluation harness — apply the
 skill's headless evaluation mode. The repository to plan against is at $R
 (explore it with your tools). Write NOTHING to disk. Print ONLY the complete
 plan file content (markdown, all three layers), no prose before or after it.
+Do not wrap the output in an outer code fence.
 
 Feature request:
 $1" --permission-mode bypassPermissions --model "$MODEL" </dev/null 2>/dev/null
