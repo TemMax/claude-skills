@@ -96,4 +96,15 @@ check "headless mode records assumptions"       "grep -q 'Assumptions (would ask
 check "superpowers attribution survives"        "grep -q 'Jesse Vincent' $SP"
 check "the MIT notice ships"                    "[ -f plugins/orchestration/skills/super-plan/references/LICENSE-superpowers ]"
 
+SH=plugins/orchestration/skills/ship/SKILL.md
+
+section "ship: the conductor that adds no machinery"
+check "the skill exists"                        "[ -f $SH ]"
+check "ship adds no machinery"                  "grep -q 'ship adds no machinery' $SH"
+check "exactly one ship-level gate"             "grep -q 'the only one ship adds' $SH"
+check "fixes route on behavior, not size"       "grep -q 'what the change can break' $SH"
+check "the merge stays with the user"           "grep -q 'merge stays with the user' $SH"
+check "wave bases are copied, never typed"      "grep -q 'rev-parse' $SH"
+check "thread phase keeps critical-review's gate" "grep -q 'push → replies → resolves' $SH"
+
 summary
