@@ -1,13 +1,16 @@
 # claude-skills
 
-A Claude Code plugin marketplace (`temmax-skills`) with two plugins — one skill
-each. Every rule in these skills is derived from the models' official Anthropic
-system cards and battle-tested with RED/GREEN agent runs (baseline failures
-reproduced, then verified fixed).
+A Claude Code plugin marketplace (`temmax-skills`) with two plugins covering the
+full development pipeline: plan → supervised execution → review. Every rule in
+these skills is derived from the models' official Anthropic system cards, and
+the load-bearing logic ships as tested code, not prose — a wave runner, a plan
+linter, and a four-tier test suite (see `tests/README.md`).
 
-- **`orchestration`** — the orchestrator model researches, plans, writes closed
-  task prompts, and reviews; executor subagents (Haiku 4.5 / Sonnet 5 / Opus 5 /
-  Opus 4.8) implement.
+- **`orchestration`** — planning (`super-plan`) and execution (`multi-model`):
+  the orchestrator model researches, plans into contract-carrying waves, and
+  launches executor subagents (Haiku 4.5 / Sonnet 5 / Opus 5 / Opus 4.8), each
+  isolated in its own worktree and judged against its contract by a different
+  model.
 - **`code-review`** — critical, evidence-based review of uncommitted changes or
   a GitHub PR, performed by the session's own model.
 
@@ -17,7 +20,8 @@ model identity and loads the matching profile from `references/`. There is no
 
 | Plugin | Skill | What it does |
 |---|---|---|
-| `orchestration` | `multi-model` | Model routing, effort selection, task-prompt template, wave planning, review checklist, and supervised waves — isolated executors judged against a machine-checkable contract by a different model — plus an orchestrator-drift advisory hook that watches the orchestrator session itself. |
+| `orchestration` | `super-plan` | Wave-native planning: research to decomposition depth, one batched round of user questions, tasks carrying machine-checkable contracts grouped into waves by file-independence, validated by the shipped `plan-lint.mjs` before the plan gate. Planning discipline adapted from Jesse Vincent's superpowers (MIT, attribution shipped). |
+| `orchestration` | `multi-model` | Model routing, effort selection, task-prompt template, review checklist, and supervised waves executed by the shipped `wave-runner.workflow.mjs` — isolated executors judged against a machine-checkable contract by a different model, with the escalation ladder as tested code — plus an orchestrator-drift advisory hook that watches the orchestrator session itself. |
 | `code-review` | `critical-review` | Scope detection, PR description+threads protocol, tiered findings table (Blocker → Nit), and a post-review fix phase that answers and resolves the PR threads its findings came from. |
 
 ## How the model routing works
@@ -110,17 +114,30 @@ Review my uncommitted changes critically
 skill name is passed as the task description:
 
 ```
+/orchestration:super-plan Plan multi-currency support for the pricing module
 /orchestration:multi-model Add multi-currency support to the pricing module
 /code-review:critical-review <PR number optional>
 ```
 
+The three chain into a pipeline: `super-plan` produces the plan file whose
+machine half is byte-for-byte the wave-runner's input, `multi-model` executes
+it in supervised waves, `critical-review` closes the loop on the result.
+
 Type `/orch` or `/code` and let autocomplete fill in the namespaced name.
 
-**What to expect from orchestration.** The orchestrator loads its profile, then
-runs research → decisions → plan, shows you a table (task | model | effort |
-rationale) and waits for your approval before launching the executor waves.
-After each wave it reviews the results by running tests and reading diffs —
-executor self-reports are never trusted.
+**What to expect from planning.** `super-plan` researches the codebase, asks
+you ONE batched round of questions for what code cannot answer, and gates
+twice: once on the design summary, once on the finished plan — which must pass
+the shipped linter (same-wave file overlap, contract completeness) before you
+ever see it.
+
+**What to expect from orchestration.** The orchestrator loads its profile,
+shows you a table (task | model | effort | rationale), then launches the waves
+through the shipped runner: every executor works in its own worktree, and an
+independent judge model checks out the branch, re-runs the contract's commands
+itself and issues a verdict — executor self-reports are never trusted. Rework,
+model escalation and the unsatisfiable-contract stop are code, not judgment
+calls.
 
 **What to expect from review.** The reviewer loads its profile, detects the
 scope (a named PR, a PR opened this session, uncommitted changes, or the
@@ -134,8 +151,9 @@ To verify the plugins are installed, run `/plugin` and look for
 
 ## Migration from 1.x
 
-This release (orchestration 1.4.0, code-review 1.1.0) collapsed the per-model
-skill variants and dropped the sonnet-only experiment:
+The 1.4.0/1.1.0 releases collapsed the per-model skill variants and dropped the
+sonnet-only experiment (current versions: orchestration 2.1.0, code-review
+1.3.0):
 
 | Before | After |
 |---|---|
@@ -160,12 +178,19 @@ claude --plugin-dir /path/to/claude-skills/plugins/code-review
 plugins/
   orchestration/
     .claude-plugin/plugin.json
+    hooks/                       # orchestrator-drift Stop hook + offline tests
     skills/
+      super-plan/
+        SKILL.md
+        references/
+          plan-lint.mjs          # the plan rules as code
+          LICENSE-superpowers    # MIT attribution (Jesse Vincent)
       multi-model/
         SKILL.md
         references/
-          orchestrator-fable-5.md
-          orchestrator-opus-4-8.md
+          wave-runner.workflow.mjs   # the escalation ladder as code
+          supervisor-prompt.md
+          orchestrator-{fable-5,opus-5,opus-4-8}.md
           model-dossiers.md
   code-review/
     .claude-plugin/plugin.json
@@ -173,7 +198,8 @@ plugins/
       critical-review/
         SKILL.md
         references/
-          reviewer-fable-5.md
-          reviewer-opus-4-8.md
+          reviewer-{fable-5,opus-5,opus-4-8}.md
           reviewer-dossier.md
+tests/                           # structure / contracts / behaviour / live eval
+  run.sh                         # ./tests/run.sh [--live]
 ```
