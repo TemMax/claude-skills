@@ -79,6 +79,13 @@ setup_repo; write_plan active '  "branch": "wave/alpha",'; write_transcript "$CL
 git -C "$WORK/repo" branch wave/alpha
 expect "quoted JSON branch is recognized" "would-call" "$(run_hook)"
 
+# 4c. the negative that makes 4b meaningful: a JSON-declared branch that does
+# NOT exist must silence the gate — if the sed matched nothing, the
+# empty-branches opt-in path would return would-call here and 4b alone would
+# pass a broken pattern (supervisor observation, wave/drift-json-branch).
+setup_repo; write_plan active '  "branch": "wave/alpha",'; write_transcript "$CLAIM"
+expect "quoted JSON branch, gone from git, silences" "silent: no-live-branches" "$(run_hook)"
+
 # 5. re-entrancy guard beats every other gate
 setup_repo; write_plan active "branch: wave/alpha"; write_transcript "$CLAIM"
 git -C "$WORK/repo" branch wave/alpha
