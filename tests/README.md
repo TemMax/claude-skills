@@ -98,6 +98,13 @@ Worth stating plainly, because a green run is easy to over-read.
   here — a run proves a case *can* pass, not that it reliably does.
   `EVAL_MODEL=claude-haiku-4-5-20251001` still runs it on Haiku for anyone
   who wants to see the weaker model's failure modes firsthand.
+- **ship has no automated tier at all.** The conductor's behavior is gates,
+  invocations of other skills, and git/PR side effects — none of it
+  exercisable headless without spending real waves and touching a real
+  remote. Its contract checks pin the load-bearing prose; everything else is
+  covered only by the in-session probe log
+  (`tests/eval/ship-insession.md`), and that log says so rather than
+  pretending otherwise.
 - **No adversarial fixtures.** Every case is an ordinary failure. Nobody has
   tried to *defeat* the supervisor — pasted output differing only in whitespace,
   or work that satisfies a contract's letter against its point. The dossiers

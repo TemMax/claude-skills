@@ -21,6 +21,7 @@ model identity and loads the matching profile from `references/`. There is no
 | Plugin | Skill | What it does |
 |---|---|---|
 | `orchestration` | `super-plan` | Wave-native planning: research to decomposition depth, one batched round of user questions, tasks carrying machine-checkable contracts grouped into waves by file-independence, validated by the shipped `plan-lint.mjs` before the plan gate. Planning discipline adapted from Jesse Vincent's superpowers (MIT, attribution shipped). |
+| `orchestration` | `ship` | The pipeline conductor: one command from request to reviewed PR — super-plan → supervised waves on a feature branch → critical-review of the PR and its threads. Adds no machinery of its own: one up-front gate, fixes routed by behavior change, and the merge always stays with the user. |
 | `orchestration` | `multi-model` | Model routing, effort selection, task-prompt template, review checklist, and supervised waves executed by the shipped `wave-runner.workflow.mjs` — isolated executors judged against a machine-checkable contract by a different model, with the escalation ladder as tested code — plus an orchestrator-drift advisory hook that watches the orchestrator session itself. |
 | `code-review` | `critical-review` | Scope detection, PR description+threads protocol, tiered findings table (Blocker → Nit), and a post-review fix phase that answers and resolves the PR threads its findings came from. |
 
@@ -114,15 +115,18 @@ Review my uncommitted changes critically
 skill name is passed as the task description:
 
 ```
+/orchestration:ship Add multi-currency support to the pricing module
 /orchestration:super-plan Plan multi-currency support for the pricing module
 /orchestration:multi-model Add multi-currency support to the pricing module
 /code-review:critical-review <PR number optional>
 ```
 
-The three chain into a pipeline: `super-plan` produces the plan file whose
-machine half feeds the wave-runner directly (each task: json entry + its
-prose section as the description), `multi-model` executes it in supervised
-waves, `critical-review` closes the loop on the result.
+`ship` runs the whole chain as one command: `super-plan` produces the plan
+file whose machine half feeds the wave-runner directly (each task: json entry
++ its prose section as the description), `multi-model` executes it in
+supervised waves on a pushed feature branch, `critical-review` closes the
+loop on the PR — and the merge stays with the user. Each link also runs
+standalone.
 
 Type `/orch` or `/code` and let autocomplete fill in the namespaced name.
 
@@ -181,6 +185,8 @@ plugins/
     .claude-plugin/plugin.json
     hooks/                       # orchestrator-drift Stop hook + offline tests
     skills/
+      ship/
+        SKILL.md               # the pipeline conductor (no references of its own)
       super-plan/
         SKILL.md
         references/
