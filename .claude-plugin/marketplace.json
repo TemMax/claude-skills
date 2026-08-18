@@ -7,7 +7,7 @@
     {
       "name": "orchestration",
       "source": "./plugins/orchestration",
-      "description": "Plan and execute: wave-native planning (super-plan) with a shipped plan linter, plus supervised multi-model waves — isolated executors judged against machine-checkable contracts. Adapts to whichever model orchestrates."
+      "description": "Plan, execute and review as one pipeline: ship conducts super-plan (wave-native planning with a shipped plan linter) into supervised multi-model waves on a feature branch and a reviewed PR — isolated executors judged against machine-checkable contracts; the merge stays with the user. Every link also runs standalone. Adapts to whichever model orchestrates."
     },
     {
       "name": "code-review",
