@@ -3,7 +3,7 @@ name: multi-model
 description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5, Opus 4.8 and Opus 5 — including supervised waves, where each executor is isolated in its own worktree and its result is judged against a machine-checkable contract by a different model — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Works on whatever model this orchestrator session runs on; it loads the matching orchestrator profile itself. Triggers: "разбей на агентов", "запусти параллельно", "оркеструй задачу", "decompose into agents", "run in parallel", "delegate to subagents", "pick a model for this task". Do NOT use for single-agent work.'
 metadata:
   author: https://github.com/TemMax
-  version: 2.2.0
+  version: 2.3.0
 ---
 
 # Orchestrating Multi-Model Development
@@ -46,7 +46,8 @@ English does not mean English replies.
 ## Process
 
 1. **Research.** Study the codebase to the depth needed for decomposition: files,
-   dependencies, conventions.
+   dependencies, conventions. Any read-only fan-out goes through the Research
+   Routing table below — research agents never inherit your model.
 2. **Decisions.** Close the open questions BEFORE decomposing: research an
    incomplete specification further and pin down the interpretation (escalate
    fundamental choices to the user); design cross-cutting architecture yourself
@@ -100,6 +101,35 @@ capability); don't give any executor untrusted external content without platform
 safeguards (Opus 5 is the most robust, but safeguards still matter); don't give
 Sonnet multi-hour sessions; don't route compiled-binary reverse-engineering to
 Opus 5 (its classifier blocks it) — use Opus 4.8.
+
+## Research Routing — Quick Reference
+
+The Model Routing table above routes work that changes things. Read-only
+research agents — the fan-out behind planning, decomposition and reviews — are
+routed here instead. An unrouted research agent inherits the session's model:
+on a Fable 5 seat that silently bills file listings at the most expensive rate
+available. Never spawn a research agent without naming its model.
+
+| Research kind | Model | Why (see the dossiers) |
+|---|---|---|
+| Mechanical pattern search: occurrences of a known string or shape | Haiku 4.5 | Zero decisions; simple file searches are its documented lane |
+| Closed enumeration: files, call sites, conventions, test commands that actually run | Sonnet 5, low/medium | Strong at digging through large code volumes (ProgramBench 76–86%, 1M context) and cheap; a closed question neutralizes its documented fabricate-when-information-is-missing failure (Sonnet 5 card, p. 71) |
+| Open research sub-question: how a subsystem works, what depends on what, why it is shaped this way | Opus 5, medium/high | First Claude to saturate the lazy-investigation eval — a thorough investigator (p. 110); cap at high, its effort curve inverts |
+| A report the orchestrator will trust without re-verification, or reasoning over a near-1M-token surface | Opus 4.8 | Honesty ceiling (0.00 misreported rate) and the best long-context reasoning in the comparison set (GraphWalks 1M 68.1); DRACO rises monotonically through max |
+
+Torn between Haiku and Sonnet → Sonnet, as always. The session's own model is
+never the answer here: research is gathering, not deciding — the decisions stay
+in the orchestrator seat, and the seat is where expensive reasoning is worth
+its price.
+
+**Mandatory lines in every research agent's prompt** (the research counterpart
+of the executor task template):
+
+- every claim carries evidence as `file:line`, or as a command plus its output;
+- `not found` is a valid and expected answer — never fill a gap with a guess
+  (Sonnet 5 fabricates precisely when information is missing, p. 71);
+- read the sources: answering from memory about library or system behavior is
+  forbidden (Opus 5's documented recall-as-truth failure, p. 87).
 
 ## Choosing Executor Effort — Quick Reference
 

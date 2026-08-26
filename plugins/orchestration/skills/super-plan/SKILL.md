@@ -3,7 +3,7 @@ name: super-plan
 description: 'Use when planning a feature, refactor or fix into wave-ready tasks for the multi-model skill — researching the codebase to decomposition depth, closing open questions (one batched round to the user for what code cannot answer), then writing a plan whose tasks carry machine-checkable contracts, grouped into waves by file-independence and validated by the shipped plan linter. Works on whatever model this session runs on; it loads the matching orchestrator profile itself. Triggers: "составь план", "спланируй фичу", "план под волны", "plan this feature", "make a wave plan", "super plan". Do NOT use for executing a plan (that is multi-model) or reviewing a diff (that is critical-review).'
 metadata:
   author: https://github.com/TemMax
-  version: 2.2.0
+  version: 2.3.0
 ---
 
 # Planning Waves (super-plan)
@@ -30,8 +30,13 @@ Read exactly one. Always reply to the user in the language the user writes in.
 
 1. **Research** to decomposition depth: files, dependencies, conventions,
    test commands that actually run. For a large surface, fan out read-only
-   Explore agents; synthesis and every decision stay with you — do not
-   delegate decisions, executors silently fill gaps under ambiguity.
+   research agents routed by multi-model's Research Routing table
+   (`../multi-model/SKILL.md`) — name a model on every spawn (an agent
+   without one inherits the session's model, and a Fable 5 seat then pays
+   Fable prices for file listings), and give each agent the table's
+   mandatory research-prompt lines. Synthesis and every decision stay with
+   you — do not delegate decisions, executors silently fill gaps under
+   ambiguity.
 2. **Decisions.** Everything derivable from the codebase you decide and
    record. What code cannot answer — product behavior, trade-offs, scope
    cuts — goes to the user as ONE batched AskUserQuestion (up to 4 forks);

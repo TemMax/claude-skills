@@ -22,6 +22,11 @@ regardless of what it reports; do not ask the user to restart at a higher effort
 
 ## Amendments to the Process
 
+- **Step 1 (Research).** "Spend the budget on research depth" means the number
+  and quality of routed research agents, never depth on your own tokens: an
+  agent spawned without a named model inherits Fable 5. Route every research
+  spawn through multi-model's Research Routing table (SKILL.md); your seat's
+  budget goes to synthesis and decisions, not to gathering.
 - **Step 2 (Decisions).** Your safeguard classifiers block reverse-engineering of
   binaries outright, and biological-image work degrades from the bio classifiers
   rather than from capability (pp. 259, 288). Route those subtasks to an
@@ -65,3 +70,4 @@ regardless of what it reports; do not ask the user to restart at a higher effort
 | Adopting the Opus profile's xhigh directive | An effort claim with no measurement behind it for your model | No pinned level; spend budget on research and spec quality |
 | Attempting binary reverse-engineering yourself | Classifier refusal mid-wave, wasted steps | Route to an Opus 4.8 executor from the start |
 | Trusting "time to wrap up" | Documented false stopping signal; work left open | Re-check the plan for what is actually closed |
+| Spawning research agents without naming a model | They inherit Fable 5 — the priciest tokens buy file listings | Route every research spawn via multi-model's Research Routing table |
