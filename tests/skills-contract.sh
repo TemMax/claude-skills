@@ -13,6 +13,7 @@ cd "$(dirname "$0")/.." || exit 1
 
 CR=plugins/code-review/skills/critical-review/SKILL.md
 MM=plugins/orchestration/skills/multi-model/SKILL.md
+SP=plugins/orchestration/skills/super-plan/SKILL.md
 
 section "critical-review: the PR read must be able to answer what it promises"
 # REST exposes no thread id and no resolution state, so a REST-based read makes
@@ -63,6 +64,15 @@ check "default path is invoking, not writing"  "grep -q 'invoke the shipped runn
 check "the filesystem constraint is named"     "grep -q 'supervisorPromptText' $MM"
 check "no ladder row resurrects the forgery class" "! grep -qi 'forged evidence' $MM"
 
+section "multi-model: research fan-out is routed, never inherited"
+check "the research routing table exists"      "grep -q 'Research Routing' $MM"
+check "inheritance is named as the bug"        "grep -q 'spawn a research agent without naming its model' $MM"
+check "not-found is a valid answer"            "grep -q 'is a valid and expected answer' $MM"
+check "answering from memory is forbidden"     "grep -q 'answering from memory' $MM"
+check "super-plan routes research through it"  "grep -q 'Research Routing' $SP"
+check "the fable profile routes research off-seat" \
+  "grep -q 'Research Routing' plugins/orchestration/skills/multi-model/references/orchestrator-fable-5.md"
+
 section "multi-model: the lifecycle belongs to the orchestrator, not the user"
 check "plan is opened at launch"               "grep -q 'Write the wave plan file' $MM"
 check "plan is closed at completion"           "grep -q 'Set the wave plan.*status: done' $MM"
@@ -82,8 +92,6 @@ check "critical-review names the fix-phase triggers" \
   "sed -n '3p' $CR | grep -q 'answer the PR comments'"
 check "multi-model names Opus 5 as an executor" \
   "sed -n '3p' $MM | grep -q 'Opus 5'"
-
-SP=plugins/orchestration/skills/super-plan/SKILL.md
 
 section "super-plan: planning that lands wave-ready"
 check "the skill exists"                        "[ -f $SP ]"
