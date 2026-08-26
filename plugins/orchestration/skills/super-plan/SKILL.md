@@ -30,8 +30,13 @@ Read exactly one. Always reply to the user in the language the user writes in.
 
 1. **Research** to decomposition depth: files, dependencies, conventions,
    test commands that actually run. For a large surface, fan out read-only
-   Explore agents; synthesis and every decision stay with you — do not
-   delegate decisions, executors silently fill gaps under ambiguity.
+   research agents routed by multi-model's Research Routing table
+   (`../multi-model/SKILL.md`) — name a model on every spawn (an agent
+   without one inherits the session's model, and a Fable 5 seat then pays
+   Fable prices for file listings), and give each agent the table's
+   mandatory research-prompt lines. Synthesis and every decision stay with
+   you — do not delegate decisions, executors silently fill gaps under
+   ambiguity.
 2. **Decisions.** Everything derivable from the codebase you decide and
    record. What code cannot answer — product behavior, trade-offs, scope
    cuts — goes to the user as ONE batched AskUserQuestion (up to 4 forks);
