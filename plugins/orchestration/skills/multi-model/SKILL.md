@@ -3,7 +3,7 @@ name: multi-model
 description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5, Opus 4.8 and Opus 5 — including supervised waves, where each executor is isolated in its own worktree and its result is judged against a machine-checkable contract by a different model — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Works on whatever model this orchestrator session runs on; it loads the matching orchestrator profile itself. Triggers: "разбей на агентов", "запусти параллельно", "оркеструй задачу", "decompose into agents", "run in parallel", "delegate to subagents", "pick a model for this task". Do NOT use for single-agent work.'
 metadata:
   author: https://github.com/TemMax
-  version: 2.3.0
+  version: 2.4.0
 ---
 
 # Orchestrating Multi-Model Development
@@ -235,8 +235,12 @@ reduce the documented failure modes:
    (force-push, reset --hard, rm outside the task) without explicit permission.
    Phrase prohibitions without qualifiers — executors rules-lawyer around wording
    when it conflicts with "the overriding goal".
-5. **Definition of done and response format:** list of changed files, the gist of
-   the changes, output of actually executed tests/linter.
+5. **Definition of done and response format:** list of changed files, the
+   gist of the changes, output of actually executed tests/linter, plus the
+   committed-work proof: `git log --oneline <base>..HEAD` (non-empty) and
+   `git status --porcelain` (empty), both pasted — uncommitted work does
+   not exist for the wave, and "done but never committed" is the most
+   common rejection on record.
 6. **Contract:** the machine-checkable half of the task. Prose carries intent;
    the contract carries what a supervisor can decide without arguing about
    intent.
@@ -278,6 +282,42 @@ a vote on. A stage can also do what advice cannot: reject and re-run.
 Send `references/supervisor-prompt.md` to a model that is not the executor's own
 (see Anti-Deception Rules), with the contract, the report, the base SHA and the
 branch.
+
+### Mechanical verification before the judge
+
+The shipped runner inserts a fact-collecting stage between the executor and
+the judge. A cheap verifier agent (default `sonnet`/`low`, overridable via
+`args.verifier`) checks out the branch and records facts: does the branch
+carry commits at all, which paths changed, what each `must_run` command
+returns when actually run, and whether the report pastes output where the
+contract says `evidence: required`. The runner — not a model — then applies
+the deterministic half of the contract: a branch with no commits, a path
+outside `files_allowed`, a red `must_run`, or missing pasted evidence
+bounces straight back to the executor as a rework, and no judge is paid for
+discovering it. Transcript mining across five real sessions found "work
+done but never committed" to be the single most common rejection (8+
+occurrences), each costing a full Opus verdict to detect.
+
+Three properties are load-bearing:
+
+- **Fail-open.** A dead verifier skips the stage; the model judge then runs
+  the full pipeline itself, exactly as before. Mechanical verification can
+  only save a judge call, never remove supervision.
+- **Once per rule.** The same mechanical rule failing twice routes to the
+  model judge with the facts attached — only a judge can decide
+  `satisfiable`, and a repeat is where that question arises.
+- **Facts, not judgment.** The verifier never decides `ok`,
+  `pasteReproduced` or `satisfiable`; those stay with the judge, which
+  receives the verifier's facts and may rely on its exit codes and outputs
+  while re-running anything it doubts.
+
+**Long commands, everywhere in the wave, are classified by kind — never by
+predicted duration.** Build-system invocations (gradle, cargo, npm, pnpm,
+yarn, make, mvn and the like) start in the background with output to a log
+file and are polled; everything else runs in the foreground. A silent
+foreground wait on a cold build looks like a stall and gets the agent
+killed — one real session lost ~4.8 hours of supervision to exactly this,
+then abandoned supervision entirely.
 
 ### Choosing the supervisor — Quick Reference
 
@@ -362,9 +402,21 @@ re-implement its rules — every hand-written wave script is a fresh chance to
 get "two strikes escalate" subtly wrong, and the one hand-written run on
 record was rejected at launch four times before it worked.
 
-1. Read `references/supervisor-prompt.md`. Workflow scripts cannot read files,
+1. **Preflight the contracts at the base.** Before the first wave forks, run
+   each distinct `must_run` command once against the recorded base — route
+   it to a cheap agent per the Research Routing table, or run it yourself.
+   Compare against the plan's recorded expectation for each command: green
+   at base, or expected-red (the task itself creates what the command
+   checks). An unexpected red is a contract defect to fix now, before any
+   executor is spawned — transcript mining found ~13% of all supervisor
+   verdicts were `satisfiable:false`, every one tracing to a contract
+   already broken at base (fmt drift at BASE, a command targeting a
+   nonexistent build target), each costing an executor attempt plus an
+   Opus verdict. The same run warms the build caches every worktree in the
+   wave will fork from cold.
+2. Read `references/supervisor-prompt.md`. Workflow scripts cannot read files,
    so its full text travels inside `args.supervisorPromptText`.
-2. Invoke the runner (`args` should be a real JSON object; the tool-call layer often delivers it
+3. Invoke the runner (`args` should be a real JSON object; the tool-call layer often delivers it
    as a JSON-encoded string, which the runner parses and validates — only
    unparseable or invalid input is rejected, by name):
 
@@ -377,6 +429,7 @@ Workflow({
     repoPath: "/abs/path/to/repo",
     supervisorPromptText: "<text of supervisor-prompt.md>",
     supervisor: { model: "opus", effort: "high" },
+    verifier: { model: "sonnet", effort: "low" },   // optional; this is the default
     tasks: [{
       id: "auth-fix",
       description: "<the substantive ask>",
@@ -397,7 +450,7 @@ carrying the isolation instructions — so the contract the executor reads and
 the contract the supervisor enforces are the same object and cannot diverge.
 Escalated rungs run at `high` effort.
 
-3. Act on the returned statuses, task by task:
+4. Act on the returned statuses, task by task:
    - `ok` — merge `wave/<id>` per the wave plan.
    - `contract-unsatisfiable` — run the amendment flow below (one amendment
      per task; removing or weakening a check goes to the user as a yes/no),
@@ -405,6 +458,13 @@ Escalated rungs run at `high` effort.
      every unchanged task replays from cache and only the amended one runs.
    - `failed` / `error` — hand the user the task, every verdict in order, and
      the branch name. Do not quietly retry.
+
+   A wave may also be launched as parallel single-task runner invocations —
+   same-wave tasks are file-disjoint by construction, so each `ok` branch
+   can merge as its result lands instead of waiting for the wave's slowest
+   task (measured: three finished tasks once waited ~47 minutes on a
+   sibling's third attempt). The wave's full suite still runs once, after
+   all of the wave's invocations settle, before the push.
 
 Write a custom wave script only when the runner genuinely cannot express the
 wave — and then follow "Delegating the Workflow Script Itself" below, because
@@ -449,6 +509,15 @@ The user edits nothing. You detect, you draft, you apply. What goes to them is a
 decision — whether they accept losing that check — not a file to open. Asking
 someone to hand-edit a config is how a safeguard ends up switched off.
 
+**An amendment exists only when the plan file is edited and the runner is
+re-invoked with `resumeFromRunId` carrying the amended task.** A mid-wave
+"I authorize X" in conversation reaches nobody: the runner rebuilds every
+rework prompt from the task object it was given, so an amendment that never
+re-enters the runner never reaches an executor. Measured 2026-08: a
+verbally pre-authorized dependency never propagated; the rework executor
+fell back to a worse design, which passed supervision and shipped, and the
+regression was fixed by a later wave at full price.
+
 One amendment per task. A second `satisfiable:false` on the same task goes to the
 user whatever kind it is: each loosening looks reasonable alone, and the loop
 that ends in a contract checking nothing is built out of reasonable steps.
@@ -474,6 +543,10 @@ security-adjacent code. For a small mechanical task, check the predicates
 (paths touched, commands run, evidence present) in plain script logic and
 skip the supervisor model. Supervision that costs more than the work it guards
 gets switched off, and then it guards nothing.
+
+The shipped runner now performs the predicate half mechanically before
+every judge call (see Mechanical verification above); what remains yours is
+scoping each contract's gates to its files and choosing the judge's effort.
 
 ## Orchestrator Drift
 
@@ -669,6 +742,8 @@ Opus 5 relays subagent claims unverified (p. 81).
 | Asking a supervisor to judge whether a mismatch was dishonest | It cannot know, and it reaches for the heaviest label — four fixes failed the same way | Record `pasteReproduced` as a fact; let repetition across attempts carry the consequence |
 | Blocking on suspicion rather than on a contract violation | Correct work is stopped and the wave gains false confidence | Doubts go to `remarks`; only violations block |
 | Recording an unpushed local `HEAD` as the wave base | Worktrees fork from `origin/<default-branch>`, so every branch shows your local-only files as deletions and every executor gets a phantom `files` violation | Push the base commit, or record `origin/<default-branch>`; verify with `git merge-base` after the first commit |
+| Amending a contract in conversation only | The rework prompt is rebuilt from the old task object; the amendment reaches nobody | Edit the plan, re-invoke with `resumeFromRunId` |
+| A full-repo gate in a per-task contract | Wall-clock multiplied by the task count; stall watchdogs kill the wait | Scope `must_run` to the task's module; the full gate runs once per wave at merge |
 
 ## References
 
