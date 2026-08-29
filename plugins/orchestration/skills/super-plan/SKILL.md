@@ -101,12 +101,16 @@ Read exactly one. Always reply to the user in the language the user writes in.
 One file in `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`, three layers:
 
 1. **Unfenced header** at column 0, before any code fence (the drift hook
-   reads it there):
+   reads it there). The first two lines of the file are exactly these, as
+   plain text — NOT inside a code fence, not indented, with nothing above
+   them (no title, no prose):
 
-   ```
    status: draft
    base: pending
-   ```
+
+   A title or any other markdown may follow the header, but never precede
+   it, and the header itself must never be fenced — a fenced or indented
+   header is invisible to the drift hook and fails lint.
 
 2. **The machine half** — exactly one fenced block whose info string is
    `json wave-plan` (plain ```json fences inside task prose stay legal and
