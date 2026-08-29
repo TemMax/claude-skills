@@ -14,6 +14,9 @@ const LADDER_ORDER = ['haiku', 'sonnet', 'opus']
 const MAX_ATTEMPTS_PER_RUNG = 2
 const MAX_ATTEMPTS_PER_TASK = 6
 
+const VERIFIER_DEFAULT = { model: 'sonnet', effort: 'low' }
+const VERIFY_MARKER = '# Mechanical verification (facts only)'
+
 function invalid(errors) { return { status: 'invalid-args', errors, tasks: [] } }
 
 // Fail closed: a bad wave returns named errors and spawns nothing.
@@ -49,6 +52,14 @@ if (!wave.supervisor || !MODELS.includes(wave.supervisor.model)) {
 }
 if (wave.supervisor && wave.supervisor.effort !== undefined && !EFFORTS.includes(wave.supervisor.effort)) {
   errors.push('supervisor.effort: one of ' + EFFORTS.join('/'))
+}
+if (wave.verifier !== undefined) {
+  if (!wave.verifier || !MODELS.includes(wave.verifier.model)) {
+    errors.push('verifier.model: one of ' + MODELS.join('/'))
+  }
+  if (wave.verifier && wave.verifier.effort !== undefined && !EFFORTS.includes(wave.verifier.effort)) {
+    errors.push('verifier.effort: one of ' + EFFORTS.join('/'))
+  }
 }
 if (!Array.isArray(wave.tasks) || wave.tasks.length === 0) {
   errors.push('tasks: a non-empty array is required')
@@ -101,11 +112,35 @@ if (!Array.isArray(wave.tasks) || wave.tasks.length === 0) {
 }
 if (errors.length > 0) return invalid(errors)
 
+const verifier = {
+  model: (wave.verifier && wave.verifier.model) || VERIFIER_DEFAULT.model,
+  effort: (wave.verifier && wave.verifier.effort) || VERIFIER_DEFAULT.effort,
+}
+
 // ---------- prompt assembly ----------
 // The executor's contract block and the supervisor's contract are rendered
 // from the same object; they cannot diverge.
 
 function yamlInline(items) { return '[' + items.join(', ') + ']' }
+
+// Deliberately tiny: ** crosses slashes, * and ? do not; everything else is
+// literal.
+function globRe(glob) {
+  let re = ''
+  for (let i = 0; i < glob.length; i++) {
+    const ch = glob[i]
+    if (ch === '*') {
+      if (glob[i + 1] === '*') { re += '.*'; i++ } else { re += '[^/]*' }
+    } else if (ch === '?') { re += '[^/]' }
+    else re += ch.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+  }
+  return new RegExp('^' + re + '$')
+}
+
+function pathAllowed(path, allowed, forbidden) {
+  if (forbidden.some((g) => globRe(g).test(path))) return false
+  return allowed.some((g) => globRe(g).test(path))
+}
 
 function renderContract(c) {
   const lines = ['contract:']
@@ -151,6 +186,9 @@ function executorPrompt(t) {
     '  (if the worktree and branch already exist from a prior attempt, reuse them as they are)',
     '- git -C ' + worktree + ' merge-base --is-ancestor ' + wave.base + ' origin/' + wave.defaultBranch,
     '  (must exit 0; if it does not, STOP and report — do not pick another base)',
+    'Build-system commands (gradle, cargo, npm, pnpm, yarn, make, mvn and the',
+    'like) — start them in the background with output to a log file and poll',
+    'the log; a silent foreground wait looks like a stall and gets killed.',
     'Work and commit ONLY inside ' + worktree + '.',
     '',
     '## Boundaries',
@@ -172,12 +210,111 @@ function executorPrompt(t) {
     'Your report must contain: the list of changed files; the gist of the',
     'change; the verbatim output of every must_run command, actually executed',
     'in your worktree; an answer to every report_must_answer question.',
+    'Commit every change to your branch before reporting. Your report must',
+    'also paste, run in your worktree: git log --oneline ' + wave.base + '..HEAD',
+    '(must be non-empty) and git status --porcelain (must be empty) —',
+    'uncommitted work does not exist for the wave.',
     'A claim that a command passed without its pasted output is a contract',
     'violation in its own right.',
     '',
     '## Contract (a supervisor will check every line of this against your branch)',
     renderContract(t.contract),
   ].filter((line) => line !== null).join('\n')
+}
+
+function verifierPrompt(t, report) {
+  const wt = wave.repoPath + '/.worktrees/verify-' + t.id
+  return [
+    VERIFY_MARKER,
+    '',
+    'You collect facts about a branch. You decide nothing and judge nothing —',
+    'run the commands below exactly and report what happened. Every number and',
+    'path you report must come from output you produced yourself.',
+    '',
+    'Repository: ' + wave.repoPath,
+    'BASE: ' + wave.base,
+    'BRANCH: wave/' + t.id,
+    '',
+    'Steps:',
+    '1. Record whether the branch tip differs from BASE:',
+    '   git -C ' + wave.repoPath + ' rev-parse ' + wave.base + ' wave/' + t.id,
+    '2. Record the changed paths, verbatim, one per array entry:',
+    '   git -C ' + wave.repoPath + ' diff --name-only ' + wave.base + '..wave/' + t.id,
+    '3. If ' + wt + ' already exists, remove it first:',
+    '   git -C ' + wave.repoPath + ' worktree remove --force ' + wt,
+    '   Then: git -C ' + wave.repoPath + ' worktree add --detach ' + wt + ' wave/' + t.id,
+    '   Run the must_run commands below IN ORDER inside that worktree, as one',
+    '   pipeline in one workspace. Record each command\'s exit code and output',
+    '   (tail is fine for long green output; keep failures verbatim).',
+    '   Build-system commands (gradle, cargo, npm, pnpm, yarn, make, mvn and',
+    '   the like) must be started in the background with output to a log file',
+    '   and polled — never a silent foreground wait.',
+    '4. For each must_run command whose evidence is "required", record whether',
+    '   the REPORT below contains pasted output for that command.',
+    '5. Clean up: git -C ' + wave.repoPath + ' worktree remove --force ' + wt,
+    '',
+    'must_run:',
+    ...t.contract.must_run.map((m) => '- ' + m.cmd + '  (evidence: ' + m.evidence + ')'),
+    '',
+    'REPORT (the executor\'s report — scan it only for step 4):',
+    String(report),
+  ].join('\n')
+}
+
+const VERIFY_SCHEMA = {
+  type: 'object',
+  properties: {
+    branchHasCommits: { type: 'boolean' },
+    filesChanged: { type: 'array', items: { type: 'string' } },
+    mustRun: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          cmd: { type: 'string' },
+          exit: { type: 'integer' },
+          output: { type: 'string' },
+          pasteFoundInReport: { type: 'boolean' },
+        },
+        required: ['cmd', 'exit'],
+      },
+    },
+    notes: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['branchHasCommits', 'filesChanged', 'mustRun'],
+}
+
+// The deterministic half of the contract, applied by the runner itself.
+// The verifier supplies facts; nothing here asks a model to judge.
+function mechanicalViolations(t, facts) {
+  const v = []
+  if (facts.branchHasCommits === false) {
+    v.push({ rule: 'work must be committed to the branch', class: 'report',
+      evidence: 'wave/' + t.id + ' tip equals BASE ' + wave.base.slice(0, 7)
+        + ' — the branch carries no commits' })
+  }
+  const outside = (facts.filesChanged ?? []).filter((p) =>
+    !pathAllowed(p, t.contract.files_allowed, t.contract.files_forbidden))
+  if (outside.length > 0) {
+    v.push({ rule: 'files_allowed: ' + yamlInline(t.contract.files_allowed), class: 'files',
+      evidence: 'paths outside the allowed globs: ' + outside.join(', ') })
+  }
+  for (const m of (facts.mustRun ?? [])) {
+    if (m.exit !== 0) {
+      v.push({ rule: 'must_run: ' + m.cmd, class: 'must_run',
+        evidence: 'exit ' + m.exit + ' when the verifier ran it: '
+          + String(m.output ?? '').slice(-2000) })
+    }
+  }
+  for (const m of t.contract.must_run) {
+    if (m.evidence !== 'required') continue
+    const f = (facts.mustRun ?? []).find((x) => x.cmd === m.cmd)
+    if (f && f.pasteFoundInReport === false) {
+      v.push({ rule: 'must_run: ' + m.cmd, class: 'report',
+        evidence: 'contract says evidence: required and the report pastes no output for this command' })
+    }
+  }
+  return v
 }
 
 function reworkPrompt(t, verdict) {
@@ -195,7 +332,7 @@ function reworkPrompt(t, verdict) {
   ].join('\n')
 }
 
-function supervisorPrompt(t, report) {
+function supervisorPrompt(t, report, facts) {
   return wave.supervisorPromptText + [
     '',
     '',
@@ -205,10 +342,14 @@ function supervisorPrompt(t, report) {
     'REPO: ' + wave.repoPath,
     'BASE: ' + wave.base,
     'BRANCH: wave/' + t.id,
+    facts ? '' : null,
+    facts ? 'VERIFIER FACTS (a separate fact-collecting agent ran the commands itself;'
+      + ' you may rely on its exit codes and outputs, and re-run anything you doubt):' : null,
+    facts ? JSON.stringify(facts, null, 2) : null,
     '',
     'REPORT:',
     String(report),
-  ].join('\n')
+  ].filter((line) => line !== null).join('\n')
 }
 
 const VERDICT_SCHEMA = {
@@ -257,6 +398,7 @@ async function runTask(t) {
   let pasteStrikes = 0
   let verdictCount = 0
   let prevVerdict = null
+  const mechSeen = new Set()
 
   // One API death is retried once and recorded; a second is a task error —
   // never a wave error.
@@ -286,13 +428,39 @@ async function runTask(t) {
         { model, effort, label: 'exec:' + t.id, phase: 'Wave' }, rung)
       if (report === null) return finish('error')
 
-      log(t.id + ': report received — judging (' + wave.supervisor.model + ')')
-      const verdict = await call(supervisorPrompt(t, report),
-        { model: wave.supervisor.model, effort: wave.supervisor.effort ?? 'high',
-          label: 'judge:' + t.id, phase: 'Wave', schema: VERDICT_SCHEMA }, rung)
-      if (verdict === null) return finish('error')
+      // Mechanical verify: cheap facts before an expensive judge. Fail-open —
+      // a dead verifier skips the stage and the judge runs everything itself;
+      // this stage can only save a judge call, never remove supervision.
+      log(t.id + ': report received — verifying (' + verifier.model + ')')
+      const facts = await call(verifierPrompt(t, report),
+        { model: verifier.model, effort: verifier.effort,
+          label: 'verify:' + t.id, phase: 'Wave', schema: VERIFY_SCHEMA }, rung)
 
-      const attempt = { rung, model, effort, kind: 'verdict', verdict, escalation: null }
+      let verdict = null
+      let kind = 'verdict'
+      if (facts !== null) {
+        const mech = mechanicalViolations(t, facts)
+        const freshRules = mech.filter((v) => !mechSeen.has(v.class + '|' + v.rule))
+        if (mech.length > 0 && freshRules.length > 0) {
+          // Once per rule: a repeat of every rule in this set goes to the
+          // judge instead — only a judge can decide satisfiable.
+          mech.forEach((v) => mechSeen.add(v.class + '|' + v.rule))
+          verdict = { ok: false, violations: mech,
+            remarks: ['mechanical verification — no model judged this attempt'] }
+          kind = 'mechanical'
+          log(t.id + ': mechanical reject [' + mech.map((v) => v.class).join(', ')
+            + '] — rework without a judge')
+        }
+      }
+      if (verdict === null) {
+        log(t.id + ': judging (' + wave.supervisor.model + ')')
+        verdict = await call(supervisorPrompt(t, report, facts),
+          { model: wave.supervisor.model, effort: wave.supervisor.effort ?? 'high',
+            label: 'judge:' + t.id, phase: 'Wave', schema: VERDICT_SCHEMA }, rung)
+        if (verdict === null) return finish('error')
+      }
+
+      const attempt = { rung, model, effort, kind, verdict, escalation: null }
       attempts.push(attempt)
       const priorVerdict = prevVerdict
       prevVerdict = verdict
