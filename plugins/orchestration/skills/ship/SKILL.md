@@ -63,17 +63,25 @@ to execution.
 ## Stage 2 — Execute
 
 1. Create the feature branch from `origin/<default>` and push it.
-2. Invoke **multi-model** to run the plan: one runner invocation per wave,
+2. Run multi-model's contract preflight at the pushed tip before the first
+   wave: each distinct `must_run` once, compared against the plan's
+   recorded base expectations. A mismatch is fixed in the plan before any
+   executor is spawned; the same run warms the build caches the wave's
+   worktrees fork from cold.
+3. Invoke **multi-model** to run the plan: one runner invocation per wave —
+   or parallel single-task invocations for a wave that would otherwise wait
+   on a long pole, merging each `ok` branch as it lands. Either way,
    `defaultBranch` = the feature branch, `base` = the branch's pushed tip,
-   copied verbatim from `git rev-parse` output — a hand-typed sha has already
-   burned one wave in this repository's history.
-3. After each wave: merge every `ok` task branch into the feature branch, run
-   the repository's offline test suite, push. The next wave's base is the new
-   pushed tip.
-4. Failures follow multi-model's rules unchanged: `failed`/`error` → stop and
+   copied verbatim from `git rev-parse` output — a hand-typed sha has
+   already burned one wave in this repository's history.
+4. After each wave: merge every `ok` task branch into the feature branch
+   (with single-task invocations, merge as they land), run the repository's
+   offline test suite once when all of the wave's invocations have settled,
+   push. The next wave's base is the new pushed tip.
+5. Failures follow multi-model's rules unchanged: `failed`/`error` → stop and
    hand the user the verdicts and branch names; `contract-unsatisfiable` →
    the amendment flow. ship never quietly retries anything.
-5. multi-model owns the plan's status transitions (`active` at launch,
+6. multi-model owns the plan's status transitions (`active` at launch,
    `done` at completion), as always.
 
 ## Stage 3 — Review
@@ -81,17 +89,29 @@ to execution.
 1. The orchestrator's own end-to-end review (multi-model's checklist) plus a
    full offline suite run.
 2. Open the PR. The body carries: what shipped, how it was built (waves,
-   verdicts, reworks — the judges' catches included), what was tested, and
-   the honest limits.
-3. Invoke **critical-review** on the PR.
-4. Route every finding by behavior, not size:
+   verdicts, reworks — the judges' catches included), what was tested, the
+   honest limits — and, when the plan carries Acceptance References that no
+   contract or runtime check verified, an explicit **"Not verified — manual
+   QA needed"** section listing each one. An unverified reference that
+   vanishes from the PR resurfaces as a production defect found by hand.
+3. If the plan carries Acceptance References and this session has a tool or
+   skill whose **described capability** is running the product and
+   observing it — launching the app, driving its UI, capturing screenshots —
+   run one runtime verification pass over those references before invoking
+   the review, and route its findings like any review findings. Match by
+   described capability, never by a hard-coded skill name: ship must work
+   in sessions that have no such skill, where this step silently reduces to
+   the "Not verified" section above. This step adds no gate and no new
+   machinery — a missing or failing capability is not a ship failure.
+4. Invoke **critical-review** on the PR.
+5. Route every finding by behavior, not size:
    - the fix **changes behavior** (code paths, tests, contracts, scripts) →
      a fix-wave: a contract and a judge through the runner, merged and
      pushed like any wave;
    - the fix **changes no behavior** (prose, docs, comments, config strings)
      → the orchestrator applies it inline and commits.
    The line is what the change can break, not how many lines it takes.
-5. If the PR has review threads, run critical-review's post-review fix phase
+6. If the PR has review threads, run critical-review's post-review fix phase
    end-to-end. Its own single gate — the exact reply texts, then
    `push → replies → resolves` — is the only barrier before anything is
    published.
@@ -113,6 +133,7 @@ and reworks, what was fixed inline versus by wave, and anything left open.
 | The suite is red after a merge | Stop before the push; hand the output over |
 | `gh` loses write capability mid-flow | critical-review degrades per its own protocol; prepared texts go to the user |
 | The user declines critical-review's fix gate | Soft reset per that skill; the PR stays open |
+| The runtime QA capability is missing or fails mid-pass | Not a ship failure: the affected references go to the PR's "Not verified — manual QA needed" section |
 
 ## Common Mistakes
 
@@ -124,3 +145,4 @@ and reworks, what was fixed inline versus by wave, and anything left open.
 | Adding a second ship-level gate mid-flow | The pipeline stops being automatic | One gate up front; the links keep their own |
 | Basing a wave on a hand-typed sha | A corrupted base already burned a wave once | Copy the tip verbatim from `git rev-parse` output |
 | Opening the PR before the suite is green | The reviewers review a broken branch | Suite first, PR second |
+| Dropping unverified Acceptance References from the PR body | They resurface as production defects found by hand | The "Not verified" section is mandatory whenever references exist |
