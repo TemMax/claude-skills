@@ -14,6 +14,7 @@ cd "$(dirname "$0")/.." || exit 1
 CR=plugins/code-review/skills/critical-review/SKILL.md
 MM=plugins/orchestration/skills/multi-model/SKILL.md
 SP=plugins/orchestration/skills/super-plan/SKILL.md
+SH=plugins/orchestration/skills/ship/SKILL.md
 
 section "critical-review: the PR read must be able to answer what it promises"
 # REST exposes no thread id and no resolution state, so a REST-based read makes
@@ -73,6 +74,31 @@ check "super-plan routes research through it"  "grep -q 'Research Routing' $SP"
 check "the fable profile routes research off-seat" \
   "grep -q 'Research Routing' plugins/orchestration/skills/multi-model/references/orchestrator-fable-5.md"
 
+WR=plugins/orchestration/skills/multi-model/references/wave-runner.workflow.mjs
+SUPP=plugins/orchestration/skills/multi-model/references/supervisor-prompt.md
+
+section "multi-model: mechanical verification pays no judge for script-decidable facts"
+check "the runner has a verify stage"           "grep -q 'Mechanical verification' $WR"
+check "the verifier stage fails open"           "grep -q 'Fail-open' $WR"
+check "mechanical repeat goes to the judge"     "grep -q 'Once per rule' $WR"
+check "commit discipline is in the executor prompt" "grep -q 'git log --oneline' $WR"
+check "long commands classified by kind in the runner" "grep -q 'in the background' $WR"
+check "the supervisor may lean on verifier facts" "grep -q 'VERIFIER FACTS' $SUPP"
+check "the supervisor backgrounds long commands"  "grep -q 'never by predicted duration' $SUPP"
+check "the skill documents the verify stage"    "grep -q 'Mechanical verification before the judge' $MM"
+check "contracts are preflighted at the base"   "grep -q 'Preflight the contracts at the base' $MM"
+check "amendments propagate only mechanically"  "grep -q 'An amendment exists only when the plan file is edited' $MM"
+check "single-task invocations are allowed"     "grep -q 'parallel single-task runner invocations' $MM"
+
+section "super-plan and ship: sizing, scoped gates, acceptance references"
+check "task right-sizing is a rule"             "grep -q 'Right-size every task' $SP"
+check "gates are scoped to the task's files"    "grep -q 'gates to its files' $SP"
+check "base expectations are recorded"          "grep -q 'expected base status' $SP"
+check "acceptance references exist"             "grep -q 'Acceptance References' $SP"
+check "ship preflights before the first wave"   "grep -q 'contract preflight at the pushed tip' $SH"
+check "unverified references reach the PR body" "grep -q 'Not verified — manual QA needed' $SH"
+check "the runtime pass probes capability, not names" "grep -q 'described capability' $SH"
+
 section "multi-model: the lifecycle belongs to the orchestrator, not the user"
 check "plan is opened at launch"               "grep -q 'Write the wave plan file' $MM"
 check "plan is closed at completion"           "grep -q 'Set the wave plan.*status: done' $MM"
@@ -103,8 +129,6 @@ check "status transitions stay with execution"  "grep -q 'status transitions bel
 check "headless mode records assumptions"       "grep -q 'Assumptions (would ask)' $SP"
 check "superpowers attribution survives"        "grep -q 'Jesse Vincent' $SP"
 check "the MIT notice ships"                    "[ -f plugins/orchestration/skills/super-plan/references/LICENSE-superpowers ]"
-
-SH=plugins/orchestration/skills/ship/SKILL.md
 
 section "ship: the conductor that adds no machinery"
 check "the skill exists"                        "[ -f $SH ]"
