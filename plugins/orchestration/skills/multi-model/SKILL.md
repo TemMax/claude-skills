@@ -450,7 +450,7 @@ carrying the isolation instructions — so the contract the executor reads and
 the contract the supervisor enforces are the same object and cannot diverge.
 Escalated rungs run at `high` effort.
 
-3. Act on the returned statuses, task by task:
+4. Act on the returned statuses, task by task:
    - `ok` — merge `wave/<id>` per the wave plan.
    - `contract-unsatisfiable` — run the amendment flow below (one amendment
      per task; removing or weakening a check goes to the user as a yes/no),
