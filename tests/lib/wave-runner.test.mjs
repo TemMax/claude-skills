@@ -58,15 +58,25 @@ function waveArgs(over = {}) {
   }
 }
 
+const FACTS_GREEN = () => ({ branchHasCommits: true, filesChanged: ['src/x.js'],
+  mustRun: [{ cmd: 'true', exit: 0, output: '(exit 0)', pasteFoundInReport: true }], notes: [] })
+
 // verdictsById: taskId -> queue of verdicts, consumed one per supervisor call.
-// execNulls: taskId -> how many leading EXECUTOR calls return null (dead agent).
-// supNulls: taskId -> how many leading SUPERVISOR calls return null (dead agent).
-function stub(verdictsById, { execNulls = {}, supNulls = {} } = {}) {
+// factsById: taskId -> queue of verifier facts (default: green facts forever).
+// execNulls / supNulls / verifyNulls: taskId -> leading null (dead-agent) counts.
+function stub(verdictsById, { execNulls = {}, supNulls = {}, verifyNulls = {}, factsById = {} } = {}) {
   const q = Object.fromEntries(Object.entries(verdictsById).map(([k, v]) => [k, [...v]]))
+  const fq = Object.fromEntries(Object.entries(factsById).map(([k, v]) => [k, [...v]]))
   const nulls = { ...execNulls }
   const supDead = { ...supNulls }
-  return (prompt) => {
+  const verDead = { ...verifyNulls }
+  return (prompt, opts = {}) => {
     const id = (prompt.match(/wave\/([a-z0-9-]+)/) ?? [])[1]
+    if ((opts.label ?? '').startsWith('verify:')) {
+      if ((verDead[id] ?? 0) > 0) { verDead[id]--; return null }
+      if (fq[id] && fq[id].length > 0) return fq[id].shift()
+      return FACTS_GREEN()
+    }
     if (prompt.startsWith(SUP)) {
       if ((supDead[id] ?? 0) > 0) { supDead[id]--; return null }
       if (!q[id] || q[id].length === 0) throw new Error('verdict queue exhausted for ' + id)
@@ -78,9 +88,11 @@ function stub(verdictsById, { execNulls = {}, supNulls = {} } = {}) {
 }
 
 const execCalls = (calls, id) =>
-  calls.filter((c) => !c.prompt.startsWith(SUP) && c.prompt.includes('wave/' + id))
+  calls.filter((c) => (c.opts.label ?? '').startsWith('exec:') && c.prompt.includes('wave/' + id))
 const supCalls = (calls, id) =>
-  calls.filter((c) => c.prompt.startsWith(SUP) && c.prompt.includes('wave/' + id))
+  calls.filter((c) => (c.opts.label ?? '').startsWith('judge:') && c.prompt.includes('wave/' + id))
+const verifyCalls = (calls, id) =>
+  calls.filter((c) => (c.opts.label ?? '').startsWith('verify:') && c.prompt.includes('wave/' + id))
 const verdictAttempts = (t) => t.attempts.filter((a) => a.kind === 'verdict')
 
 const tests = []
@@ -161,6 +173,7 @@ test('S1 clean pass: one executor call, one supervisor call, no escalation', asy
   assert.equal(supCalls(calls, 't-one').length, 1)
   assert.equal(execCalls(calls, 't-one')[0].opts.model, 'sonnet')
   assert.deepEqual(verdictAttempts(result.tasks[0]).map((a) => a.escalation), [null])
+  assert.equal(verifyCalls(calls, 't-one').length, 1)
 })
 
 test('S2 rework: same model, prior verdict travels in the prompt', async () => {
@@ -306,6 +319,98 @@ test('S7d two dead supervisor calls → task error, wave survives', async () => 
   assert.equal(result.status, 'partial')
   assert.equal(supCalls(calls, 't-one').length, 2)
   assert.equal(execCalls(calls, 't-one').length, 1)
+})
+
+// ---------- V1–V6: the mechanical verify stage ----------
+
+test('V1 verify runs after the executor and before the judge', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.ok()] }),
+  })
+  assert.equal(result.tasks[0].status, 'ok')
+  const labels = calls.map((c) => (c.opts.label ?? '').split(':')[0])
+  assert.deepEqual(labels, ['exec', 'verify', 'judge'])
+})
+
+test('V2 no commits on the branch → mechanical bounce, judge not called', async () => {
+  const noCommits = { ...FACTS_GREEN(), branchHasCommits: false }
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.ok()] }, { factsById: { 't-one': [noCommits, FACTS_GREEN()] } }),
+  })
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.equal(supCalls(calls, 't-one').length, 1)
+  assert.equal(execCalls(calls, 't-one').length, 2)
+  assert.equal(result.tasks[0].attempts[0].kind, 'mechanical')
+  assert.match(execCalls(calls, 't-one')[1].prompt, /Prior attempt was rejected/)
+  assert.match(execCalls(calls, 't-one')[1].prompt, /carries no commits/)
+})
+
+test('V2b a path outside the globs → mechanical files violation', async () => {
+  const outside = { ...FACTS_GREEN(), filesChanged: ['docs/readme.md'] }
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.ok()] }, { factsById: { 't-one': [outside, FACTS_GREEN()] } }),
+  })
+  assert.equal(result.tasks[0].status, 'ok')
+  const mech = result.tasks[0].attempts[0]
+  assert.equal(mech.kind, 'mechanical')
+  assert.equal(mech.verdict.violations[0].class, 'files')
+  assert.equal(supCalls(calls, 't-one').length, 1)
+})
+
+test('V3 the same mechanical rule twice → the second goes to the judge', async () => {
+  const noCommits = () => ({ ...FACTS_GREEN(), branchHasCommits: false })
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.ok()] },
+      { factsById: { 't-one': [noCommits(), noCommits()] } }),
+  })
+  // attempt 1: mechanical bounce; attempt 2: same rule again → judge decides,
+  // and the judge's ok:true closes the task.
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.equal(supCalls(calls, 't-one').length, 1)
+  assert.match(supCalls(calls, 't-one')[0].prompt, /VERIFIER FACTS/)
+})
+
+test('V4 verifier dead twice → fail-open: judge runs, task passes', async () => {
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.ok()] }, { verifyNulls: { 't-one': 2 } }),
+  })
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.equal(supCalls(calls, 't-one').length, 1)
+  assert.equal(verifyCalls(calls, 't-one').length, 2)
+  assert.ok(!supCalls(calls, 't-one')[0].prompt.includes('VERIFIER FACTS'))
+})
+
+test('V5 red must_run in facts → mechanical must_run bounce with the output', async () => {
+  const red = { ...FACTS_GREEN(), mustRun: [{ cmd: 'true', exit: 1, output: 'boom', pasteFoundInReport: true }] }
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.ok()] }, { factsById: { 't-one': [red, FACTS_GREEN()] } }),
+  })
+  assert.equal(result.tasks[0].status, 'ok')
+  const mech = result.tasks[0].attempts[0]
+  assert.equal(mech.verdict.violations[0].class, 'must_run')
+  assert.match(mech.verdict.violations[0].evidence, /boom/)
+})
+
+test('V6 mechanical verdicts never count paste strikes or stop as unsatisfiable', async () => {
+  // Two different mechanical rules on consecutive attempts: if mechanical
+  // verdicts fed pasteStrikes or satisfiable, this would escalate early or
+  // stop as contract-unsatisfiable instead of exhausting rung 0 and failing.
+  const noCommits = { ...FACTS_GREEN(), branchHasCommits: false }
+  const outside = { ...FACTS_GREEN(), filesChanged: ['docs/readme.md'] }
+  const { result } = await runWorkflow(SCRIPT, {
+    args: waveArgs({ tasks: [task({ ladder: [] })] }),
+    agentStub: stub({ 't-one': [] }, { factsById: { 't-one': [noCommits, outside] } }),
+  })
+  // rung 0 has 2 attempts, both consumed by mechanical bounces → failed,
+  // with zero supervisor calls and no contract-unsatisfiable status.
+  assert.equal(result.tasks[0].status, 'failed')
+  assert.ok(result.tasks[0].attempts.every((a) => a.kind !== 'verdict'))
 })
 
 let failed = 0
