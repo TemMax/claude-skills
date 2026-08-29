@@ -1,5 +1,5 @@
-status: draft
-base: pending
+status: done
+base: 407451bd15a24db2b00db885db70b2b8ac1ae2e4
 
 # Orchestration Hardening — mechanical verification, preflight, discipline
 
