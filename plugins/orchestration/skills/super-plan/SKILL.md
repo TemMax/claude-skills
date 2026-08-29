@@ -54,6 +54,30 @@ Read exactly one. Always reply to the user in the language the user writes in.
    file-independence: same-wave tasks must not share files — merge
    colliding tasks or split them across consecutive waves. Dependent
    chains are consecutive waves, never one wave.
+
+   **Right-size every task.** The measured lever for wave success is task
+   breadth, not model choice: two broad tasks failed for 717 and 139
+   minutes respectively and shipped only after being re-cut into five
+   narrow tasks that each passed first-try in 5–95 minutes. Split signals —
+   any one is enough: `files_allowed` spans more than one module or
+   subsystem; the description carries more than ~3 distinct deliverables;
+   the prose needs "and then" chains to say what done means. Prefer more,
+   narrower tasks: one deliverable one executor can finish and one judge
+   can check in a single session.
+
+   **Scope each contract's gates to its files.** Derive `must_run` from
+   `files_allowed`: a task confined to one module carries that module's
+   check command, never the full-repo gate — the full gate runs once per
+   wave at merge. Full-repo commands in per-task contracts multiply
+   wall-clock by the task count for no added safety (measured: one session
+   re-ran the identical full-monorepo gate 12 times).
+
+   **Record the expected base status of every `must_run`.** For each
+   command, state in the task prose whether it is green at base or
+   expected-red because the task itself creates what it checks. Execution
+   preflights every command at the base and compares against this
+   expectation; a mismatch is a contract defect caught before any executor
+   is spawned.
 5. **Lint.** Run the shipped linter and fix every error yourself — the
    user never edits the plan:
 
@@ -114,6 +138,24 @@ One file in `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`, three layers:
    is known. At launch, multi-model composes each runner task as the json
    entry plus its prose section, verbatim.
 
+## Acceptance References
+
+When the request carries product or visual references — Figma links,
+screenshots, mockups, behavioral specs — the plan records them in a
+dedicated `## Acceptance References` section: one entry per reference, its
+source, and the concrete facts that must match (sizes, colors, copy, flow
+order). Then convert everything statically checkable into contract pins: a
+hex token, a dimension constant or a string of copy becomes a `must_run`
+grep in the owning task's contract. What cannot be pinned statically —
+animation feel, layout at runtime, end-to-end flow behavior — stays listed:
+execution and review carry the unverified remainder into the PR body as an
+explicit manual-QA list rather than letting it vanish. Measured cost of
+skipping this: one contract-green feature needed ~18 hours of
+after-the-fact manual QA for defects (wrong gradients, duplicated toolbars,
+misplaced flows) that were all visible in references the plan never
+recorded. No references given → no section: there is nothing to check
+against.
+
 ## Headless evaluation mode
 
 When there is no user to answer gates (an eval harness runs you), skip both
@@ -131,3 +173,6 @@ silently is the failure this mode exists to measure.
 | Presenting a plan that fails lint | The user debugs your format | Lint first, fix every error, then present |
 | Setting `status: active` while planning | The drift hook pays for a wave that is not running | Leave `draft`; execution owns transitions |
 | A task whose fix is "see the conversation" | The executor sees only its prompt | Self-contained tasks, full code where known |
+| A task spanning several modules | Hours-long attempts, repeated rejects | Split by deliverable; narrow `files_allowed` |
+| A full-repo gate in a per-task contract | Wall-clock multiplied by the task count | Scope `must_run` to the task's module |
+| Visual references left out of the plan | Fidelity defects surface as post-ship manual QA | Record Acceptance References; pin what greps can pin |
