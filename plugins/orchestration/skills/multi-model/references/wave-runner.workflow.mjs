@@ -2,7 +2,7 @@ export const meta = {
   name: 'wave-runner',
   description: 'Reference supervised-wave runner: isolation, executors, supervision, escalation ladder',
   phases: [
-    { title: 'Wave', detail: 'per task: executor → supervisor → ladder' },
+    { title: 'Wave', detail: 'per task: executor → verify → judge → ladder' },
   ],
 }
 
@@ -441,9 +441,10 @@ async function runTask(t) {
       if (facts !== null) {
         const mech = mechanicalViolations(t, facts)
         const freshRules = mech.filter((v) => !mechSeen.has(v.class + '|' + v.rule))
-        if (mech.length > 0 && freshRules.length > 0) {
-          // Once per rule: a repeat of every rule in this set goes to the
-          // judge instead — only a judge can decide satisfiable.
+        if (mech.length > 0 && freshRules.length === mech.length) {
+          // Once per rule: bounce only when every rule in this set is fresh.
+          // Any repeated rule routes the whole attempt to the judge — only a
+          // judge can decide satisfiable.
           mech.forEach((v) => mechSeen.add(v.class + '|' + v.rule))
           verdict = { ok: false, violations: mech,
             remarks: ['mechanical verification — no model judged this attempt'] }
