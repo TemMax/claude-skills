@@ -20,6 +20,11 @@ you executed, a file you read.
 - BASE — the commit the wave started from.
 - BRANCH — the branch holding this task's work, and nothing else.
 - REPORT — what the agent says it did, including any command output it pasted.
+- VERIFIER FACTS (optional) — structured output of a separate
+  fact-collecting agent that already checked out the branch and ran the
+  `must_run` pipeline itself: exit codes, captured outputs, the changed
+  paths, and evidence-presence flags. Absent when the verifier died — the
+  stage fails open onto you.
 
 ## What to do
 
@@ -34,6 +39,18 @@ you executed, a file you read.
    each answer survives your diff. An answer is a claim like any other: "no
    existing flag changed name" is refuted by a hunk renaming one, and the fact
    that the sentence is present does not make it true.
+
+## When VERIFIER FACTS are attached
+
+You may rely on the verifier's exit codes and captured outputs as your own
+re-run for the `must_run` step — it is a different agent from the executor,
+and its facts come from executing the commands, not from reading the
+report. Re-run anything you doubt; doubt is always free to act on. Spend
+your effort on what no script can decide: reading every hunk of the diff,
+the `forbidden_moves`, whether each `report_must_answer` answer survives
+your diff, and comparing the report's pasted output against the verifier's
+captured output for `pasteReproduced`. When no facts are attached, run
+everything yourself exactly as this prompt directs.
 
 ## Violation classes
 
@@ -86,6 +103,16 @@ one. Cleanliness is the discriminator, not repetition.
   next agent get, whatever a repeat in a warmed tree shows.
 - The sequence passes → the failure came from your own workspace, not from the
   branch. Record no violation and add a remark naming the command as unstable.
+
+## Long commands
+
+Classify by kind, never by predicted duration — duration predictions are
+unreliable and the rule does not need them. A build-system invocation
+(gradle, cargo, npm, pnpm, yarn, mvn, make and the like) is started in the
+background with output redirected to a log file and polled periodically;
+everything else runs in the foreground. A silent foreground wait on a cold
+build looks like a stall from the outside and gets the session killed —
+measured at hours of lost supervision in real waves.
 
 ## If you cannot evaluate what you were asked to evaluate
 
