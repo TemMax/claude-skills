@@ -413,6 +413,22 @@ test('V6 mechanical verdicts never count paste strikes or stop as unsatisfiable'
   assert.ok(result.tasks[0].attempts.every((a) => a.kind !== 'verdict'))
 })
 
+test('V7 a repeated rule mixed with a fresh one goes to the judge, not another bounce', async () => {
+  // attempt 1: noCommits (fresh) → mechanical bounce.
+  // attempt 2: noCommits again (repeat) + files violation (fresh) → the
+  // repeat routes the whole attempt to the judge despite the fresh rule.
+  const noCommits = { ...FACTS_GREEN(), branchHasCommits: false }
+  const mixed = { ...FACTS_GREEN(), branchHasCommits: false, filesChanged: ['docs/readme.md'] }
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: waveArgs(),
+    agentStub: stub({ 't-one': [V.ok()] }, { factsById: { 't-one': [noCommits, mixed] } }),
+  })
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.equal(result.tasks[0].attempts[0].kind, 'mechanical')
+  assert.equal(supCalls(calls, 't-one').length, 1)
+  assert.match(supCalls(calls, 't-one')[0].prompt, /VERIFIER FACTS/)
+})
+
 let failed = 0
 for (const t of tests) {
   try { await t.fn(); console.log('ok -', t.name) }
