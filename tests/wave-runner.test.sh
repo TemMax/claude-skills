@@ -14,7 +14,7 @@ check "the runner ships"                    "[ -f $W ]"
 expect "exactly one export" "1" "$(grep -c '^export ' "$W")"
 check "meta is a pure literal"              "! sed -n '/^export const meta/,/^}/p' $W | grep -qE '\\\$\\{|\\\`| \\+ '"
 check "no Date or random (breaks resume)"   "! grep -qE 'Date\\.|new Date|Math\\.random' $W"
-check "short model names only"              "! grep -q 'claude-' $W"
+check "no full model id except the pinned claude-opus-4-8" "! grep -o 'claude-[a-z0-9.-]*' $W | grep -v '^claude-opus-4-8$' | grep -q ."
 check "result leaves via top-level return"  "grep -qE '^return ' $W"
 
 section "Ladder semantics, simulated on the shipped file"

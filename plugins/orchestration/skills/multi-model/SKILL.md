@@ -1,9 +1,9 @@
 ---
 name: multi-model
-description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5, Opus 4.8 and Opus 5 — including supervised waves, where each executor is isolated in its own worktree and its result is judged against a machine-checkable contract by a different model — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Works on whatever model this orchestrator session runs on; it loads the matching orchestrator profile itself. Triggers: "разбей на агентов", "запусти параллельно", "оркеструй задачу", "decompose into agents", "run in parallel", "delegate to subagents", "pick a model for this task". Do NOT use for single-agent work.'
+description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5, Opus 4.8, Opus 5 and Fable 5.1 — including supervised waves, where each executor is isolated in its own worktree and its result is judged against a machine-checkable contract by a different model — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Works on whatever model this orchestrator session runs on; it loads the matching orchestrator profile itself. Triggers: "разбей на агентов", "запусти параллельно", "оркеструй задачу", "decompose into agents", "run in parallel", "delegate to subagents", "pick a model for this task". Do NOT use for single-agent work.'
 metadata:
   author: https://github.com/TemMax
-  version: 2.4.0
+  version: 2.5.0
 ---
 
 # Orchestrating Multi-Model Development
@@ -16,6 +16,7 @@ profile file:
 
 | Your model ID | Read this file |
 |---|---|
+| `claude-fable-5-1` | `${CLAUDE_SKILL_DIR}/references/orchestrator-fable-5-1.md` |
 | `claude-fable-5` | `${CLAUDE_SKILL_DIR}/references/orchestrator-fable-5.md` |
 | `claude-opus-5` (any context-window suffix) | `${CLAUDE_SKILL_DIR}/references/orchestrator-opus-5.md` |
 | `claude-opus-4-8` (any context-window suffix, e.g. `[1m]`) | `${CLAUDE_SKILL_DIR}/references/orchestrator-opus-4-8.md` |
@@ -35,7 +36,8 @@ plan.
 ## Overview
 
 The orchestrator (this session's model) researches, plans, writes task specs, and
-verifies; the executors (Haiku 4.5 / Sonnet 5 / Opus 5 / Opus 4.8) implement. Core
+verifies; the executors (Haiku 4.5 / Sonnet 5 / Opus 5 / Opus 4.8, and Fable 5.1
+as an explicit rung) implement. Core
 principle: **decisions belong to the orchestrator, execution belongs to the
 agents**. Every rule below is derived from the models' official system cards; the
 facts and numbers live in `references/model-dossiers.md`.
@@ -87,35 +89,37 @@ English does not mean English replies.
 | Fine-grained debugging, concurrency, source-level security-sensitive code | Opus 5 executor | Strongest coding + best injection robustness; source security unblocked |
 | A long unsliceable session | Opus 5 executor | Strongest long-horizon coding at Opus-4.8 price |
 | Sonnet hit its ceiling after a fix iteration | Opus 5 executor | The heavy-executor upgrade over Sonnet |
-| Reading untrusted external content (web, fetched pages, hostile files) | Opus 5 executor | Most injection-robust model tested (still pair with platform safeguards) |
-| Reverse-engineering / vulnerability discovery in compiled binaries | Opus 4.8 executor | Opus 5's Fable-class cyber classifier blocks binaries; Opus 4.8 does not |
+| Reading untrusted external content (web, fetched pages, hostile files) | Opus 5 executor | Most injection-robust affordable model (IPI 0.4% at k=1); still pair with platform safeguards |
+| Untrusted content whose compromise would reach secrets or irreversible actions (content known hostile, an agent that can act) | Fable 5.1 executor (`fable`) | Most injection-robust model to date: IPI 0.1% at k=1 / 1.0% at k=15 vs Opus 5's 0.4 / 4.8; none of 2,826 directly-answered coding requests broke (pp. 83, 86). Opus 5 stays the cost default |
+| Reverse-engineering / vulnerability discovery in compiled binaries | Opus 4.8 executor (`claude-opus-4-8`) | Opus 5's and Fable 5.1's cyber classifiers block binaries (Fable 5.1 card p. 52); Opus 4.8 is where the fallback lands anyway (p. 46) — choose it, don't fall into it |
 
 Torn between Haiku and Sonnet → Sonnet. Torn between Sonnet and Opus → improve the
 task spec first, then upgrade the model. Opus 5 is the default heavy executor and
 verifier; Opus 4.8 is retained only for compiled-binary work and as the
-cyber-refusal fallback.
+cyber-refusal fallback. In plans and runner args it is addressed by its
+full ID `claude-opus-4-8`.
 
 **Routing anti-patterns:** no sub-orchestrators — executors never spawn their own
 subagents (documented failures in deep delegation chains: status honesty, not
 capability); don't give any executor untrusted external content without platform
 safeguards (Opus 5 is the most robust, but safeguards still matter); don't give
 Sonnet multi-hour sessions; don't route compiled-binary reverse-engineering to
-Opus 5 (its classifier blocks it) — use Opus 4.8.
+Opus 5 or Fable 5.1 (their classifiers block it) — use Opus 4.8.
 
 ## Research Routing — Quick Reference
 
 The Model Routing table above routes work that changes things. Read-only
 research agents — the fan-out behind planning, decomposition and reviews — are
 routed here instead. An unrouted research agent inherits the session's model:
-on a Fable 5 seat that silently bills file listings at the most expensive rate
-available. Never spawn a research agent without naming its model.
+on a Fable seat (5 or 5.1) that silently bills file listings at the most
+expensive rate available. Never spawn a research agent without naming its model.
 
 | Research kind | Model | Why (see the dossiers) |
 |---|---|---|
 | Mechanical pattern search: occurrences of a known string or shape | Haiku 4.5 | Zero decisions; simple file searches are its documented lane |
 | Closed enumeration: files, call sites, conventions, test commands that actually run | Sonnet 5, low/medium | Strong at digging through large code volumes (ProgramBench 76–86%, 1M context) and cheap; a closed question neutralizes its documented fabricate-when-information-is-missing failure (Sonnet 5 card, p. 71) |
 | Open research sub-question: how a subsystem works, what depends on what, why it is shaped this way | Opus 5, medium/high | First Claude to saturate the lazy-investigation eval — a thorough investigator (p. 110); cap at high, its effort curve inverts |
-| A report the orchestrator will trust without re-verification, or reasoning over a near-1M-token surface | Opus 4.8 | Honesty ceiling (0.00 misreported rate) and the best long-context reasoning in the comparison set (GraphWalks 1M 68.1); DRACO rises monotonically through max |
+| A report the orchestrator will trust without re-verification, or reasoning over a near-1M-token surface | Opus 4.8 (`claude-opus-4-8`) | Honesty ceiling (0.00 misreported rate) and the best long-context reasoning in the comparison set (GraphWalks 1M 68.1); DRACO rises monotonically through max |
 
 Torn between Haiku and Sonnet → Sonnet, as always. The session's own model is
 never the answer here: research is gathering, not deciding — the decisions stay
@@ -141,12 +145,16 @@ is your profile's business, not this table's.
 | Haiku 4.5 | — does not support effort — | | | |
 | Sonnet 5 | obvious solution, but the code must be read | routine implementation per spec | default for non-trivial work | hardest execution tasks; plateau! |
 | Opus 5 executor | unusually strong on simple/scoped tasks | well-specified work | default for non-trivial work | avoid — overthinking/self-verification risk |
-| Opus 4.8 executor | — | most well-specified tasks (min effort ≈ Opus 4.7 max) | debugging, verification, long horizon | research-grade only |
+| Opus 4.8 executor (`claude-opus-4-8`) | — | most well-specified tasks (min effort ≈ Opus 4.7 max) | debugging, verification, long horizon | research-grade only |
+| Fable 5.1 executor (explicit ladder rung only) | scoped, closed tasks | **peak on scoped coding** (FrontierCode, p. 169) — always with a scope/brevity line | long-horizon work | xhigh ≈ max at 19–25% fewer tokens (pp. 193–194); out-of-scope edits rise with effort — the scope line is mandatory |
 
 Signal rule: wanting to give Sonnet xhigh because the task is open-ended → that
 means switching the model to Opus or returning to the Decisions stage, not effort.
 Opus 5's effort curve is the exception — higher is not better; it peaks mid-range
-on coding and overthinks at `max`, so cap Opus 5 executors at `high`.
+on coding and overthinks at `max`, so cap Opus 5 executors at `high`. Fable
+5.1's curve has its own shape: task correctness keeps rising with effort but so
+do unrequested out-of-scope edits (p. 169), so a Fable 5.1 executor prompt
+always carries an explicit scope and brevity line.
 
 ## Wave Isolation
 
@@ -267,7 +275,9 @@ reduce the documented failure modes:
    State the prohibitions explicitly and loudly. This is measured, not
    stylistic: an explicit "don't work around it — report it" lowers fabricated
    workarounds from 17.4% to 9.1% for Fable 5 (pp. 161–163) and from 9.4% to
-   2.8% for Opus 4.8 (pp. 109–110).
+   2.8% for Opus 4.8 (pp. 109–110). The Fable 5.1 card did not repeat this
+   measurement; what it documents instead is unrequested out-of-scope edits
+   rising with effort (p. 169), which the same explicit scope line addresses.
 
 For tasks with images/PDF/charts — give Sonnet code-execution access.
 
@@ -323,16 +333,26 @@ then abandoned supervision entirely.
 
 Two hard rules, then the table. Never the executor's own model (self-preference:
 measured zero for Opus 4.8 and Fable 5, unmeasured for Opus 5 — so Opus 5 never
-judges Opus 5). Never a weaker tier than the executor's: the judge re-runs and
-re-derives everything the executor did.
+judges Opus 5; measured small but non-zero for Fable 5.1 — 0.1 points out of 10,
+lenient when told the author is Claude, p. 124 — which is why the runner's judge
+prompt never names the executor's model and why `fable` still judges Opus 5.
+Not stating it does not stop a judge in an all-Claude pipeline from inferring
+it; what bounds the effect is the magnitude and the contract's mechanical half
+— verifier facts and grep-decidable checks the judge cannot soften).
+Never a weaker tier than the executor's: the judge re-runs and re-derives
+everything the executor did.
 
 | Executor | Supervisor | Effort |
 |---|---|---|
 | Haiku 4.5 | Opus 5 | high |
 | Sonnet 5 | Opus 5 | high |
-| Opus 5 | Fable 5 (fallback: Opus 4.8) | high |
-| Opus 4.8 | Opus 5 or Fable 5 | high |
-| Fable 5 (explicit ladder rung only) | Opus 5 | high |
+| Opus 5 | Fable 5.1 via `fable` (fallback: Opus 4.8 via `claude-opus-4-8`) | high |
+| Opus 4.8 | Opus 5 or Fable 5.1 | high |
+| Fable 5.1 (explicit ladder rung only) | Opus 5 | high |
+
+The short name `fable` resolves to whichever Fable the harness serves — Fable
+5.1 as of September 2026; Fable 5 is no longer addressable and keeps its profile
+and dossier for history.
 
 Effort is `high` across the board — the shipped runner's default — and the row
 is measured, not stylistic: on 2026-08-12 a Haiku supervisor at `medium` passed
@@ -651,11 +671,12 @@ Each of these comes from a measured failure, not from general caution.
 |---|---|
 | State the prohibitions to the executor loudly and explicitly | Explicit "don't work around — report" lowers fabrication: Fable 17.4% → 9.1% (pp. 161–163), Opus 4.8 9.4% → 2.8% (pp. 109–110) |
 | Do NOT disclose the supervisor's specific checks to the executor | Grader awareness reaches 24–30% and changes behavior at the surface level (Fable pp. 171–181) |
-| The supervisor is never the executor's own model | Opus 5's self-preference bias as a judge is unmeasured; Opus 4.8 (pp. 122–124) and Fable 5 (pp. 202–203) have measured zero |
+| The supervisor is never the executor's own model | Opus 5's self-preference bias as a judge is unmeasured; Opus 4.8 (pp. 122–124) and Fable 5 (pp. 202–203) have measured zero; Fable 5.1 has a measured 0.1/10 (p. 124) |
 | A claim without command output is a violation | Caveat laundering: "I verified this myself" while spot-checking only ancillary facts (pp. 37–39) |
 | Attach verdicts; never paraphrase an executor report in their place | Opus 5 relays subagent claims unverified (p. 81) |
 | Stopping early with open plan items is a violation | Fable stops on spurious token-budget concerns, 2.43M tokens unspent (pp. 170–171) |
 | Claims of monitoring or watching get their own check | Dead watchers: recap lines said "monitoring" while nothing polled (pp. 33–35) |
+| Never name the executor's model in the judge prompt | Fable 5.1 grades more leniently when told the author is Claude — 0.1/10, small but measured (p. 124) |
 
 **Rules explicit, checks opaque.** The two halves come from opposite findings
 and must not be collapsed. The contract is handed to the executor in full —
@@ -667,8 +688,11 @@ the forbidden moves. An executor told the rules complies with the rules; an
 executor told how compliance is measured optimizes for the measurement.
 
 **Choosing the supervisor's model.** Never the executor's own. Prefer a judge
-with measured zero self-preference — Opus 4.8 or Fable 5; when the executor is
-one of those, supervise with the other. Opus 5 may execute under supervision but
+with measured zero self-preference — Opus 4.8 (pp. 122–124); `fable` (Fable 5.1)
+carries a measured 0.1/10 lenience when told the author is Claude (p. 124);
+the judge prompt never states the executor's model, inference remains possible
+in an all-Claude pipeline, and the bound is the magnitude plus the contract's
+mechanical half — so it judges Opus 5, and Opus 5 judges it. Opus 5 may execute under supervision but
 does not supervise: the property that would justify it is unmeasured, and an
 unmeasured property is not a permission.
 
@@ -690,8 +714,11 @@ them:
   unparseable to the harness.
 - `Date.now()`, `new Date()` and `Math.random()` **throw** inside a script; they
   would break resume. Timestamps come in through `args`.
-- `opts.model` takes the short names (`haiku`, `sonnet`, `opus`, `fable`), not
-  full model IDs.
+- `opts.model` takes the short names (`haiku`, `sonnet`, `opus`, `fable`) or
+  the one pinned full ID `claude-opus-4-8`. Workflow's `agent()` accepts
+  full model IDs — measured 2026-09-01, probe `wf_93d94701-ae1`:
+  `claude-opus-4-8` → Opus 4.8, `opus-4-8` rejected — and the runner and the
+  plan linter accept exactly that one full ID and no other.
 - The script's **return value** is the result. `console.log` is not a channel;
   `log()` emits progress, not results.
 - `agent()` returns `null` when a subagent dies after retries — every call site
@@ -736,7 +763,7 @@ Opus 5 relays subagent claims unverified (p. 81).
 | Numeric example in the spec computed in your head | The example contradicts the formula, the agent stalls | Compute with a tool or give only the formula |
 | Not warning about parallel file changes | The agent treats the wave as an anomaly, wastes steps | List the files its neighbors modify |
 | Documentation assigned to no one | README silently goes stale | An explicit docs task in the decomposition |
-| Supervising with the executor's own model | A judge with unmeasured self-preference grants its own work a discount for free | Opus 4.8 or Fable 5, never the executor's model |
+| Supervising with the executor's own model | A judge with unmeasured self-preference grants its own work a discount for free | Opus 4.8 or Fable 5.1, never the executor's model; never name the executor to the judge |
 | Telling the executor how compliance is measured | Grader awareness turns compliance performative at the surface | Rules explicit, method undisclosed |
 | Accepting a claim with no command output | The cheapest fabrication passes untouched | `evidence: required`, and compare it with your own re-run |
 | Asking a supervisor to judge whether a mismatch was dishonest | It cannot know, and it reaches for the heaviest label — four fixes failed the same way | Record `pasteReproduced` as a fact; let repetition across attempts carry the consequence |
@@ -747,10 +774,11 @@ Opus 5 relays subagent claims unverified (p. 81).
 
 ## References
 
-- `references/orchestrator-fable-5.md`, `references/orchestrator-opus-5.md`,
+- `references/orchestrator-fable-5-1.md`,
+  `references/orchestrator-fable-5.md`, `references/orchestrator-opus-5.md`,
   `references/orchestrator-opus-4-8.md` — the orchestrator profiles. Load exactly
   one, per Step 0.
-- `references/model-dossiers.md` — dossiers on all four models with numbers and
+- `references/model-dossiers.md` — dossiers on all five models with numbers and
   page references to the system cards: benchmarks, documented failure modes,
   effort curves, multi-agent harness data, orchestration takeaways. Load it for
   contested routing calls or to justify a choice.

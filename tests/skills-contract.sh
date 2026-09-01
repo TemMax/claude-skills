@@ -139,4 +139,74 @@ check "the merge stays with the user"           "grep -q 'merge stays with the u
 check "wave bases are copied, never typed"      "grep -q 'rev-parse' $SH"
 check "thread phase keeps critical-review's gate" "grep -q 'push → replies → resolves' $SH"
 
+section "Fable 5.1: every skill routes the new model ID to its own profile"
+OF=plugins/orchestration/skills/multi-model/references/orchestrator-fable-5-1.md
+RF=plugins/code-review/skills/critical-review/references/reviewer-fable-5-1.md
+
+check "Step 0: multi-model routes fable-5-1 to its profile" \
+  "grep -qF '| \`claude-fable-5-1\` | \`\${CLAUDE_SKILL_DIR}/references/orchestrator-fable-5-1.md\` |' $MM"
+check "Step 0: super-plan routes fable-5-1 to its profile" \
+  "grep -qF '| \`claude-fable-5-1\` | \`../multi-model/references/orchestrator-fable-5-1.md\` |' $SP"
+check "Step 0: ship routes fable-5-1 to its profile" \
+  "grep -qF '| \`claude-fable-5-1\` | \`../multi-model/references/orchestrator-fable-5-1.md\` |' $SH"
+check "Step 0: critical-review routes fable-5-1 to its profile" \
+  "grep -qF '| \`claude-fable-5-1\` | \`\${CLAUDE_SKILL_DIR}/references/reviewer-fable-5-1.md\` |' $CR"
+
+check "the fable-5 row survives in multi-model"     "grep -qF '| \`claude-fable-5\` ' $MM"
+check "the fable-5 row survives in super-plan"      "grep -qF '| \`claude-fable-5\` ' $SP"
+check "the fable-5 row survives in ship"            "grep -qF '| \`claude-fable-5\` ' $SH"
+check "the fable-5 row survives in critical-review" "grep -qF '| \`claude-fable-5\` ' $CR"
+
+check "the orchestrator fable-5.1 profile ships"    "[ -f $OF ]"
+check "the orchestrator profile gates on its model id" "grep -qF 'claude-fable-5-1' $OF"
+check "the orchestrator profile tells a mismatched model to stop" \
+  "grep -qF 'stop reading it' $OF"
+check "the reviewer fable-5.1 profile ships"        "[ -f $RF ]"
+check "the reviewer profile gates on its model id"  "grep -qF 'claude-fable-5-1' $RF"
+check "the reviewer profile tells a mismatched model to stop" \
+  "grep -qF 'stop reading it' $RF"
+
+check "the 5.1 orchestrator profile routes research off-seat" \
+  "grep -q 'Research Routing' $OF"
+check "the 5.1 profile pins no fixed effort level" \
+  "grep -qF 'No fixed level is pinned' $OF"
+check "the 5.1 profile records its medium peak"    "grep -qF 'peaks at medium' $OF"
+
+check "the judge-bias rule survives"                "grep -qF 'told the author is Claude' $MM"
+check "the judge-bias citation survives"            "grep -qF 'p. 124' $MM"
+check "the judge prompt rule names the omission"    "grep -qF 'never names the executor' $MM"
+check "the shipped judge prompt never names the executor's model" \
+  "! sed -n '/^function supervisorPrompt/,/^}/p' $WR | grep -q 'executor'"
+
+check "the supervisor table names Fable 5.1 as Opus 5's judge" \
+  "grep -qF '| Opus 5 | Fable 5.1 via \`fable\`' $MM"
+
+check "the multi-model dossier has a Fable 5.1 section" \
+  "grep -q '^## Fable 5.1' plugins/orchestration/skills/multi-model/references/model-dossiers.md"
+check "the reviewer dossier has a Fable 5.1 section" \
+  "grep -q '^## Fable 5.1 as a reviewer of its own code' plugins/code-review/skills/critical-review/references/reviewer-dossier.md"
+
+check "README carries the fable-5.1 row"            "grep -qF '| \`claude-fable-5-1\` |' README.md"
+check "multi-model's model list names Fable 5.1"    "sed -n '3p' $MM | grep -qF 'Fable 5.1'"
+
+section "Opus 4.8 is addressable by its full model ID"
+
+PL=plugins/orchestration/skills/super-plan/references/plan-lint.mjs
+OP5=plugins/orchestration/skills/multi-model/references/orchestrator-opus-5.md
+
+check "the runner accepts the pinned ID"            "grep -qF \"'claude-opus-4-8'\" $WR"
+check "the linter accepts the pinned ID"            "grep -qF \"'claude-opus-4-8'\" $PL"
+check "the runner carries no other full model ID" \
+  "! grep -o 'claude-[a-z0-9.-]*' $WR | grep -v '^claude-opus-4-8\$' | grep -q ."
+check "the simulator tier guards the single-ID rule" \
+  "grep -qF \"grep -v '^claude-opus-4-8\$'\" tests/wave-runner.test.sh"
+check "the linter tier rejects the bare short form" \
+  "grep -qF '\"model\": \"opus-4-8\"' tests/plan-lint.test.sh"
+check "the skill names the ID in the supervisor row" \
+  "grep -qF 'fallback: Opus 4.8 via \`claude-opus-4-8\`' $MM"
+check "the skill's opts.model rule names the pin"   "grep -qF 'pinned full ID' $MM"
+check "the old not-addressable wording is gone"     "! grep -q 'not addressable' $MM"
+check "the fable-5.1 profile names the pinned ID"   "grep -qF 'claude-opus-4-8' $OF"
+check "the opus-5 profile names the pinned ID"      "grep -qF 'claude-opus-4-8' $OP5"
+
 summary

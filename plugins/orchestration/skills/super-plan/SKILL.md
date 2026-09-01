@@ -3,7 +3,7 @@ name: super-plan
 description: 'Use when planning a feature, refactor or fix into wave-ready tasks for the multi-model skill — researching the codebase to decomposition depth, closing open questions (one batched round to the user for what code cannot answer), then writing a plan whose tasks carry machine-checkable contracts, grouped into waves by file-independence and validated by the shipped plan linter. Works on whatever model this session runs on; it loads the matching orchestrator profile itself. Triggers: "составь план", "спланируй фичу", "план под волны", "plan this feature", "make a wave plan", "super plan". Do NOT use for executing a plan (that is multi-model) or reviewing a diff (that is critical-review).'
 metadata:
   author: https://github.com/TemMax
-  version: 2.4.0
+  version: 2.5.0
 ---
 
 # Planning Waves (super-plan)
@@ -19,6 +19,7 @@ the ONE matching profile — the same profiles the multi-model skill uses:
 
 | Your model ID | Read this file |
 |---|---|
+| `claude-fable-5-1` | `../multi-model/references/orchestrator-fable-5-1.md` |
 | `claude-fable-5` | `../multi-model/references/orchestrator-fable-5.md` |
 | `claude-opus-5` (any context-window suffix) | `../multi-model/references/orchestrator-opus-5.md` |
 | `claude-opus-4-8` (any suffix) | `../multi-model/references/orchestrator-opus-4-8.md` |
@@ -32,7 +33,7 @@ Read exactly one. Always reply to the user in the language the user writes in.
    test commands that actually run. For a large surface, fan out read-only
    research agents routed by multi-model's Research Routing table
    (`../multi-model/SKILL.md`) — name a model on every spawn (an agent
-   without one inherits the session's model, and a Fable 5 seat then pays
+   without one inherits the session's model, and a Fable seat (5 or 5.1) then pays
    Fable prices for file listings), and give each agent the table's
    mandatory research-prompt lines. Synthesis and every decision stay with
    you — do not delegate decisions, executors silently fill gaps under
@@ -134,8 +135,10 @@ One file in `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`, three layers:
    ] }
    ```
 
-   Short model names only. `branch` is always `wave/<id>`. The supervisor
-   sits on the wave because execution is one runner invocation per wave.
+   Short model names, or the one pinned full ID `claude-opus-4-8` (the
+   only full ID the runner and this linter accept). `branch` is always
+   `wave/<id>`. The supervisor sits on the wave because execution is one
+   runner invocation per wave.
 
 3. **The prose half** — one `## Task <id>` section per task: the
    substantive description and context, with full code where the solution

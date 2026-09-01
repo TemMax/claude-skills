@@ -102,4 +102,21 @@ expect "repo warnings exit 0" "0" "$rc"
 contains "missing path prefix warned" 'prefix "src/http" does not exist' "$out"
 contains "missing command warned" 'command "definitely-not-a-real-binary-xyz" found neither' "$out"
 
+section "the pinned full id"
+
+mutate '"model": "sonnet"' '"model": "claude-opus-4-8"'
+out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+expect "pinned full id in executor.model exits 0" "0" "$rc"
+contains "pinned full id in executor.model is clean" "OK: 0 error(s)" "$out"
+
+mutate '"ladder": ["opus"]' '"ladder": ["claude-opus-4-8"]'
+out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+expect "pinned full id in ladder exits 0" "0" "$rc"
+contains "pinned full id in ladder is clean" "OK: 0 error(s)" "$out"
+
+mutate '"model": "sonnet"' '"model": "opus-4-8"'
+out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+expect "unpinned full-looking id exits 1" "1" "$rc"
+contains "unpinned full-looking id named" "executor.model" "$out"
+
 summary

@@ -8,7 +8,8 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join, isAbsolute } from 'node:path'
 
-const MODELS = ['haiku', 'sonnet', 'opus', 'fable']
+// 'claude-opus-4-8' is the one full ID the runner accepts (probe wf_93d94701-ae1, 2026-09-01); every other full ID stays rejected.
+const MODELS = ['haiku', 'sonnet', 'opus', 'fable', 'claude-opus-4-8']
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const CONTRACT_KEYS = ['files_allowed', 'files_forbidden', 'must_run',
@@ -79,7 +80,7 @@ if (plan) {
       const at = 'waves[' + wi + ']'
       if (!w || typeof w !== 'object') { err(at + ': must be an object'); return }
       if (!w.supervisor || !MODELS.includes(w.supervisor.model)) {
-        err(at + '.supervisor.model: one of ' + MODELS.join('/') + ' (short names only)')
+        err(at + '.supervisor.model: one of ' + MODELS.join('/') + ' (short names, or the pinned full ID claude-opus-4-8)')
       }
       if (w.supervisor && w.supervisor.effort !== undefined && !EFFORTS.includes(w.supervisor.effort)) {
         err(at + '.supervisor.effort: one of ' + EFFORTS.join('/'))
@@ -97,13 +98,13 @@ if (plan) {
         }
         if (t.branch !== 'wave/' + t.id) err(tat + '.branch: must be "wave/' + t.id + '"')
         if (!t.executor || !MODELS.includes(t.executor.model)) {
-          err(tat + '.executor.model: one of ' + MODELS.join('/') + ' (short names only)')
+          err(tat + '.executor.model: one of ' + MODELS.join('/') + ' (short names, or the pinned full ID claude-opus-4-8)')
         }
         if (t.executor && t.executor.effort !== undefined && !EFFORTS.includes(t.executor.effort)) {
           err(tat + '.executor.effort: one of ' + EFFORTS.join('/'))
         }
         if (t.ladder !== undefined && (!Array.isArray(t.ladder) || t.ladder.some((m) => !MODELS.includes(m)))) {
-          err(tat + '.ladder: array of ' + MODELS.join('/') + ' (short names only)')
+          err(tat + '.ladder: array of ' + MODELS.join('/') + ' (short names, or the pinned full ID claude-opus-4-8)')
         }
         const c = t.contract
         if (!c || typeof c !== 'object') { err(tat + '.contract: required, with all five keys'); return }

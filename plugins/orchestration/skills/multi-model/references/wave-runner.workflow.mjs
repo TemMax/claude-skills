@@ -8,7 +8,8 @@ export const meta = {
 
 // Escalation policy tested by tests/lib/wave-runner.test.mjs — change the
 // numbers there and here together.
-const MODELS = ['haiku', 'sonnet', 'opus', 'fable']
+// 'claude-opus-4-8' is the one full ID the harness resolves (Workflow's agent() accepts full IDs; 'opus-4-8' is rejected — probe wf_93d94701-ae1, 2026-09-01). Explicit rung only: not in LADDER_ORDER.
+const MODELS = ['haiku', 'sonnet', 'opus', 'fable', 'claude-opus-4-8']
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
 const LADDER_ORDER = ['haiku', 'sonnet', 'opus']
 const MAX_ATTEMPTS_PER_RUNG = 2
@@ -100,13 +101,13 @@ if (!Array.isArray(wave.tasks) || wave.tasks.length === 0) {
       }
     }
     if (!t.executor || !MODELS.includes(t.executor.model)) {
-      errors.push(at + '.executor.model: one of ' + MODELS.join('/') + ' (short names only)')
+      errors.push(at + '.executor.model: one of ' + MODELS.join('/') + ' (short names, or the pinned full ID claude-opus-4-8)')
     }
     if (t.executor && t.executor.effort !== undefined && !EFFORTS.includes(t.executor.effort)) {
       errors.push(at + '.executor.effort: one of ' + EFFORTS.join('/'))
     }
     if (t.ladder !== undefined && (!Array.isArray(t.ladder) || t.ladder.some((m) => !MODELS.includes(m)))) {
-      errors.push(at + '.ladder: an array of ' + MODELS.join('/') + ' (short names only)')
+      errors.push(at + '.ladder: an array of ' + MODELS.join('/') + ' (short names, or the pinned full ID claude-opus-4-8)')
     }
   })
 }

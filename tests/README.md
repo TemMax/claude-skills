@@ -66,7 +66,9 @@ EVAL_REPEAT=5 ./tests/run.sh --live
 ```
 
 Measured 2026-08-11 at 5 runs each: both 5/5. No flakiness observed on the cases
-where a wrong answer costs the most.
+where a wrong answer costs the most. Repeated 2026-09-01 on Fable 5.1
+(`EVAL_MODEL=claude-fable-5-1 EVAL_REPEAT=5`): F3 5/5, D3 5/5, and the
+single-run cases (F1, F2, F4, D1, D2) passed a second time in the same run.
 
 ## What this suite cannot tell you
 
@@ -84,6 +86,13 @@ Worth stating plainly, because a green run is easy to over-read.
   Fable 5 as well (`EVAL_MODEL=claude-sonnet-5|claude-opus-5|claude-fable-5`,
   F1–F4). Single runs prove each model *can* judge these fixtures, not a
   rate; Opus 4.8 and the drift tier's non-Haiku behaviour remain unmeasured.
+  Fable 5.1 (`EVAL_MODEL=claude-fable-5-1`), measured 2026-09-01 in one run
+  per tier: supervisor 9/9 (F1–F4), drift 3/3, wave 3/3 (a real verdict over
+  the `Workflow` boundary, not the skip branch), super-plan 6/6 (P1 and P2
+  lint-clean, the fork surfaced). Single runs — "can", not a rate — except
+  the two false-positive guards, which hold 5/5 (see Repeating the guards). Its
+  first live use as a wave supervisor is recorded in
+  `tests/eval/wave-insession.md`.
 - **The super-plan floor is Sonnet, not Haiku — measured, not assumed, and
   still not perfect.** Measured 2026-08-18 across repeated live runs of
   `tests/eval/super-plan.sh`: Haiku 4.5 did not reliably follow the skill's

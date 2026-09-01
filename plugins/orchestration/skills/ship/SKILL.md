@@ -3,7 +3,7 @@ name: ship
 description: 'Use when delivering a feature end-to-end — from a request to a reviewed pull request — through the full pipeline: super-plan turns it into contract-carrying waves, multi-model executes them supervised on a feature branch, critical-review reviews the PR and answers its threads. One confirmation up front (the feature branch will be pushed and a PR opened); the merge stays with the user. Triggers: "сделай под ключ", "доведи фичу до PR", "полный цикл", "ship this", "ship it", "end to end". Do NOT use for a single stage — invoke super-plan, multi-model or critical-review directly instead.'
 metadata:
   author: https://github.com/TemMax
-  version: 2.4.0
+  version: 2.5.0
 ---
 
 # Shipping a Feature (ship)
@@ -19,6 +19,7 @@ the ONE matching profile — the same profiles the multi-model skill uses:
 
 | Your model ID | Read this file |
 |---|---|
+| `claude-fable-5-1` | `../multi-model/references/orchestrator-fable-5-1.md` |
 | `claude-fable-5` | `../multi-model/references/orchestrator-fable-5.md` |
 | `claude-opus-5` (any context-window suffix) | `../multi-model/references/orchestrator-opus-5.md` |
 | `claude-opus-4-8` (any suffix) | `../multi-model/references/orchestrator-opus-4-8.md` |
