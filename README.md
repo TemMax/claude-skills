@@ -81,7 +81,12 @@ Opus-specific process amendments along with it. A model with no profile at all
 hedged instead of falling back cleanly. With the effort directive scoped inside
 the profile, a model-ID gate on each profile, and an explicit fallback row, 14
 of 14 runs across Fable 5, Opus 4.8 and Sonnet 5 loaded the right profile,
-refused the wrong one, and applied the right effort.
+refused the wrong one, and applied the right effort. Repeated for Fable 5.1 on
+2026-09-01 with headless `claude -p --plugin-dir` runs: 6 of 6 on
+`claude-fable-5-1` (four multi-model, two critical-review) loaded exactly
+`orchestrator-fable-5-1.md` / `reviewer-fable-5-1.md` — one run captured with
+`--output-format stream-json` shows a single profile read and nothing else —
+and a Sonnet 5 control reported no matching profile.
 
 The Opus profile also **self-checks the session effort**: Step 0 surfaces the
 live value via the `${CLAUDE_EFFORT}` substitution, and the profile halts an
