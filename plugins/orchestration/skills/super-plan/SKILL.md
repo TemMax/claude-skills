@@ -33,7 +33,7 @@ Read exactly one. Always reply to the user in the language the user writes in.
    test commands that actually run. For a large surface, fan out read-only
    research agents routed by multi-model's Research Routing table
    (`../multi-model/SKILL.md`) — name a model on every spawn (an agent
-   without one inherits the session's model, and a Fable 5 seat then pays
+   without one inherits the session's model, and a Fable seat (5 or 5.1) then pays
    Fable prices for file listings), and give each agent the table's
    mandatory research-prompt lines. Synthesis and every decision stay with
    you — do not delegate decisions, executors silently fill gaps under

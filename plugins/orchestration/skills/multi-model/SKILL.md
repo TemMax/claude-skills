@@ -36,7 +36,8 @@ plan.
 ## Overview
 
 The orchestrator (this session's model) researches, plans, writes task specs, and
-verifies; the executors (Haiku 4.5 / Sonnet 5 / Opus 5 / Opus 4.8) implement. Core
+verifies; the executors (Haiku 4.5 / Sonnet 5 / Opus 5 / Opus 4.8, and Fable 5.1
+as an explicit rung) implement. Core
 principle: **decisions belong to the orchestrator, execution belongs to the
 agents**. Every rule below is derived from the models' official system cards; the
 facts and numbers live in `references/model-dossiers.md`.
@@ -144,7 +145,7 @@ is your profile's business, not this table's.
 | Sonnet 5 | obvious solution, but the code must be read | routine implementation per spec | default for non-trivial work | hardest execution tasks; plateau! |
 | Opus 5 executor | unusually strong on simple/scoped tasks | well-specified work | default for non-trivial work | avoid — overthinking/self-verification risk |
 | Opus 4.8 executor | — | most well-specified tasks (min effort ≈ Opus 4.7 max) | debugging, verification, long horizon | research-grade only |
-| Fable 5.1 executor (explicit ladder rung only) | scoped, closed tasks | **peak on scoped coding** (FrontierCode, p. 169) — always with a scope/brevity line | long-horizon work | xhigh ≈ max at ~20% fewer tokens (pp. 193–194); out-of-scope edits rise with effort — the scope line is mandatory |
+| Fable 5.1 executor (explicit ladder rung only) | scoped, closed tasks | **peak on scoped coding** (FrontierCode, p. 169) — always with a scope/brevity line | long-horizon work | xhigh ≈ max at 19–25% fewer tokens (pp. 193–194); out-of-scope edits rise with effort — the scope line is mandatory |
 
 Signal rule: wanting to give Sonnet xhigh because the task is open-ended → that
 means switching the model to Opus or returning to the Decisions stage, not effort.
@@ -333,7 +334,10 @@ Two hard rules, then the table. Never the executor's own model (self-preference:
 measured zero for Opus 4.8 and Fable 5, unmeasured for Opus 5 — so Opus 5 never
 judges Opus 5; measured small but non-zero for Fable 5.1 — 0.1 points out of 10,
 lenient when told the author is Claude, p. 124 — which is why the runner's judge
-prompt never names the executor's model and why `fable` still judges Opus 5).
+prompt never names the executor's model and why `fable` still judges Opus 5.
+Not stating it does not stop a judge in an all-Claude pipeline from inferring
+it; what bounds the effect is the magnitude and the contract's mechanical half
+— verifier facts and grep-decidable checks the judge cannot soften).
 Never a weaker tier than the executor's: the judge re-runs and re-derives
 everything the executor did.
 
@@ -341,7 +345,7 @@ everything the executor did.
 |---|---|---|
 | Haiku 4.5 | Opus 5 | high |
 | Sonnet 5 | Opus 5 | high |
-| Opus 5 | Fable 5.1 via `fable` (fallback: Opus 4.8) | high |
+| Opus 5 | Fable 5.1 via `fable` (fallback: Opus 4.8 — prose-only, not addressable by the runner's short names) | high |
 | Opus 4.8 | Opus 5 or Fable 5.1 | high |
 | Fable 5.1 (explicit ladder rung only) | Opus 5 | high |
 
@@ -684,9 +688,10 @@ executor told how compliance is measured optimizes for the measurement.
 
 **Choosing the supervisor's model.** Never the executor's own. Prefer a judge
 with measured zero self-preference — Opus 4.8 (pp. 122–124); `fable` (Fable 5.1)
-carries a measured 0.1/10 lenience when told the author is Claude (p. 124),
-which the judge prompt never triggers because it never names the executor — so
-it judges Opus 5, and Opus 5 judges it. Opus 5 may execute under supervision but
+carries a measured 0.1/10 lenience when told the author is Claude (p. 124);
+the judge prompt never states the executor's model, inference remains possible
+in an all-Claude pipeline, and the bound is the magnitude plus the contract's
+mechanical half — so it judges Opus 5, and Opus 5 judges it. Opus 5 may execute under supervision but
 does not supervise: the property that would justify it is unmeasured, and an
 unmeasured property is not a permission.
 

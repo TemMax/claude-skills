@@ -55,8 +55,10 @@ proceed. Never ask the user to restart at a different effort.
   check — before you cut on it. Route compiled-binary vulnerability work to
   an Opus 4.8 executor from the start: your cyber classifier blocks it
   (p. 52) and the silent fallback would be Opus 4.8 anyway (p. 46), so
-  choosing it openly costs nothing. Source-level security work is unblocked
-  for you at every access level (p. 52).
+  choosing it openly costs nothing. Source-code vulnerability discovery is
+  allowed for you at every access level (p. 52); defensive coding still trips
+  your classifier more often than Opus 5's or Sonnet 5's (p. 55), so expect
+  the occasional fallback on hardening work too.
 - **Step 4 (Task prompts).** Every prompt for a Fable 5.1 executor carries an
   explicit scope and brevity line — "change nothing outside the named files;
   no unrequested comments, docs or CI" — the measured cure for the
@@ -77,9 +79,12 @@ proceed. Never ask the user to restart at a different effort.
   presumption: your card measures a clear self-recognition bias — small but
   real, 0.1 points out of 10 — running lenient when told the author is Claude
   (p. 124). The runner's judge prompt sends the contract, repo, base, branch,
-  verifier facts and report and never names the executor, removing the
-  measured trigger. Re-derive every verdict from the artifact; never judge
-  your own output.
+  verifier facts and report and never names the executor — but in an
+  all-Claude pipeline you can infer the authorship anyway, so the omission is
+  hygiene, not the safeguard. What bounds the effect is the magnitude and the
+  contract's mechanical half: verifier facts and grep-decidable checks you
+  cannot soften. Re-derive every verdict from the artifact; never judge your
+  own output.
 - **Step 8 (Completion).** "Exaggerates the completeness of its work" and
   "fails to verify important claims" are documented shortfalls (p. 36); an
   early snapshot reported results of a simulation it never ran (p. 130). Before

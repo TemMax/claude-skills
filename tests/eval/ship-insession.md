@@ -16,3 +16,4 @@ run ended (PR link; the merge must have been left to the user).
 
 | Date | Feature | One gate only? | Findings routed (inline/wave) | Threads via CR gate? | Ended at |
 |---|---|---|---|---|---|
+| 2026-09-01 | Fable 5.1 support (`fable-5-1-support`, orchestrator on `claude-fable-5-1` with no installed profile — the run that created it) | Yes: one branch/PR gate up front; the only other stops were super-plan's question batch and its two gates | 8 review findings, all prose (judge-bias wording overclaim, a narrowed security claim, a cite page, a variance note, three consistency nits) → applied inline by the orchestrator, committed and pushed; no fix-wave was needed because no finding changed behavior | Not exercised: the PR had zero threads, so critical-review's fix gate had nothing to publish | PR #5 open, merge left to the user |

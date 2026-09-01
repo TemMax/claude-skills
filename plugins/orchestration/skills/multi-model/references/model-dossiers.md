@@ -93,7 +93,8 @@ execution over many hours", median 0.56 vs Fable 5's 0.41, outright failure rate
 87.6 / 86.3 / 85.4, episodes up to the full 1M window (p. 176); CursorBench
 3.2.0 at max 73.4 / 70.5 / 70.0, and 68.0 at medium for $3.53 per task (p. 172);
 OSWorld 2.0 77.9/41.7 vs 72.9/36.1 vs 75.4/39.6 (p. 189); AutomationBench
-31.4 / 17.1 / 26.9 (p. 195); AA-Briefcase 1694 / 1572 / 1685 (p. 193); GDPval-AA
+31.4 / 17.1 / 26.9 (p. 167; p. 195 prints Fable 5 as 17.05); AA-Briefcase
+1694 / 1572 / 1685 (p. 193); GDPval-AA
 v2 1853 / 1723 / 1824 (p. 193); Toolathlon Pass@1 77.8 vs Opus 5's 80.6 —
 Fable 5.1 alone ran with classifiers and fallback enabled, 3.4% of trials hit a
 refusal (p. 194); HLE with tools 65.0 / 63.8 / 63.6; DeepSWE v1.1 67.4 (p. 168).
@@ -126,9 +127,12 @@ bias, although the magnitude of the bias is still quite low
 (0.1 points out of 10)" — it grades transcripts more leniently when told the
 author is Claude (pp. 124–125; summary p. 92). This reverses Fable 5's measured
 zero. The shipped runner's judge prompt carries the contract, base, branch,
-verifier facts and report and never names the executor's model, so the measured
-trigger is absent; the bias is small, not zero. Takeaway: it may judge, with
-the executor's identity undisclosed; it never judges its own output.
+verifier facts and report and never names the executor's model; a judge in an
+all-Claude pipeline can still infer the authorship, so what bounds the effect
+is the magnitude (0.1/10) and the contract's mechanical half — verifier facts
+and grep-decidable checks. Takeaway: it may judge, with the executor's
+identity undisclosed and the contract carrying the checks; it never judges its
+own output.
 
 **Honesty profile.** Factuality net score 0.57 on AA-Omniscience, slightly below
 Mythos 5 within error bars, ahead of every other Claude model; abstains less, so
@@ -216,8 +220,9 @@ fallback, minus the injection robustness below.
 
 **Prompt injection — most robust to date, and where the breaks come from.**
 Gray Swan IPI: 0.1% at k=1, 0.7% at k=10, 1.0% at k=15 vs Opus 5's 0.4/3.6/4.8
-and Fable 5's 0.6/4.9/6.5 (p. 83); by surface at k=15: coding 0.3%, tool use
-0.0%, GUI computer use 4.1% (p. 83). Shade coding: every successful attack was
+and Fable 5's 0.6/4.9/6.5 (p. 83; Opus 5's own card printed 0.2/2.0 — the 5.1
+card attributes such shifts to evaluation updates, p. 78); by surface at k=15:
+coding 0.3%, tool use 0.0%, GUI computer use 4.1% (p. 83). Shade coding: every successful attack was
 served by the Opus 4.8 fallback; none of the 2,826 requests Fable 5.1 answered
 directly broke (p. 86); with probes 12.80%, "the lowest of any model with
 safeguards enabled" (p. 87). Computer use 0.07% with thinking (p. 87). Browser

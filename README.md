@@ -57,8 +57,9 @@ strongest long-horizon coder in the lineup (FrontierSWE v2 0.57 vs Opus 5's
 of its measurements change the rules: as a judge it is the first model since
 Opus 4.7 with a measured self-recognition bias (0.1 points out of 10, lenient
 when told the author is Claude, p. 124) — the runner's judge prompt never
-names the executor, so `fable` still judges Opus 5, and the rule is now a
-contract test; on scoped coding its score peaks at `medium` because higher
+names the executor and the bias is bounded by the contract's mechanical
+half, so `fable` still judges Opus 5, and the prompt rule is now a contract
+test; on scoped coding its score peaks at `medium` because higher
 effort adds unrequested out-of-scope edits (p. 169), so every Fable 5.1
 executor prompt carries a scope line; and it is the most injection-robust
 model to date (IPI 0.1% at k=1, p. 83), the executor for untrusted content
