@@ -1,5 +1,5 @@
 status: active
-base: 4809453d405c6824138a1768bd9ef39c82819a40
+base: cd1ca7c0c2c4b8e5d3842bb53e8e71f7769e2f93
 
 # Fable 5.1 support — profiles, dossiers, Step 0 rows, tests
 
@@ -1281,7 +1281,7 @@ runner, the linter and the skill text was an assumption, not a harness
 limit. Waves 3–4 make Opus 4.8 addressable as exactly one pinned full ID,
 `claude-opus-4-8`, keeping every other full ID rejected (the existing
 `claude-haiku-4-5` rejection test must still pass). Base for wave 3 is the
-pushed tip `4809453d405c6824138a1768bd9ef39c82819a40`.
+pushed tip `cd1ca7c0c2c4b8e5d3842bb53e8e71f7769e2f93`.
 
 ## Task runner-opus-4-8-id
 
