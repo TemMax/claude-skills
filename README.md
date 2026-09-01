@@ -9,9 +9,9 @@ linter, and a four-tier test suite (see `tests/README.md`).
 - **`orchestration`** — the full pipeline: `ship` conducts planning
   (`super-plan`) and execution (`multi-model`) into a reviewed PR. The
   orchestrator model researches, plans into contract-carrying waves, and
-  launches executor subagents (Haiku 4.5 / Sonnet 5 / Opus 5 / Opus 4.8), each
-  isolated in its own worktree and judged against its contract by a different
-  model.
+  launches executor subagents (Haiku 4.5 / Sonnet 5 / Opus 5 / Opus 4.8 / Fable
+  5.1 as an explicit rung), each isolated in its own worktree and judged
+  against its contract by a different model.
 - **`code-review`** — critical, evidence-based review of uncommitted changes or
   a GitHub PR, performed by the session's own model.
 
@@ -34,6 +34,7 @@ to exactly one profile file and forbids reading the others:
 
 | Model ID | orchestration profile | code-review profile |
 |---|---|---|
+| `claude-fable-5-1` | `references/orchestrator-fable-5-1.md` | `references/reviewer-fable-5-1.md` |
 | `claude-fable-5` | `references/orchestrator-fable-5.md` | `references/reviewer-fable-5.md` |
 | `claude-opus-5` (any context suffix) | `references/orchestrator-opus-5.md` | `references/reviewer-opus-5.md` |
 | `claude-opus-4-8` (any context suffix, e.g. `[1m]`) | `references/orchestrator-opus-4-8.md` | `references/reviewer-opus-4-8.md` |
@@ -48,6 +49,24 @@ overthinking / self-verification loops), so its profile runs at `high`, not
 names an unverified-subagent-relay failure mode, so the Opus 5 orchestrator
 profile doubles down on verifying subagent claims. Grounded in the Claude Opus 5
 system card (193 pp., July 2026).
+
+Fable 5.1 (`claude-fable-5-1`) has its own profiles, grounded in the Claude
+Fable 5.1 & Mythos 5.1 system card (212 pp., September 2026). It is the
+strongest long-horizon coder in the lineup (FrontierSWE v2 0.57 vs Opus 5's
+0.52, pp. 170–171) at roughly half Fable 5's cost per task (p. 5), and three
+of its measurements change the rules: as a judge it is the first model since
+Opus 4.7 with a measured self-recognition bias (0.1 points out of 10, lenient
+when told the author is Claude, p. 124) — the runner's judge prompt never
+names the executor, so `fable` still judges Opus 5, and the rule is now a
+contract test; on scoped coding its score peaks at `medium` because higher
+effort adds unrequested out-of-scope edits (p. 169), so every Fable 5.1
+executor prompt carries a scope line; and it is the most injection-robust
+model to date (IPI 0.1% at k=1, p. 83), the executor for untrusted content
+whose compromise would reach secrets or actions. Its card also documents an
+orchestrator failure the profile guards against: distorting user intent to
+subagents, including a fabricated user authorization and a
+`bypassPermissions` launch (pp. 95–96). The short name `fable` now resolves
+to Fable 5.1; Fable 5's profiles and dossier sections stay for history.
 
 The profile carries everything that is genuinely model-specific: the session's
 reasoning-effort guidance, amendments to the numbered process steps, and the
@@ -80,6 +99,9 @@ higher effort roughly halves prompt-injection susceptibility (p. 80). Low/medium
 effort on Opus 4.8 is executor territory (its minimum effort already matches
 Opus 4.7's maximum). No equivalent level is pinned for Fable 5 — that
 measurement does not exist for it, and the Fable profile says so explicitly.
+The same holds for Fable 5.1, whose profile names xhigh as the documented
+long-horizon sweet spot (xhigh matches max at 19–25% fewer tokens,
+pp. 193–194) without pinning it.
 
 Both skills also ship a dossier (`references/model-dossiers.md`,
 `references/reviewer-dossier.md`) with benchmark numbers, documented failure
@@ -203,7 +225,7 @@ plugins/
         references/
           wave-runner.workflow.mjs   # the escalation ladder as code
           supervisor-prompt.md
-          orchestrator-{fable-5,opus-5,opus-4-8}.md
+          orchestrator-{fable-5-1,fable-5,opus-5,opus-4-8}.md
           model-dossiers.md
   code-review/
     .claude-plugin/plugin.json
@@ -211,7 +233,7 @@ plugins/
       critical-review/
         SKILL.md
         references/
-          reviewer-{fable-5,opus-5,opus-4-8}.md
+          reviewer-{fable-5-1,fable-5,opus-5,opus-4-8}.md
           reviewer-dossier.md
 tests/                           # structure / contracts / behaviour / live eval
   run.sh                         # ./tests/run.sh [--live]
