@@ -17,7 +17,7 @@ profile file:
 | Your model ID | Read this file |
 |---|---|
 | `claude-fable-5-1` | `${CLAUDE_SKILL_DIR}/references/orchestrator-fable-5-1.md` |
-| `claude-fable-5` (exactly — `claude-fable-5-1` is the row above) | `${CLAUDE_SKILL_DIR}/references/orchestrator-fable-5.md` |
+| `claude-fable-5` | `${CLAUDE_SKILL_DIR}/references/orchestrator-fable-5.md` |
 | `claude-opus-5` (any context-window suffix) | `${CLAUDE_SKILL_DIR}/references/orchestrator-opus-5.md` |
 | `claude-opus-4-8` (any context-window suffix, e.g. `[1m]`) | `${CLAUDE_SKILL_DIR}/references/orchestrator-opus-4-8.md` |
 | anything else | no profile exists — use the model-agnostic rules below only, and tell the user which model you are and that no profile matched |
