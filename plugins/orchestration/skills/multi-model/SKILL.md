@@ -91,12 +91,13 @@ English does not mean English replies.
 | Sonnet hit its ceiling after a fix iteration | Opus 5 executor | The heavy-executor upgrade over Sonnet |
 | Reading untrusted external content (web, fetched pages, hostile files) | Opus 5 executor | Most injection-robust affordable model (IPI 0.4% at k=1); still pair with platform safeguards |
 | Untrusted content whose compromise would reach secrets or irreversible actions (content known hostile, an agent that can act) | Fable 5.1 executor (`fable`) | Most injection-robust model to date: IPI 0.1% at k=1 / 1.0% at k=15 vs Opus 5's 0.4 / 4.8; none of 2,826 directly-answered coding requests broke (pp. 83, 86). Opus 5 stays the cost default |
-| Reverse-engineering / vulnerability discovery in compiled binaries | Opus 4.8 executor | Opus 5's and Fable 5.1's cyber classifiers block binaries (Fable 5.1 card p. 52); Opus 4.8 is where the fallback lands anyway (p. 46) — choose it, don't fall into it |
+| Reverse-engineering / vulnerability discovery in compiled binaries | Opus 4.8 executor (`claude-opus-4-8`) | Opus 5's and Fable 5.1's cyber classifiers block binaries (Fable 5.1 card p. 52); Opus 4.8 is where the fallback lands anyway (p. 46) — choose it, don't fall into it |
 
 Torn between Haiku and Sonnet → Sonnet. Torn between Sonnet and Opus → improve the
 task spec first, then upgrade the model. Opus 5 is the default heavy executor and
 verifier; Opus 4.8 is retained only for compiled-binary work and as the
-cyber-refusal fallback.
+cyber-refusal fallback. In plans and runner args it is addressed by its
+full ID `claude-opus-4-8`.
 
 **Routing anti-patterns:** no sub-orchestrators — executors never spawn their own
 subagents (documented failures in deep delegation chains: status honesty, not
@@ -118,7 +119,7 @@ expensive rate available. Never spawn a research agent without naming its model.
 | Mechanical pattern search: occurrences of a known string or shape | Haiku 4.5 | Zero decisions; simple file searches are its documented lane |
 | Closed enumeration: files, call sites, conventions, test commands that actually run | Sonnet 5, low/medium | Strong at digging through large code volumes (ProgramBench 76–86%, 1M context) and cheap; a closed question neutralizes its documented fabricate-when-information-is-missing failure (Sonnet 5 card, p. 71) |
 | Open research sub-question: how a subsystem works, what depends on what, why it is shaped this way | Opus 5, medium/high | First Claude to saturate the lazy-investigation eval — a thorough investigator (p. 110); cap at high, its effort curve inverts |
-| A report the orchestrator will trust without re-verification, or reasoning over a near-1M-token surface | Opus 4.8 | Honesty ceiling (0.00 misreported rate) and the best long-context reasoning in the comparison set (GraphWalks 1M 68.1); DRACO rises monotonically through max |
+| A report the orchestrator will trust without re-verification, or reasoning over a near-1M-token surface | Opus 4.8 (`claude-opus-4-8`) | Honesty ceiling (0.00 misreported rate) and the best long-context reasoning in the comparison set (GraphWalks 1M 68.1); DRACO rises monotonically through max |
 
 Torn between Haiku and Sonnet → Sonnet, as always. The session's own model is
 never the answer here: research is gathering, not deciding — the decisions stay
@@ -144,7 +145,7 @@ is your profile's business, not this table's.
 | Haiku 4.5 | — does not support effort — | | | |
 | Sonnet 5 | obvious solution, but the code must be read | routine implementation per spec | default for non-trivial work | hardest execution tasks; plateau! |
 | Opus 5 executor | unusually strong on simple/scoped tasks | well-specified work | default for non-trivial work | avoid — overthinking/self-verification risk |
-| Opus 4.8 executor | — | most well-specified tasks (min effort ≈ Opus 4.7 max) | debugging, verification, long horizon | research-grade only |
+| Opus 4.8 executor (`claude-opus-4-8`) | — | most well-specified tasks (min effort ≈ Opus 4.7 max) | debugging, verification, long horizon | research-grade only |
 | Fable 5.1 executor (explicit ladder rung only) | scoped, closed tasks | **peak on scoped coding** (FrontierCode, p. 169) — always with a scope/brevity line | long-horizon work | xhigh ≈ max at 19–25% fewer tokens (pp. 193–194); out-of-scope edits rise with effort — the scope line is mandatory |
 
 Signal rule: wanting to give Sonnet xhigh because the task is open-ended → that
@@ -345,7 +346,7 @@ everything the executor did.
 |---|---|---|
 | Haiku 4.5 | Opus 5 | high |
 | Sonnet 5 | Opus 5 | high |
-| Opus 5 | Fable 5.1 via `fable` (fallback: Opus 4.8 — prose-only, not addressable by the runner's short names) | high |
+| Opus 5 | Fable 5.1 via `fable` (fallback: Opus 4.8 via `claude-opus-4-8`) | high |
 | Opus 4.8 | Opus 5 or Fable 5.1 | high |
 | Fable 5.1 (explicit ladder rung only) | Opus 5 | high |
 
@@ -713,8 +714,11 @@ them:
   unparseable to the harness.
 - `Date.now()`, `new Date()` and `Math.random()` **throw** inside a script; they
   would break resume. Timestamps come in through `args`.
-- `opts.model` takes the short names (`haiku`, `sonnet`, `opus`, `fable`), not
-  full model IDs.
+- `opts.model` takes the short names (`haiku`, `sonnet`, `opus`, `fable`) or
+  the one pinned full ID `claude-opus-4-8`. Workflow's `agent()` accepts
+  full model IDs — measured 2026-09-01, probe `wf_93d94701-ae1`:
+  `claude-opus-4-8` → Opus 4.8, `opus-4-8` rejected — and the runner and the
+  plan linter accept exactly that one full ID and no other.
 - The script's **return value** is the result. `console.log` is not a channel;
   `log()` emits progress, not results.
 - `agent()` returns `null` when a subagent dies after retries — every call site

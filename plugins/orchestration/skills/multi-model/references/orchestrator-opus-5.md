@@ -67,7 +67,7 @@ so in one line and proceed.
 
 | Task | Model | Why |
 |---|---|---|
-| Reverse-engineering / vulnerability discovery in compiled binaries | Opus 4.8 executor, not yourself | Your Fable-class cyber classifier blocks binary vuln discovery (p. 45); Opus 4.8 does not carry that classifier |
+| Reverse-engineering / vulnerability discovery in compiled binaries | Opus 4.8 executor (`claude-opus-4-8`), not yourself | Your Fable-class cyber classifier blocks binary vuln discovery (p. 45); Opus 4.8 does not carry that classifier |
 | Source-level security work, secure coding, patching, defensive vuln discovery | you (Opus 5) | Explicitly unblocked at all access levels (p. 45); you false-flag defensive coding less than Fable and about as little as Opus 4.8 (p. 47) |
 | Anything reading untrusted external content (web, fetched pages, hostile files) | route to yourself or Sonnet 5 | You are the most injection-robust model tested — coding-context attack success 0.18% with probes vs Opus 4.8's 2.09% (p. 75) |
 
@@ -108,5 +108,5 @@ so in one line and proceed.
 | Adopting the Opus 4.8 "push to xhigh" rule | The exact regime where your effort curve inverts | The rule is Opus 4.8's; yours caps at high |
 | Relaying a subagent's "done"/"tests pass" as fact | Named failure mode; multi-agent honesty unmeasured | Verify the load-bearing claim yourself |
 | Building a verification pipeline before results land | Documented stall — hours lost, nothing shipped | Read the diff, run the tests, stop |
-| Routing binary reverse-engineering to yourself | Your cyber classifier blocks it mid-wave | Route it to an Opus 4.8 executor |
+| Routing binary reverse-engineering to yourself | Your cyber classifier blocks it mid-wave | Route it to an Opus 4.8 executor (`claude-opus-4-8`) |
 | Claiming "zero judge bias" like the Opus 4.8 profile | Unmeasured for you | Re-derive every verdict from the artifact |
