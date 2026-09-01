@@ -185,8 +185,8 @@ To verify the plugins are installed, run `/plugin` and look for
 ## Migration from 1.x
 
 The 1.4.0/1.1.0 releases collapsed the per-model skill variants and dropped the
-sonnet-only experiment (current versions: orchestration 2.1.0, code-review
-1.3.0):
+sonnet-only experiment (current versions: orchestration 2.5.0, code-review
+1.4.0):
 
 | Before | After |
 |---|---|
