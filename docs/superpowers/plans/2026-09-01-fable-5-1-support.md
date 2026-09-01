@@ -1,5 +1,5 @@
-status: done
-base: d45fd7ff6856f55ae636e79fa729be3d533aaf8f
+status: active
+base: 4809453d405c6824138a1768bd9ef39c82819a40
 
 # Fable 5.1 support — profiles, dossiers, Step 0 rows, tests
 
@@ -290,6 +290,108 @@ empty ladder so no rework attempt ever lands on the judge's own model.
           ],
           "report_must_answer": [
             "Paste `git diff --stat` and confirm exactly seven files changed."
+          ] } }
+    ] },
+  { "wave": 3,
+    "supervisor": { "model": "opus", "effort": "high" },
+    "tasks": [
+      { "id": "runner-opus-4-8-id",
+        "branch": "wave/runner-opus-4-8-id",
+        "executor": { "model": "sonnet", "effort": "high" },
+        "ladder": ["opus"],
+        "contract": {
+          "files_allowed": ["plugins/orchestration/skills/multi-model/references/wave-runner.workflow.mjs", "tests/lib/wave-runner.test.mjs", "tests/wave-runner.test.sh"],
+          "files_forbidden": ["plugins/orchestration/skills/multi-model/SKILL.md", "plugins/orchestration/skills/super-plan/**", "tests/lib/workflow-sim.mjs", "tests/skills-contract.sh", "tests/plan-lint.test.sh"],
+          "must_run": [
+            { "cmd": "bash tests/wave-runner.test.sh", "evidence": "required" },
+            { "cmd": "grep -qF \"'claude-opus-4-8'\" plugins/orchestration/skills/multi-model/references/wave-runner.workflow.mjs", "evidence": "required" },
+            { "cmd": "! grep -o 'claude-[a-z0-9.-]*' plugins/orchestration/skills/multi-model/references/wave-runner.workflow.mjs | grep -v '^claude-opus-4-8$' | grep -q .", "evidence": "required" },
+            { "cmd": "grep -c 'claude-opus-4-8' tests/lib/wave-runner.test.mjs | awk '{exit !($1 >= 3)}'", "evidence": "required" },
+            { "cmd": "grep -qF \"grep -v '^claude-opus-4-8$'\" tests/wave-runner.test.sh", "evidence": "required" },
+            { "cmd": "grep -qF \"const LADDER_ORDER = ['haiku', 'sonnet', 'opus']\" plugins/orchestration/skills/multi-model/references/wave-runner.workflow.mjs", "evidence": "required" },
+            { "cmd": "bash tests/skills-contract.sh", "evidence": "required" }
+          ],
+          "forbidden_moves": [
+            "deleting or weakening any existing simulator scenario or static check — the short-name check is replaced by a stricter one, never dropped",
+            "changing LADDER_ORDER, MAX_ATTEMPTS_PER_RUNG, MAX_ATTEMPTS_PER_TASK or any ladder logic",
+            "adding any full model ID other than claude-opus-4-8"
+          ],
+          "report_must_answer": [
+            "Which scenarios did you add, and what does each assert about opts.model?",
+            "Paste the simulator run's final lines and the static-check PASS lines."
+          ] } },
+      { "id": "lint-opus-4-8-id",
+        "branch": "wave/lint-opus-4-8-id",
+        "executor": { "model": "sonnet", "effort": "medium" },
+        "ladder": ["opus"],
+        "contract": {
+          "files_allowed": ["plugins/orchestration/skills/super-plan/references/plan-lint.mjs", "tests/plan-lint.test.sh"],
+          "files_forbidden": ["plugins/orchestration/skills/multi-model/**", "tests/fixtures/**", "tests/lib/**", "tests/skills-contract.sh", "tests/wave-runner.test.sh"],
+          "must_run": [
+            { "cmd": "bash tests/plan-lint.test.sh", "evidence": "required" },
+            { "cmd": "grep -qF \"'claude-opus-4-8'\" plugins/orchestration/skills/super-plan/references/plan-lint.mjs", "evidence": "required" },
+            { "cmd": "grep -c 'claude-opus-4-8' tests/plan-lint.test.sh | awk '{exit !($1 >= 2)}'", "evidence": "required" },
+            { "cmd": "grep -qF 'opus-4-8' tests/plan-lint.test.sh", "evidence": "required" },
+            { "cmd": "node plugins/orchestration/skills/super-plan/references/plan-lint.mjs docs/superpowers/plans/2026-09-01-fable-5-1-support.md | grep -q '^OK'", "evidence": "required" }
+          ],
+          "forbidden_moves": [
+            "deleting or weakening any existing linter rule or test mutation — the long-model-id rejection for claude-haiku-4-5 must still pass",
+            "editing tests/fixtures/plans/clean.md",
+            "adding any full model ID other than claude-opus-4-8"
+          ],
+          "report_must_answer": [
+            "Which mutations did you add and what does each expect (exit code and named message)?",
+            "Paste the final passed/failed line of tests/plan-lint.test.sh."
+          ] } },
+      { "id": "docs-opus-4-8-id",
+        "branch": "wave/docs-opus-4-8-id",
+        "executor": { "model": "sonnet", "effort": "medium" },
+        "ladder": ["opus"],
+        "contract": {
+          "files_allowed": ["plugins/orchestration/skills/multi-model/SKILL.md", "plugins/orchestration/skills/multi-model/references/orchestrator-fable-5-1.md", "plugins/orchestration/skills/multi-model/references/orchestrator-opus-5.md"],
+          "files_forbidden": ["plugins/orchestration/skills/multi-model/references/wave-runner.workflow.mjs", "plugins/orchestration/skills/multi-model/references/model-dossiers.md", "plugins/orchestration/skills/super-plan/**", "plugins/code-review/**", "tests/**", "README.md"],
+          "must_run": [
+            { "cmd": "bash tests/skills-contract.sh", "evidence": "required" },
+            { "cmd": "grep -qF '| Opus 5 | Fable 5.1 via `fable` (fallback: Opus 4.8 via `claude-opus-4-8`) | high |' plugins/orchestration/skills/multi-model/SKILL.md", "evidence": "required" },
+            { "cmd": "! grep -q 'prose-only, not addressable' plugins/orchestration/skills/multi-model/SKILL.md", "evidence": "required" },
+            { "cmd": "grep -qF 'wf_93d94701-ae1' plugins/orchestration/skills/multi-model/SKILL.md", "evidence": "required" },
+            { "cmd": "grep -c 'claude-opus-4-8' plugins/orchestration/skills/multi-model/SKILL.md | awk '{exit !($1 >= 5)}'", "evidence": "required" },
+            { "cmd": "grep -c 'claude-opus-4-8' plugins/orchestration/skills/multi-model/references/orchestrator-fable-5-1.md | awk '{exit !($1 >= 2)}'", "evidence": "required" },
+            { "cmd": "grep -c 'claude-opus-4-8' plugins/orchestration/skills/multi-model/references/orchestrator-opus-5.md | awk '{exit !($1 >= 2)}'", "evidence": "required" },
+            { "cmd": "grep -qF 'not addressable' plugins/orchestration/skills/multi-model/SKILL.md; test $? -eq 1", "evidence": "required" }
+          ],
+          "forbidden_moves": [
+            "removing or rewording any line that tests/skills-contract.sh greps for",
+            "changing the frontmatter version line",
+            "editing anything other than the lines named in the task"
+          ],
+          "report_must_answer": [
+            "List every edit as old-line → new-line, in file order.",
+            "Paste the final passed/failed line of tests/skills-contract.sh."
+          ] } }
+    ] },
+  { "wave": 4,
+    "supervisor": { "model": "opus", "effort": "high" },
+    "tasks": [
+      { "id": "pins-opus-4-8-id",
+        "branch": "wave/pins-opus-4-8-id",
+        "executor": { "model": "sonnet", "effort": "medium" },
+        "ladder": ["opus"],
+        "contract": {
+          "files_allowed": ["tests/skills-contract.sh"],
+          "files_forbidden": ["plugins/**", "tests/lib/**", "tests/wave-runner.test.sh", "tests/plan-lint.test.sh", "README.md"],
+          "must_run": [
+            { "cmd": "bash tests/skills-contract.sh", "evidence": "required" },
+            { "cmd": "bash -n tests/skills-contract.sh", "evidence": "required" },
+            { "cmd": "grep -qF 'section \"Opus 4.8 is addressable by its full model ID\"' tests/skills-contract.sh", "evidence": "required" },
+            { "cmd": "grep -c 'claude-opus-4-8' tests/skills-contract.sh | awk '{exit !($1 >= 6)}'", "evidence": "required" }
+          ],
+          "forbidden_moves": [
+            "deleting or weakening any existing check",
+            "a check that passes on an empty file (every grep names a specific string)"
+          ],
+          "report_must_answer": [
+            "How many checks did you add, and what is the new passed/failed summary line?"
           ] } }
     ] }
 ] }
@@ -1167,3 +1269,159 @@ after (it requires plugin.json and every SKILL.md version to agree).
 
 Run `bash tests/structure.sh` and `bash tests/skills-contract.sh`; both must
 pass. `git diff --stat` must show exactly seven files.
+
+## Amendment 2026-09-01 — Opus 4.8 is addressable by its full model ID
+
+Probe `wf_93d94701-ae1` (a five-agent Workflow, each agent asked to report
+its own model ID): `claude-opus-4-8` → `claude-opus-4-8[1m]`, `opus` →
+`claude-opus-5[1m]`, `fable` → `claude-fable-5-1`, `claude-opus-4-8[1m]` →
+`claude-opus-4-8[1m]`, `opus-4-8` → rejected by the harness. So Workflow's
+`agent()` accepts full model IDs and the "short names only" rule in the
+runner, the linter and the skill text was an assumption, not a harness
+limit. Waves 3–4 make Opus 4.8 addressable as exactly one pinned full ID,
+`claude-opus-4-8`, keeping every other full ID rejected (the existing
+`claude-haiku-4-5` rejection test must still pass). Base for wave 3 is the
+pushed tip `4809453d405c6824138a1768bd9ef39c82819a40`.
+
+## Task runner-opus-4-8-id
+
+Make the shipped runner accept `claude-opus-4-8` as a model name for
+executors, ladder rungs, supervisors and verifiers, and keep every other
+full model ID rejected. Three files, nothing else.
+
+1. `plugins/orchestration/skills/multi-model/references/wave-runner.workflow.mjs`:
+   change line 11 from `const MODELS = ['haiku', 'sonnet', 'opus', 'fable']`
+   to `const MODELS = ['haiku', 'sonnet', 'opus', 'fable', 'claude-opus-4-8']`
+   and add a comment line directly above it:
+   `// 'claude-opus-4-8' is the one full ID the harness resolves (Workflow's agent() accepts full IDs; 'opus-4-8' is rejected — probe wf_93d94701-ae1, 2026-09-01). Explicit rung only: not in LADDER_ORDER.`
+   In the two validation messages that end with `(short names only)`
+   (executor.model and ladder), change that suffix to
+   `(short names, or the pinned full ID claude-opus-4-8)`. Do not change
+   `LADDER_ORDER`, the attempt caps, `defaultLadder`, or anything else —
+   `defaultLadder('claude-opus-4-8')` already returns `[]` because the name
+   is not in `LADDER_ORDER`, exactly like `fable`.
+2. `tests/wave-runner.test.sh`: replace the static check
+   `check "short model names only" "! grep -q 'claude-' $W"` with a stricter
+   one that allows exactly the pinned ID and nothing else:
+   `check "no full model id except the pinned claude-opus-4-8" "! grep -o 'claude-[a-z0-9.-]*' $W | grep -v '^claude-opus-4-8$' | grep -q ."`
+   Keep every other check verbatim.
+3. `tests/lib/wave-runner.test.mjs`: add scenarios in the file's existing
+   style (`test(...)` with `runWorkflow`, `waveArgs`, `task`, `stub`, `V`):
+   - **S9a** — a task with `executor: { model: 'claude-opus-4-8', effort: 'high' }`
+     and `ladder: []`, supervisor `{ model: 'claude-opus-4-8', effort: 'high' }`,
+     stub returning `V.ok()`: the wave returns `status: 'done'`, the task
+     `status: 'ok'`, and at least one recorded agent call has
+     `opts.model === 'claude-opus-4-8'` (assert on `calls`).
+   - **S9b** — `executor: { model: 'opus-4-8' }` (no `claude-` prefix) and,
+     separately or in the same scenario, `ladder: ['claude-sonnet-5']`: the
+     result is `invalid-args`, the joined errors match `/executor\.model/`
+     and `/ladder/`, and zero agent calls were made.
+   Look at how S8c builds a bad wave and at how the existing ok scenario
+   inspects `calls` before writing these; do not modify existing scenarios.
+
+Run `bash tests/wave-runner.test.sh` (green at base; must stay green with
+the new scenarios) and `bash tests/skills-contract.sh` (green at base;
+must stay green). The greps in the contract are red at base by design —
+they check what this task adds.
+
+## Task lint-opus-4-8-id
+
+Make the shipped plan linter accept `claude-opus-4-8` and keep every other
+full ID rejected. Two files, nothing else.
+
+1. `plugins/orchestration/skills/super-plan/references/plan-lint.mjs`:
+   change `const MODELS = ['haiku', 'sonnet', 'opus', 'fable']` to
+   `const MODELS = ['haiku', 'sonnet', 'opus', 'fable', 'claude-opus-4-8']`
+   with a comment line directly above it:
+   `// 'claude-opus-4-8' is the one full ID the runner accepts (probe wf_93d94701-ae1, 2026-09-01); every other full ID stays rejected.`
+   In every validation message that ends with `(short names only)`
+   (supervisor.model, executor.model, ladder) change that suffix to
+   `(short names, or the pinned full ID claude-opus-4-8)`. Nothing else
+   changes.
+2. `tests/plan-lint.test.sh`: keep every existing mutation verbatim —
+   including `"model": "haiku"` → `"model": "claude-haiku-4-5"` expecting
+   the `executor.model` error — and add, in the "each error class is caught
+   by name" section or a new `section "the pinned full id"`:
+   - mutation `"model": "sonnet"` → `"model": "claude-opus-4-8"`: exit code
+     0 and output contains `OK: 0 error(s)`;
+   - mutation `"ladder": ["opus"]` → `"ladder": ["claude-opus-4-8"]`: exit
+     code 0 and output contains `OK: 0 error(s)`;
+   - mutation `"model": "sonnet"` → `"model": "opus-4-8"`: exit code 1 and
+     output contains `executor.model`.
+   Use the file's `mutate`, `expect` and `contains` helpers.
+
+Run `bash tests/plan-lint.test.sh` (green at base; must stay green) and
+confirm the linter still passes this plan file (the last must_run).
+
+## Task docs-opus-4-8-id
+
+Update the prose so it stops calling Opus 4.8 unaddressable and names the
+pinned full ID. Three files, exact edits, nothing else. Run
+`bash tests/skills-contract.sh` before and after — it greps these files for
+specific lines and must stay green; never reword a line you were not told
+to change; do not touch the frontmatter `version:` line.
+
+`plugins/orchestration/skills/multi-model/SKILL.md`:
+1. The bullet beginning "- `opts.model` takes the short names (`haiku`,
+   `sonnet`, `opus`, `fable`), not" (two wrapped lines ending "full model
+   IDs.") becomes: "- `opts.model` takes the short names (`haiku`, `sonnet`,
+   `opus`, `fable`) or the one pinned full ID `claude-opus-4-8`. Workflow's
+   `agent()` accepts full model IDs — measured 2026-09-01, probe
+   `wf_93d94701-ae1`: `claude-opus-4-8` → Opus 4.8, `opus-4-8` rejected —
+   and the runner and the plan linter accept exactly that one full ID and no
+   other." (rewrap at ~80 columns).
+2. The supervisor-table row that currently reads
+   "| Opus 5 | Fable 5.1 via `fable` (fallback: Opus 4.8 — prose-only, not
+   addressable by the runner's short names) | high |" becomes exactly
+   "| Opus 5 | Fable 5.1 via `fable` (fallback: Opus 4.8 via `claude-opus-4-8`) | high |".
+3. In the Model Routing table, the compiled-binaries row's Model cell
+   "Opus 4.8 executor" becomes "Opus 4.8 executor (`claude-opus-4-8`)"; in
+   the sentence "Opus 4.8 is retained only for compiled-binary work and as
+   the cyber-refusal fallback." append " In plans and runner args it is
+   addressed by its full ID `claude-opus-4-8`."
+4. In the Research Routing table, the row whose Model cell is "Opus 4.8"
+   (the trusted-report / near-1M row) gets "Opus 4.8 (`claude-opus-4-8`)".
+5. In the executor effort table, the row starting "| Opus 4.8 executor |"
+   gets "| Opus 4.8 executor (`claude-opus-4-8`) |".
+
+`plugins/orchestration/skills/multi-model/references/orchestrator-fable-5-1.md`:
+6. In the Amendment to Model Routing table, the Model cell "Opus 4.8
+   executor, right away" becomes "Opus 4.8 executor (`claude-opus-4-8`),
+   right away".
+7. In the Common Mistakes table, the Correct cell "Name an Opus 4.8 executor
+   from the start" becomes "Name a `claude-opus-4-8` executor from the
+   start".
+
+`plugins/orchestration/skills/multi-model/references/orchestrator-opus-5.md`:
+8. In the Amendment to Model Routing table, the Model cell "Opus 4.8
+   executor, not yourself" becomes "Opus 4.8 executor (`claude-opus-4-8`),
+   not yourself".
+9. In the Common Mistakes table, the Correct cell "Route it to an Opus 4.8
+   executor" becomes "Route it to an Opus 4.8 executor (`claude-opus-4-8`)".
+
+Report every edit as old → new.
+
+## Task pins-opus-4-8-id
+
+Add contract-test pins to `tests/skills-contract.sh` (only file), in the
+file's `section` / `check` style, placed just before the final `summary`
+line, with this exact header:
+
+```
+section "Opus 4.8 is addressable by its full model ID"
+```
+
+Checks (names are yours; expressions these or stricter):
+- the runner accepts the pinned ID: `grep -qF "'claude-opus-4-8'" $WR`;
+- the linter accepts it: `grep -qF "'claude-opus-4-8'" plugins/orchestration/skills/super-plan/references/plan-lint.mjs`;
+- the runner carries no other full ID: `! grep -o 'claude-[a-z0-9.-]*' $WR | grep -v '^claude-opus-4-8$' | grep -q .`;
+- the simulator tier guards that: `grep -qF "grep -v '^claude-opus-4-8$'" tests/wave-runner.test.sh`;
+- the linter tier rejects the bare `opus-4-8`: `grep -qF '"model": "opus-4-8"' tests/plan-lint.test.sh`;
+- the skill names the ID in the supervisor row: ``grep -qF 'fallback: Opus 4.8 via `claude-opus-4-8`' $MM``;
+- the skill's opts.model rule names it: `grep -qF 'pinned full ID' $MM`;
+- the "not addressable" wording is gone: `! grep -q 'not addressable' $MM`;
+- the fable-5.1 and opus-5 profiles name it: `grep -qF 'claude-opus-4-8' <each profile>`.
+
+Base is the merged wave-3 tip, so every grep has something to find. Run
+`bash -n tests/skills-contract.sh` and `bash tests/skills-contract.sh`;
+paste the final passed/failed line.
