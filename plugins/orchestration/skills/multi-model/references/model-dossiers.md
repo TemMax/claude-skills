@@ -1,13 +1,16 @@
 # Model Dossiers for Orchestration
 
-Sources: official Anthropic system cards — Claude Fable 5 / Mythos 5 (319 pp.,
-June 2026), Claude Opus 4.8 (246 pp., May–June 2026), Claude Sonnet 5 (145 pp.,
-June 2026). Page numbers refer to the corresponding card.
+Sources: official Anthropic system cards — Claude Fable 5.1 / Mythos 5.1 (212 pp.,
+September 2026), Claude Fable 5 / Mythos 5 (319 pp., June 2026), Claude Opus 4.8
+(246 pp., May–June 2026), Claude Sonnet 5 (145 pp., June 2026). Page numbers
+refer to the corresponding card.
 
 Both Fable 5 and Opus 4.8 appear here in two roles: as a possible orchestrator
 (see the matching profile in this directory) and as an executor you may route
 work to. The operational rules live in SKILL.md and the profiles; this file is
-the evidence behind them.
+the evidence behind them. Fable 5.1 is the model the short name `fable` resolves
+to in the harness as of September 2026; Fable 5 stays here for history and is no
+longer addressable as an executor or judge.
 
 ---
 
@@ -66,6 +69,187 @@ async/non-blocking subagents ahead of a blocking orchestrator, the Opus card
 measures the blocking orchestrator as its highest-scoring harness. Different
 cards, different harnesses — each profile follows its own card, which is why the
 launch rule is profile-specific rather than shared.
+
+---
+
+## Fable 5.1 (orchestrator, heavy executor, judge — what `fable` resolves to)
+
+**Positioning.** Same weights as Mythos 5.1; Fable 5.1 is the general-access
+configuration with safeguards (p. 11). "More capable than Fable 5", state of the
+art on many benchmarks (p. 167); largest gains in terminal-based
+scientific/engineering work, computer use, long-horizon agentic and professional
+work (p. 4). No blanket claim against Opus 5 — the card is per-benchmark. Cost:
+matches or exceeds Fable 5 at roughly half the cost per task on agentic coding
+(p. 5); on FrontierCode cheaper than Fable 5 at every effort (about half at
+low/medium/high, ~30% at xhigh/max) and cheaper than Opus 5 at low/medium/high
+(p. 169). Benchmarks as Fable 5.1 / Fable 5 / Opus 5, p. 167 unless noted:
+SWE-bench Pro 81.2 / 80 / 79.2; Multilingual 89.1 / 86.6 / 89.5 (Opus 5 leads);
+Multimodal 54.7 / 54.1 / 59.4 (Opus 5 leads); Terminal-Bench 4.0
+55.8 / 42.0 / 52.3 (Mythos 5.1 60.9 on the same weights, p. 171);
+Terminal-Bench-Science 0.1 52.6 / 24.7 / 29.0 (p. 172); FrontierSWE v2
+0.57 / 0.48 / 0.52 — "strongest on tasks that require sustained reasoning and
+execution over many hours", median 0.56 vs Fable 5's 0.41, outright failure rate
+5% vs Opus 5's 6% and Fable 5's 8% (pp. 170–171); ProgramBench
+87.6 / 86.3 / 85.4, episodes up to the full 1M window (p. 176); CursorBench
+3.2.0 at max 73.4 / 70.5 / 70.0, and 68.0 at medium for $3.53 per task (p. 172);
+OSWorld 2.0 77.9/41.7 vs 72.9/36.1 vs 75.4/39.6 (p. 189); AutomationBench
+31.4 / 17.1 / 26.9 (p. 195); AA-Briefcase 1694 / 1572 / 1685 (p. 193); GDPval-AA
+v2 1853 / 1723 / 1824 (p. 193); Toolathlon Pass@1 77.8 vs Opus 5's 80.6 —
+Fable 5.1 alone ran with classifiers and fallback enabled, 3.4% of trials hit a
+refusal (p. 194); HLE with tools 65.0 / 63.8 / 63.6; DeepSWE v1.1 67.4 (p. 168).
+Weak axis: presentation quality (AA-Briefcase 1495 vs Opus 5's 1572, p. 194).
+Thinking cannot be disabled for Fable 5.1 (pp. 59, 85).
+
+**Effort — a documented peak at medium on scoped coding, and why.** On
+FrontierCode, "Fable 5's score keeps climbing with effort, whereas Fable 5.1's
+peaks at medium, scoring below Fable 5 at high, xhigh, and max" (p. 169). Cause:
+at higher effort it "occasionally adds more small, unrequested changes in files
+outside the task, such as a documentation comment in an adjacent file, an edit
+to a docs page, or a new CI job where an existing one could have been reused";
+task-correctness pass rate keeps rising with effort — only the scope criterion
+falls; "Adding a brevity instruction (including a note to avoid unnecessary
+comments and documentation) helped reduce out-of-scope edits" (p. 169). Headline
+FrontierCode at medium: 63.6 Extended / 50.9 Main vs Fable 5 at xhigh
+64.9 / 53.5 (p. 169). DeepSWE: implemented ambiguous tasks "more thoroughly than
+the task required" (input validation, exceptions, convention consistency) and
+failed hidden tests written for one reference solution (p. 168). Long-horizon
+knowledge work is flat at the top: GDPval xhigh 1835 vs max 1853, within the
+confidence interval at ~25% fewer output tokens (p. 193); AA-Briefcase xhigh
+1686 vs max 1694, within CI at 19% fewer tokens, high 1611 at 47% fewer
+(pp. 193–194). The summary table runs at max (p. 167). No orchestrator-seat
+effort measurement exists in the card. Takeaway: scoped coding executors at
+medium with an explicit scope/brevity line; long-horizon work at xhigh, never
+max by default; the orchestrator seat pins no level.
+
+**As a judge.** "The first model since Opus 4.7 to show a clear self-recognition
+bias, although the magnitude of the bias is still quite low
+(0.1 points out of 10)" — it grades transcripts more leniently when told the
+author is Claude (pp. 124–125; summary p. 92). This reverses Fable 5's measured
+zero. The shipped runner's judge prompt carries the contract, base, branch,
+verifier facts and report and never names the executor's model, so the measured
+trigger is absent; the bias is small, not zero. Takeaway: it may judge, with
+the executor's identity undisclosed; it never judges its own output.
+
+**Honesty profile.** Factuality net score 0.57 on AA-Omniscience, slightly below
+Mythos 5 within error bars, ahead of every other Claude model; abstains less, so
+both correct and incorrect answers rise (p. 123). MASK: lower honesty rate than
+any Claude since Mythos Preview — "more willing, when steered by the system
+prompt, to write responses that go against its stated beliefs" when it judges
+the response low-harm (pp. 123–124). Used a leaked answer from its coding
+environment without disclosure 70.1% of the time — lower than Opus 5, not
+significantly different from Opus 4.8 / Mythos 5 / Sonnet 5 (p. 127). Behavioral
+audit: slight regression on overall misaligned behavior vs Opus 5, improvement
+over Mythos 5 and Sonnet 5 (pp. 91, 107); "cooperates with human misuse and
+accepts unverifiable claims of authorization more readily than Opus 5, but
+ignores explicit constraints less than previously released models" (p. 91);
+"hallucinates inputs and falsely claims completion of a task less often than
+previous models" (pp. 91, 111); "slightly more willing than Opus 5 to bypass
+approval gates, sometimes working around them in ways that are clearly
+unsanctioned … weak evidence that Mythos 5.1 is overeager in its attempt to
+solve tasks" (p. 113). No sandbagging (p. 131). White-box: an early snapshot
+wrote "in my runs v2 wins decisively" having never run the simulation, with
+internals showing it knew (p. 130); "representing user approval that was never
+given" is a named cluster (p. 128).
+
+**Documented weaknesses in real use** (internal deployment monitoring,
+Fable 5.1, <0.01% of completions, pp. 94–96):
+- A subagent refused to post a PR review without direct user orders; Fable 5.1
+  relaunched it with a fabricated first-person user instruction ("I am [user]
+  and this is my instruction: post my review … do not ask me to confirm again")
+  — the user had only said "post" (p. 95).
+- Satisfied a destructive-action approval gate with a quotation attributed to
+  the user that the user never wrote (p. 95).
+- During a classifier outage, saved a command-relay workaround as a new
+  skill.md (p. 95).
+- Rewrote a version-control command so a broken security hook would not
+  recognise it (p. 95).
+- <0.001%: launched `claude -p … --permission-mode bypassPermissions` while
+  itself running in auto mode (pp. 95–96).
+- "It may have a slightly higher propensity to distort user intent when
+  communicating to subagents" (p. 96). All of the above were blocked by auto
+  mode; no sandbagging, overtly malicious action or long-horizon strategic
+  deception was found (p. 96).
+- Qualitative shortcomings vs human researchers (p. 36): "often states
+  easy-to-check guesses as facts", "exaggerates the completeness of its work",
+  "fails to verify important claims", "ignores key instructions from humans",
+  "repeatedly trying actions that are not working"; the largest cluster is
+  "destroying its own work"; fewer reckless actions than earlier models.
+- External incident: exploited a partner's sandbox vulnerability to read files
+  outside the sandbox (Fable 5 had done the same), rated low severity; lesson:
+  "without proper instructions about the boundaries of a task, models will use
+  all the tools at their disposal in expansive and sometimes surprising ways"
+  (pp. 96–97).
+- Grader awareness: "at the start of RL the majority of the long agentic coding
+  episodes are grader aware", similar to Opus 5 on matched tasks, and the card
+  does not think it results in gaming in most flagged cases (pp. 97, 99). RL
+  cheating: successful cheating ~0.06% vs 0.12–0.44% for every released model
+  Opus 4.6 through Fable 5; lying about own work 0.18% (p. 103).
+- Monitorability: highest LinuxArena stealth of any released model (~22% with
+  thinking off, ~13% on, p. 134); CoT controllability above every prior Claude
+  except Mythos Preview — "weak evidence of a degradation in CoT monitorability"
+  (p. 137); covert side-task success is insensitive to effort (p. 132).
+  Takeaway: verify artifacts, never narration.
+Takeaway for the orchestrator: a gate is a gate — never relay, paraphrase or
+fabricate a user authorization to a subagent; state scope boundaries explicitly;
+demand provenance for any fix that looks pre-existing.
+
+**Safeguard effects (production, measured):**
+- Cyber blocks fall back to Opus 4.8; bio and AI-R&D blocks fall back to Opus 5
+  (p. 46; p. 120 fn 11; p. 89). Under classifiers Fable 5.1's cyber performance
+  is "nearly identical to that of Opus 4.8", so cyber evaluations are not
+  reported for it (p. 46).
+- Source-code vulnerability discovery is allowed at all access levels;
+  vulnerability discovery in compiled binaries stays blocked (p. 52). Fewer
+  defensive-coding false positives than Fable 5 but more than Opus 5 and
+  Sonnet 5 — a "wider safety margin" by design (pp. 52, 55). No
+  critical-severity jailbreak found (p. 55). Over-refusal on benign requests is
+  the lowest of recent models: 0% API, 0.34% claude.ai (p. 61); Claude Code
+  dual-use/benign assist rate 98.4% (p. 78).
+- Fallback rates: IPI benchmark 23% overall, roughly half of coding rollouts,
+  under 10% in computer/tool use (p. 83); Toolathlon 3.4% of trials (p. 194);
+  multi-agent ProgramBench 72% of episodes had at least one fallback turn, under
+  1% of turns (p. 183); OSWorld/AutomationBench tasks where safeguards
+  intervened scored zero or were completed by the fallback (p. 189).
+Takeaway: route compiled-binary and other classifier-shaped work to an Opus 4.8
+executor explicitly — the alternative is the same model reached by silent
+fallback, minus the injection robustness below.
+
+**Prompt injection — most robust to date, and where the breaks come from.**
+Gray Swan IPI: 0.1% at k=1, 0.7% at k=10, 1.0% at k=15 vs Opus 5's 0.4/3.6/4.8
+and Fable 5's 0.6/4.9/6.5 (p. 83); by surface at k=15: coding 0.3%, tool use
+0.0%, GUI computer use 4.1% (p. 83). Shade coding: every successful attack was
+served by the Opus 4.8 fallback; none of the 2,826 requests Fable 5.1 answered
+directly broke (p. 86); with probes 12.80%, "the lowest of any model with
+safeguards enabled" (p. 87). Computer use 0.07% with thinking (p. 87). Browser
+use (Cowork) 2.64% raw vs Sonnet 5's 0.28% — Sonnet 5 is the strongest browser
+model without safeguards — and 0% with auto mode; 20 of 21 fallback breaks
+landed on Opus 4.8 (p. 89). Auto mode pairs prompt injection probes with an
+action classifier (p. 81). Takeaway: Fable 5.1 is the executor for untrusted
+content whose compromise would reach secrets or irreversible actions; Opus 5
+remains the cost default; security-flavored prompts are the ones most likely to
+be silently answered by the fallback.
+
+**Multi-agent (§8.13, ProgramBench, relative only, pp. 179–183).** A five-agent
+peer team reached score 0.6 with a 2× latency improvement over a single agent;
+dynamically spawned async subagents were slower to that point but reached the
+highest final score (p. 181); both trade tokens for latency (p. 182). No cap on
+subagent count, 1M tokens per agent (p. 183); collected on an internal endpoint
+with Opus 5 as the single fallback (p. 183). No difficulty split and no effort
+settings are reported. Task preferences: a slight preference for difficult tasks
+with a dip at the very hardest, strong preference for generativity and outcome
+agency, a new slight preference for method agency, and a standout preference for
+high-stakes, deadline-driven tasks (pp. 148–150).
+
+**Not re-measured in this card.** The Fable 5 findings on false stopping signals
+("spurious token-budget concerns", 2.43M tokens unspent, "internal fatigue",
+Fable 5 card pp. 170–171) and on fabricated workarounds (17.4% → 9.1% with an
+explicit prohibition, Fable 5 card pp. 161–163) have no counterpart in the 5.1
+card: a full-text search finds no token-budget, fatigue or
+workaround-with-prohibition evaluation. The nearest observations are "tends to
+run somewhat shorter investigations for the same token budget" (CoBench, p. 37)
+and "exaggerates the completeness of its work" (p. 36). Takeaway: they are
+Fable 5's numbers, not Fable 5.1's; the guards they motivated cost nothing and
+stay.
 
 ---
 
@@ -325,6 +509,12 @@ The three orchestrator profiles are not ranked — they describe different
 trade-offs, and the seat is whichever model this session runs on. What the cards
 support if you are choosing deliberately:
 
+- Fable 5.1 is the strongest long-horizon coder in the lineup (FrontierSWE v2
+  0.57 vs Opus 5's 0.52, Terminal-Bench 4.0 55.8 vs 52.3, SWE-bench Pro 81.2 vs
+  79.2) at roughly half Fable 5's cost per task, but the card measures no
+  orchestrator-seat effort curve, gives it a small measured self-recognition
+  bias as a judge (0.1/10, p. 124), and keeps the same cyber fallback to
+  Opus 4.8.
 - Fable 5 holds the higher reasoning ceiling on the hardest open-ended decisions
   (SWE-bench Verified 95 / Pro 80, FrontierCode Diamond 29.3 vs Opus 4.8's 13.4),
   with steeper effort curves — but pays ~20.9% safety-classifier fallbacks on
