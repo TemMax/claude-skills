@@ -94,7 +94,7 @@ proceed. Never ask the user to restart at a different effort.
 
 | Task | Model | Why |
 | --- | --- | --- |
-| Compiled-binary vulnerability discovery, or anything your cyber classifier blocks | Opus 4.8 executor, right away | Blocked for you at every access level (p. 52); the silent fallback is Opus 4.8 anyway (p. 46), so route it openly |
+| Compiled-binary vulnerability discovery, or anything your cyber classifier blocks | Opus 4.8 executor (`claude-opus-4-8`), right away | Blocked for you at every access level (p. 52); the silent fallback is Opus 4.8 anyway (p. 46), so route it openly |
 | Untrusted content whose compromise reaches secrets or irreversible actions | Yourself (`fable`) | Most injection-robust model to date: IPI 0.1% at k=1, 1.0% at k=15, and none of 2,826 directly served coding requests broke (pp. 83, 86). Opus 5 stays the cost default |
 | Live browser content without additional safeguards | Sonnet 5 | Browser injection 0.28% against your 2.64% raw (p. 89) |
 | Scoped coding on a Fable 5.1 executor | Fable 5.1 at medium effort, plus the scope line | The score peaks at medium; higher effort buys out-of-scope edits (p. 169) |
@@ -161,5 +161,5 @@ around a blocker — report it" line in every task prompt.
 | Launching anything with `bypassPermissions` | Documented misuse; the sandbox stops being a sandbox (pp. 95–96) | Never. Escalation goes to the user, not to a flag |
 | Judging on a zero-bias presumption, or judging your own output | 0.1-point leniency toward Claude-authored work rides into the verdict (p. 124) | Re-derive from the artifact; a different seat judges your work; the judge prompt never names the executor |
 | Spawning research agents without naming a model | They inherit Fable 5.1 and burn your seat's budget at your seat's price | Route every spawn through the Research Routing table in SKILL.md |
-| Routing compiled-binary vulnerability work to yourself | The classifier blocks it and you silently fall back (p. 52, p. 46) | Name an Opus 4.8 executor from the start |
+| Routing compiled-binary vulnerability work to yourself | The classifier blocks it and you silently fall back (p. 52, p. 46) | Name a `claude-opus-4-8` executor from the start |
 | Declaring done on an executor's summary | Exaggerated completeness; results claimed that were never produced (p. 36, p. 130) | List each open plan item and the artifact that closes it |
