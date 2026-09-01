@@ -135,8 +135,10 @@ One file in `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`, three layers:
    ] }
    ```
 
-   Short model names only. `branch` is always `wave/<id>`. The supervisor
-   sits on the wave because execution is one runner invocation per wave.
+   Short model names, or the one pinned full ID `claude-opus-4-8` (the
+   only full ID the runner and this linter accept). `branch` is always
+   `wave/<id>`. The supervisor sits on the wave because execution is one
+   runner invocation per wave.
 
 3. **The prose half** — one `## Task <id>` section per task: the
    substantive description and context, with full code where the solution
