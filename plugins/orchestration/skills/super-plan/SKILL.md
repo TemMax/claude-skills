@@ -19,6 +19,7 @@ the ONE matching profile — the same profiles the multi-model skill uses:
 
 | Your model ID | Read this file |
 |---|---|
+| `claude-fable-5-1` | `../multi-model/references/orchestrator-fable-5-1.md` |
 | `claude-fable-5` | `../multi-model/references/orchestrator-fable-5.md` |
 | `claude-opus-5` (any context-window suffix) | `../multi-model/references/orchestrator-opus-5.md` |
 | `claude-opus-4-8` (any suffix) | `../multi-model/references/orchestrator-opus-4-8.md` |
