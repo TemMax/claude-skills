@@ -189,4 +189,24 @@ check "the reviewer dossier has a Fable 5.1 section" \
 check "README carries the fable-5.1 row"            "grep -qF '| \`claude-fable-5-1\` |' README.md"
 check "multi-model's model list names Fable 5.1"    "sed -n '3p' $MM | grep -qF 'Fable 5.1'"
 
+section "Opus 4.8 is addressable by its full model ID"
+
+PL=plugins/orchestration/skills/super-plan/references/plan-lint.mjs
+OP5=plugins/orchestration/skills/multi-model/references/orchestrator-opus-5.md
+
+check "the runner accepts the pinned ID"            "grep -qF \"'claude-opus-4-8'\" $WR"
+check "the linter accepts the pinned ID"            "grep -qF \"'claude-opus-4-8'\" $PL"
+check "the runner carries no other full model ID" \
+  "! grep -o 'claude-[a-z0-9.-]*' $WR | grep -v '^claude-opus-4-8\$' | grep -q ."
+check "the simulator tier guards the single-ID rule" \
+  "grep -qF \"grep -v '^claude-opus-4-8\$'\" tests/wave-runner.test.sh"
+check "the linter tier rejects the bare short form" \
+  "grep -qF '\"model\": \"opus-4-8\"' tests/plan-lint.test.sh"
+check "the skill names the ID in the supervisor row" \
+  "grep -qF 'fallback: Opus 4.8 via \`claude-opus-4-8\`' $MM"
+check "the skill's opts.model rule names the pin"   "grep -qF 'pinned full ID' $MM"
+check "the old not-addressable wording is gone"     "! grep -q 'not addressable' $MM"
+check "the fable-5.1 profile names the pinned ID"   "grep -qF 'claude-opus-4-8' $OF"
+check "the opus-5 profile names the pinned ID"      "grep -qF 'claude-opus-4-8' $OP5"
+
 summary
