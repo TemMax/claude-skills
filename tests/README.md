@@ -84,6 +84,9 @@ Worth stating plainly, because a green run is easy to over-read.
   Fable 5 as well (`EVAL_MODEL=claude-sonnet-5|claude-opus-5|claude-fable-5`,
   F1–F4). Single runs prove each model *can* judge these fixtures, not a
   rate; Opus 4.8 and the drift tier's non-Haiku behaviour remain unmeasured.
+  Fable 5.1 (`EVAL_MODEL=claude-fable-5-1`) is unmeasured on every tier as of
+  2026-09-01; its first live use as a wave supervisor is recorded in
+  `tests/eval/wave-insession.md`.
 - **The super-plan floor is Sonnet, not Haiku — measured, not assumed, and
   still not perfect.** Measured 2026-08-18 across repeated live runs of
   `tests/eval/super-plan.sh`: Haiku 4.5 did not reliably follow the skill's
