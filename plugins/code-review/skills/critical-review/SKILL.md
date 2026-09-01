@@ -16,6 +16,7 @@ profile file:
 
 | Your model ID | Read this file |
 |---|---|
+| `claude-fable-5-1` | `${CLAUDE_SKILL_DIR}/references/reviewer-fable-5-1.md` |
 | `claude-fable-5` | `${CLAUDE_SKILL_DIR}/references/reviewer-fable-5.md` |
 | `claude-opus-5` (any context-window suffix) | `${CLAUDE_SKILL_DIR}/references/reviewer-opus-5.md` |
 | `claude-opus-4-8` (any context-window suffix, e.g. `[1m]`) | `${CLAUDE_SKILL_DIR}/references/reviewer-opus-4-8.md` |
@@ -42,8 +43,12 @@ Fable 5's system card documents no self-preference bias as a judge, and Opus
 knowingly broken results) — those models CAN be trusted to judge their own
 output, but only if they re-derive every claim from the code instead of
 recalling intentions. Opus 5's self-preference bias is unmeasured, so it earns
-no such presumption — it re-derives every claim or it has nothing. Whatever the
-model, re-derivation from the artifact is the load-bearing rule.
+no such presumption — it re-derives every claim or it has nothing. Fable 5.1's
+card is the first since Opus 4.7 to measure a clear self-recognition bias —
+small, 0.1 points out of 10, lenient when told the author is Claude (p. 124) —
+so, like Opus 5, it reviews its own code only by re-deriving every claim from
+the artifact. Whatever the model, re-derivation from the artifact is the
+load-bearing rule.
 
 Always reply to the user in the language the user writes in — this skill being in
 English does not mean English replies.
@@ -423,7 +428,8 @@ gh api graphql \
 
 ## References
 
-- `references/reviewer-fable-5.md`, `references/reviewer-opus-5.md`,
+- `references/reviewer-fable-5-1.md`, `references/reviewer-fable-5.md`,
+  `references/reviewer-opus-5.md`,
   `references/reviewer-opus-4-8.md` — the reviewer profiles. Load exactly one,
   per Step 0.
 - `references/reviewer-dossier.md` — the review-relevant excerpts from the
