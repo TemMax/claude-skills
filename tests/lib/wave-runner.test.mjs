@@ -159,6 +159,34 @@ test('S8d a null task entry fails closed, not with a crash', async () => {
   assert.equal(calls.length, 0)
 })
 
+test('S9a the pinned full ID claude-opus-4-8 runs executor and supervisor', async () => {
+  const pinned = waveArgs({
+    supervisor: { model: 'claude-opus-4-8', effort: 'high' },
+    tasks: [task({ executor: { model: 'claude-opus-4-8', effort: 'high' }, ladder: [] })],
+  })
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: pinned,
+    agentStub: stub({ 't-one': [V.ok()] }),
+  })
+  assert.equal(result.status, 'done')
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.ok(calls.some((c) => c.opts.model === 'claude-opus-4-8'))
+})
+
+test('S9b an unpinned short form is rejected while the pinned ID elsewhere is not enough to save it', async () => {
+  const bad = waveArgs()
+  bad.tasks = [task({ executor: { model: 'opus-4-8' }, ladder: ['claude-sonnet-5'] })]
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: bad,
+    agentStub: () => { throw new Error('no agent may be called') },
+  })
+  assert.equal(result.status, 'invalid-args')
+  const all = result.errors.join('; ')
+  assert.match(all, /executor\.model/)
+  assert.match(all, /ladder/)
+  assert.equal(calls.length, 0)
+})
+
 // ---------- S1–S7: the ladder itself ----------
 
 test('S1 clean pass: one executor call, one supervisor call, no escalation', async () => {
