@@ -1,6 +1,6 @@
 ---
 name: ship
-description: 'Use when delivering a feature end-to-end — from a request to a reviewed pull request — through the full pipeline: super-plan turns it into contract-carrying waves, multi-model executes them supervised on a feature branch, critical-review reviews the PR and answers its threads. One confirmation up front (the feature branch will be pushed and a PR opened); the merge stays with the user. Triggers: "сделай под ключ", "доведи фичу до PR", "полный цикл", "ship this", "ship it", "end to end". Do NOT use for a single stage — invoke super-plan, multi-model or critical-review directly instead.'
+description: 'Use to conduct the full delivery pipeline: super-plan, supervised waves, critical review, PR creation, and thread resolution. It never merges and adds no execution machinery of its own.'
 metadata:
   author: https://github.com/TemMax
   version: 2.5.0
@@ -12,20 +12,30 @@ One command, three shipped stages, one promise: what leaves this skill is a
 pushed feature branch with a reviewed pull request — never a touched default
 branch. **The merge stays with the user.**
 
-## Step 0 — Load Your Own Orchestrator Profile (before anything else)
+## Step 0 — load exactly one active-seat profile
 
-Your environment block states the model you are running as. Read it and load
-the ONE matching profile — the same profiles the multi-model skill uses:
+1. Read the `PLUGIN_RUNTIME_CONTEXT_V1` line for this plugin.
+2. If it carries a supported exact model id, load that id's relative profile.
+3. Otherwise use an exact model id explicitly supplied by the session.
+4. Otherwise load the generic profile and treat both model and effort as unknown.
 
-| Your model ID | Read this file |
+Never read a user config file to guess a session override. Never load more than one active-seat profile. A profile whose exact-id guard does not match must not be applied.
+
+| Exact model id | Relative profile |
 |---|---|
 | `claude-fable-5-1` | `../multi-model/references/orchestrator-fable-5-1.md` |
 | `claude-fable-5` | `../multi-model/references/orchestrator-fable-5.md` |
 | `claude-opus-5` (any context-window suffix) | `../multi-model/references/orchestrator-opus-5.md` |
 | `claude-opus-4-8` (any suffix) | `../multi-model/references/orchestrator-opus-4-8.md` |
-| anything else | no profile exists — use the rules below only, and say so |
+| `gpt-5.6-sol` | `../multi-model/references/orchestrator-gpt-5-6-sol.md` |
+| `gpt-5.6-terra` | `../multi-model/references/orchestrator-gpt-5-6-terra.md` |
+| `gpt-5.6-luna` | `../multi-model/references/orchestrator-gpt-5-6-luna.md` |
+| unknown | `../multi-model/references/orchestrator-generic.md` |
 
-Read exactly one. Always reply to the user in the language the user writes in.
+The alias `gpt-5.6` selects Sol only after the runtime-context handler has
+normalized it to `gpt-5.6-sol`. An exact supplied effort may be used; otherwise
+effort is unknown and receives no effort-specific claim. Always reply to the
+user in the language the user writes in.
 
 ## What ship owns — and what it does not
 

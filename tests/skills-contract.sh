@@ -115,16 +115,17 @@ done
 
 section "Both skills: rules must be findable by the model that needs them"
 check "critical-review names the fix-phase triggers" \
-  "sed -n '3p' $CR | grep -q 'answer the PR comments'"
-check "multi-model names Opus 5 as an executor" \
-  "sed -n '3p' $MM | grep -q 'Opus 5'"
+  "sed -n '3p' $CR | grep -qF 'fixing findings, replying, and resolving fully addressed threads'"
+check "multi-model names Claude and GPT executors" \
+  "sed -n '3p' $MM | grep -qF 'route Claude or GPT-5.6 executors'"
 
 section "super-plan: planning that lands wave-ready"
 check "the skill exists"                        "[ -f $SP ]"
 check "the lint script ships"                   "[ -f plugins/orchestration/skills/super-plan/references/plan-lint.mjs ]"
 check "lint is mandatory before the plan gate"  "grep -q 'plan-lint.mjs' $SP"
 check "same-wave file overlap is forbidden"     "grep -q 'must not share files' $SP"
-check "questions are batched, not dripped"      "grep -q 'ONE batched AskUserQuestion' $SP"
+check "questions are batched, not dripped"      "grep -q 'Collect genuine product forks in one batch' $SP"
+check "questions use host-neutral interaction"  "grep -q 'host-native structured input tool' $SP"
 check "status transitions stay with execution"  "grep -q 'status transitions belong' $SP"
 check "headless mode records assumptions"       "grep -q 'Assumptions (would ask)' $SP"
 check "superpowers attribution survives"        "grep -q 'Jesse Vincent' $SP"
@@ -144,13 +145,13 @@ OF=plugins/orchestration/skills/multi-model/references/orchestrator-fable-5-1.md
 RF=plugins/code-review/skills/critical-review/references/reviewer-fable-5-1.md
 
 check "Step 0: multi-model routes fable-5-1 to its profile" \
-  "grep -qF '| \`claude-fable-5-1\` | \`\${CLAUDE_SKILL_DIR}/references/orchestrator-fable-5-1.md\` |' $MM"
+  "grep -qF '| \`claude-fable-5-1\` | \`references/orchestrator-fable-5-1.md\` |' $MM"
 check "Step 0: super-plan routes fable-5-1 to its profile" \
   "grep -qF '| \`claude-fable-5-1\` | \`../multi-model/references/orchestrator-fable-5-1.md\` |' $SP"
 check "Step 0: ship routes fable-5-1 to its profile" \
   "grep -qF '| \`claude-fable-5-1\` | \`../multi-model/references/orchestrator-fable-5-1.md\` |' $SH"
 check "Step 0: critical-review routes fable-5-1 to its profile" \
-  "grep -qF '| \`claude-fable-5-1\` | \`\${CLAUDE_SKILL_DIR}/references/reviewer-fable-5-1.md\` |' $CR"
+  "grep -qF '| \`claude-fable-5-1\` | \`references/reviewer-fable-5-1.md\` |' $CR"
 
 check "the fable-5 row survives in multi-model"     "grep -qF '| \`claude-fable-5\` ' $MM"
 check "the fable-5 row survives in super-plan"      "grep -qF '| \`claude-fable-5\` ' $SP"
@@ -187,7 +188,7 @@ check "the reviewer dossier has a Fable 5.1 section" \
   "grep -q '^## Fable 5.1 as a reviewer of its own code' plugins/code-review/skills/critical-review/references/reviewer-dossier.md"
 
 check "README carries the fable-5.1 row"            "grep -qF '| \`claude-fable-5-1\` |' README.md"
-check "multi-model's model list names Fable 5.1"    "sed -n '3p' $MM | grep -qF 'Fable 5.1'"
+check "multi-model still routes Fable 5.1"         "grep -qF '| \`claude-fable-5-1\` | \`references/orchestrator-fable-5-1.md\` |' $MM"
 
 section "Opus 4.8 is addressable by its full model ID"
 

@@ -1,6 +1,6 @@
 ---
 name: multi-model
-description: 'Use when orchestrating parallel development work through Workflow subagents on Haiku 4.5, Sonnet 5, Opus 4.8, Opus 5 and Fable 5.1 — including supervised waves, where each executor is isolated in its own worktree and its result is judged against a machine-checkable contract by a different model — decomposing a coding task into agent waves, routing tasks to models, picking reasoning effort, writing task prompts for executor agents, or reviewing their results. Works on whatever model this orchestrator session runs on; it loads the matching orchestrator profile itself. Triggers: "разбей на агентов", "запусти параллельно", "оркеструй задачу", "decompose into agents", "run in parallel", "delegate to subagents", "pick a model for this task". Do NOT use for single-agent work.'
+description: 'Use for supervised parallel implementation: decompose coding work into isolated worktree tasks, route Claude or GPT-5.6 executors, mechanically verify contracts, and supervise every result with a different model. Trigger on requests to delegate, orchestrate, parallelize, or choose a model. Do not use for single-agent work.'
 metadata:
   author: https://github.com/TemMax
   version: 2.5.0
@@ -8,30 +8,31 @@ metadata:
 
 # Orchestrating Multi-Model Development
 
-## Step 0 — Load Your Own Orchestrator Profile (before anything else)
+## Step 0 — load exactly one active-seat profile
 
-Your environment block states the model you are running as ("You are powered by
-the model named X. The exact model ID is Y"). Read it and load the ONE matching
-profile file:
+1. Read the `PLUGIN_RUNTIME_CONTEXT_V1` line for this plugin.
+2. If it carries a supported exact model id, load that id's relative profile.
+3. Otherwise use an exact model id explicitly supplied by the session.
+4. Otherwise load the generic profile and treat both model and effort as unknown.
 
-| Your model ID | Read this file |
+Never read a user config file to guess a session override. Never load more than one active-seat profile. A profile whose exact-id guard does not match must not be applied.
+
+| Exact model id | Relative profile |
 |---|---|
-| `claude-fable-5-1` | `${CLAUDE_SKILL_DIR}/references/orchestrator-fable-5-1.md` |
-| `claude-fable-5` | `${CLAUDE_SKILL_DIR}/references/orchestrator-fable-5.md` |
-| `claude-opus-5` (any context-window suffix) | `${CLAUDE_SKILL_DIR}/references/orchestrator-opus-5.md` |
-| `claude-opus-4-8` (any context-window suffix, e.g. `[1m]`) | `${CLAUDE_SKILL_DIR}/references/orchestrator-opus-4-8.md` |
-| anything else | no profile exists — use the model-agnostic rules below only, and tell the user which model you are and that no profile matched |
+| `claude-fable-5-1` | `references/orchestrator-fable-5-1.md` |
+| `claude-fable-5` | `references/orchestrator-fable-5.md` |
+| `claude-opus-5` (any context-window suffix) | `references/orchestrator-opus-5.md` |
+| `claude-opus-4-8` (any context-window suffix, e.g. `[1m]`) | `references/orchestrator-opus-4-8.md` |
+| `gpt-5.6-sol` | `references/orchestrator-gpt-5-6-sol.md` |
+| `gpt-5.6-terra` | `references/orchestrator-gpt-5-6-terra.md` |
+| `gpt-5.6-luna` | `references/orchestrator-gpt-5-6-luna.md` |
+| unknown | `references/orchestrator-generic.md` |
 
-**Read exactly one file — the one matching your own model. Do not read the
-others: their session-effort guidance, documented failure modes and strengths
-belong to a different model and are not yours.** State which profile you loaded
-before planning. Your profile amends the numbered steps below; where it amends a
-step, the amendment wins.
-
-Your session's current reasoning effort is reported by the harness as
-**${CLAUDE_EFFORT}**. Your profile states the effort it expects; if that reported
-value is lower than your profile requires, act as your profile directs before you
-plan.
+The alias `gpt-5.6` selects Sol only after the runtime-context handler has
+normalized it to `gpt-5.6-sol`. An exact supplied effort may be used; otherwise
+effort is unknown and receives no effort-specific claim. State which profile was
+loaded before planning. That profile amends the numbered steps below; where it
+amends a step, the amendment wins.
 
 ## Overview
 
