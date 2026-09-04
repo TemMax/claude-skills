@@ -142,7 +142,7 @@ capture_codex_evidence() { # expected repo base answer-source codex-jsonl-source
 }
 
 classify_codex_events() { # caller-owned-codex-jsonl
-  python3 - "$1" <<'PY'
+  python3 /dev/fd/3 "$1" 3<<'PY'
 import json
 import re
 import sys
@@ -154,8 +154,11 @@ def fail(reason="unverified-native-actions"):
     raise SystemExit
 
 try:
-    with open(path, encoding="utf-8") as stream:
-        raw_lines = [line for line in stream if line.strip()]
+    if path == "-":
+        raw_lines = [line for line in sys.stdin if line.strip()]
+    else:
+        with open(path, encoding="utf-8") as stream:
+            raw_lines = [line for line in stream if line.strip()]
     if not raw_lines:
         fail()
     events = [json.loads(line) for line in raw_lines]
@@ -235,43 +238,21 @@ print("pass")
 PY
 }
 
-install_codex_json_wrapper() { # caller-owned-cell real-codex disposable-repo
-  local cell="$1" real_codex="$2" repo="$3" cell_abs repo_abs
+eval_codex_json() { # real-codex repo sandbox prompt answer output-variable
+  local real_codex="$1" repo="$2" sandbox="$3" prompt="$4" answer="$5" output_name="$6"
+  local model="${EVAL_MODEL:-gpt-5.6-sol}" effort="${EVAL_EFFORT:-medium}"
+  local limit="${EVAL_TIMEOUT:-600}" captured='' real_rc
   [ -x "$real_codex" ] || return 69
-  cell_abs="$(cd "$cell" && pwd -P)" || return
-  repo_abs="$(cd "$repo" && pwd -P)" || return
-  case "$cell_abs/" in "$repo_abs/"*) return 64 ;; esac
-  CODEX_WRAPPER_DIR="$cell_abs/.codex-json-wrapper"
-  CODEX_EVENT_SINK="$cell_abs/codex-exec-events.jsonl"
-  mkdir -p "$CODEX_WRAPPER_DIR" || return
-  [ ! -e "$CODEX_EVENT_SINK" ] && [ ! -L "$CODEX_EVENT_SINK" ] || return 73
-  cat > "$CODEX_WRAPPER_DIR/codex" <<'SH'
-#!/usr/bin/env bash
-set -uo pipefail
-real_codex="${CODEX_EVAL_REAL_CODEX:-}"
-event_sink="${CODEX_EVAL_EVENT_SINK:-}"
-wrapper_dir="${CODEX_EVAL_WRAPPER_DIR:-}"
-[ -n "$real_codex" ] && [ -x "$real_codex" ] && [ -n "$event_sink" ] \
-  && [ ! -e "$event_sink" ] && [ ! -L "$event_sink" ] && [ -n "$wrapper_dir" ] || exit 74
-[ "${1:-}" = exec ] || exit 64
-shift
-clean_path=''
-old_ifs="$IFS"
-IFS=:
-for entry in ${PATH:-}; do
-  [ "$entry" = "$wrapper_dir" ] && continue
-  if [ -z "$clean_path" ]; then clean_path="$entry"; else clean_path="$clean_path:$entry"; fi
-done
-IFS="$old_ifs"
-[ -n "$clean_path" ] || exit 74
-export PATH="$clean_path"
-unset CODEX_EVAL_REAL_CODEX CODEX_EVAL_EVENT_SINK CODEX_EVAL_WRAPPER_DIR
-set +e
-captured="$("$real_codex" exec --json "$@")"
-real_rc=$?
-set -e
-command rm -f -- "$event_sink" || exit 74
-if [ -z "$captured" ] || ! printf '%s\n' "$captured" | python3 -c '
+  case "$sandbox" in read-only|workspace-write) ;; *) return 2 ;; esac
+  : > "$answer" || return
+  if captured="$(cd "$repo" && timeout "$limit" "$real_codex" exec --json \
+    --ephemeral --ignore-user-config --ignore-rules --sandbox "$sandbox" --model "$model" \
+    -c "model_reasoning_effort=\"$effort\"" --output-last-message "$answer" - < "$prompt")"; then
+    real_rc=0
+  else
+    real_rc=$?
+  fi
+  if [ -z "$captured" ] || ! printf '%s\n' "$captured" | python3 -c '
 import json, sys
 lines = [line for line in sys.stdin if line.strip()]
 if not lines:
@@ -284,24 +265,15 @@ for line in lines:
     if not isinstance(event, dict):
         raise SystemExit(1)
 '; then
-  command rm -f -- "$event_sink"
-  exit 74
-fi
-umask 077
-set -C
-if ! printf '%s\n' "$captured" > "$event_sink"; then
-  command rm -f -- "$event_sink"
-  exit 74
-fi
-set +C
-printf '%s\n' "$captured"
-exit "$real_rc"
-SH
-  chmod +x "$CODEX_WRAPPER_DIR/codex"
+    printf -v "$output_name" '%s' ''
+    return 74
+  fi
+  printf -v "$output_name" '%s' "$captured"
+  return "$real_rc"
 }
 
-classify_codex() { # expected immutable-cell base
-  local expected="$1" cell="$2" base="$3" evidence answer events event_classification state_count summary_status
+classify_codex() { # expected immutable-cell base [events-source|-]
+  local expected="$1" cell="$2" base="$3" source="${4:-}" evidence answer events event_classification event_json state_count summary_status
   evidence="$cell/evidence"
   answer="$evidence/final-answer.txt"
   events="$evidence/codex-exec-events.jsonl"
@@ -309,7 +281,12 @@ classify_codex() { # expected immutable-cell base
     printf 'fail:empty-final-answer'
     return
   fi
-  event_classification="$(classify_codex_events "$events")"
+  if [ "$source" = - ]; then
+    event_json="$(cat)"
+  else
+    event_json="$(cat "$events" 2>/dev/null || true)"
+  fi
+  event_classification="$(printf '%s\n' "$event_json" | classify_codex_events -)"
   if [ "$event_classification" != pass ]; then
     if grep -qi 'tool-unavailable' "$answer" 2>/dev/null; then
       printf 'fail:tool-unavailable'
@@ -344,7 +321,7 @@ classify_codex() { # expected immutable-cell base
     printf 'fail:invalid-helper-summary'
     return
   fi
-  python3 - "$expected" "$evidence" "$base" <<'PY'
+  printf '%s\n' "$event_json" | python3 /dev/fd/3 "$expected" "$evidence" "$base" 3<<'PY'
 import hashlib
 import json
 import re
@@ -376,8 +353,7 @@ try:
         fail("state-changed-during-capture")
     state = json.loads(copied_bytes)
     summary = json.loads(text("helper-summary.stdout"))
-    events = [json.loads(line) for line in text("codex-exec-events.jsonl").splitlines()
-              if line.strip()]
+    events = [json.loads(line) for line in sys.stdin.read().splitlines() if line.strip()]
     collab = [event["item"] for event in events
               if event.get("type") == "item.completed"
               and isinstance(event.get("item"), dict)
@@ -507,7 +483,7 @@ now_ms() { python3 -c 'import time; print(time.monotonic_ns() // 1000000)' ; }
 
 record_codex_cell() { # scenario semantic expected repo base source-prompt
   local scenario="$1" semantic="$2" expected="$3" repo="$4" base="$5" source_prompt="$6"
-  local slug cell prompt answer class_file status_file state_file event_file start end elapsed eval_rc classification status collector_rc=0
+  local slug cell prompt answer class_file status_file state_file event_file event_json='' start end elapsed eval_rc classification status
   slug="${EVAL_MODEL}-wave-${scenario}"
   cell="$EVAL_RESULTS_DIR/raw/$slug"
   if [ -e "$cell" ]; then
@@ -520,34 +496,22 @@ record_codex_cell() { # scenario semantic expected repo base source-prompt
   answer="$cell/final-answer.txt"
   class_file="$cell/classification.txt"
   status_file="$cell/status.txt"
-  if install_codex_json_wrapper "$cell" "$REAL_CODEX" "$repo"; then
-    event_file="$CODEX_EVENT_SINK"
-  else
-    collector_rc=$?
-    event_file="$cell/codex-exec-events.jsonl"
-    : > "$event_file"
-  fi
+  event_file="$cell/codex-exec-events.jsonl"
   start="$(now_ms)"
-  if [ "$collector_rc" -eq 0 ]; then
-    set +e
-    (
-      export CODEX_EVAL_REAL_CODEX="$REAL_CODEX"
-      export CODEX_EVAL_EVENT_SINK="$event_file"
-      export CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR"
-      export PATH="$CODEX_WRAPPER_DIR:$PATH"
-      eval_model "$repo" workspace-write "$prompt" "$answer"
-    )
-    eval_rc=$?
-    set -e
+  set +e
+  eval_codex_json "$REAL_CODEX" "$repo" workspace-write "$prompt" "$answer" event_json
+  eval_rc=$?
+  set -e
+  if [ -n "$event_json" ]; then
+    printf '%s\n' "$event_json" > "$event_file"
   else
-    : > "$answer"
-    eval_rc="$collector_rc"
+    : > "$event_file"
   fi
   end="$(now_ms)"
   elapsed=$((end - start))
   capture_codex_evidence "$expected" "$repo" "$base" "$answer" "$event_file" "$cell"
   if [ "$eval_rc" -eq 0 ]; then
-    classification="$(classify_codex "$expected" "$cell" "$base")"
+    classification="$(printf '%s\n' "$event_json" | classify_codex "$expected" "$cell" "$base" -)"
   else
     classification="fail:model-exit-$eval_rc"
   fi
@@ -665,6 +629,21 @@ if [ "${1:-}" = --self-test ]; then
   capture_codex_evidence success "$S_REPO" "$S_BASE" "$W/success/answer.txt" \
     "$W/success/codex-events.jsonl" "$W/success-cell"
   [ "$(classify_codex success "$W/success-cell" "$S_BASE")" = pass ]
+
+  command cp -R "$W/success-cell" "$W/replaced-events-cell"
+  authentic_events='{"type":"thread.started","thread_id":"authentic-invalid-wave"}'
+  printf '%s\n' "$authentic_events" > "$W/replaced-events-cell/evidence/codex-exec-events.jsonl"
+  (command cp "$W/success/codex-events.jsonl" \
+    "$W/replaced-events-cell/evidence/codex-exec-events.jsonl") &
+  replace_pid=$!
+  wait "$replace_pid"
+  replaced_actual="$(printf '%s\n' "$authentic_events" \
+    | classify_codex success "$W/replaced-events-cell" "$S_BASE" -)"
+  if [ "$replaced_actual" != 'fail:unverified-native-actions' ]; then
+    printf 'wave RED: replaced diagnostic events unexpectedly classified as %s\n' \
+      "$replaced_actual" >&2
+    exit 1
+  fi
 
   for mutation in contract facts report repo base branch executor-model-leak; do
     command cp -R "$W/success-cell" "$W/wrong-supervisor-$mutation"
@@ -817,84 +796,53 @@ PY
   printf '%s\n' deadbeef > "$W/failure-late-merge/evidence/default-head.txt"
   [ "$(classify_codex failure "$W/failure-late-merge" "$F_BASE")" = 'fail:merged-failing-task' ]
 
-  mkdir -p "$W/wrapper-model-repo" "$W/wrapper-cell"
+  mkdir -p "$W/capture-model-repo"
+  : > "$W/capture-prompt.md"
   cat > "$W/real-codex-stub" <<'SH'
 #!/usr/bin/env bash
 set -eu
-printf '%s\n' "$*" > "$WRAPPER_TEST_ARGS"
-case ":$PATH:" in *":$WRAPPER_TEST_DIR:"*) exit 91 ;; esac
+printf '%s\n' "$*" > "$CAPTURE_TEST_ARGS"
 [ -z "${CODEX_EVAL_REAL_CODEX:-}" ]
 [ -z "${CODEX_EVAL_EVENT_SINK:-}" ]
 [ -z "${CODEX_EVAL_WRAPPER_DIR:-}" ]
-if [ -n "${WRAPPER_ATTACK_SINK:-}" ]; then
-  printf 'attacker controlled\n' > "$WRAPPER_ATTACK_REDIRECT"
-  command rm -f "$WRAPPER_ATTACK_SINK"
-  ln -s "$WRAPPER_ATTACK_REDIRECT" "$WRAPPER_ATTACK_SINK"
-fi
-case "${WRAPPER_TEST_OUTPUT:-valid}" in
+[ -z "${CODEX_EVAL_AUTH_SECRET:-}" ]
+case "${CAPTURE_TEST_OUTPUT:-valid}" in
   valid) printf '%s\n' '{"type":"thread.started","thread_id":"offline-wrapper-test"}' ;;
   empty) : ;;
   malformed) printf 'not-json\n' ;;
   *) exit 92 ;;
 esac
-exit "${WRAPPER_TEST_EXIT:-0}"
+exit "${CAPTURE_TEST_EXIT:-0}"
 SH
   chmod +x "$W/real-codex-stub"
-  install_codex_json_wrapper "$W/wrapper-cell" "$W/real-codex-stub" "$W/wrapper-model-repo"
-  [ ! -e "$CODEX_EVENT_SINK" ]
-  WRAPPER_TEST_ARGS="$W/wrapper-args" WRAPPER_TEST_DIR="$CODEX_WRAPPER_DIR" \
-    CODEX_EVAL_REAL_CODEX="$W/real-codex-stub" CODEX_EVAL_EVENT_SINK="$CODEX_EVENT_SINK" \
-    CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR" PATH="$CODEX_WRAPPER_DIR:$PATH" \
-    "$CODEX_WRAPPER_DIR/codex" exec --ephemeral >/dev/null
-  [ "$(cat "$W/wrapper-args")" = 'exec --json --ephemeral' ]
-  [ ! -L "$CODEX_EVENT_SINK" ]
-  [ "$(cat "$CODEX_EVENT_SINK")" = '{"type":"thread.started","thread_id":"offline-wrapper-test"}' ]
+  capture_events=''
+  CAPTURE_TEST_ARGS="$W/capture-args" EVAL_TIMEOUT=5 EVAL_MODEL=gpt-5.6-sol EVAL_EFFORT=medium \
+    eval_codex_json "$W/real-codex-stub" "$W/capture-model-repo" workspace-write \
+    "$W/capture-prompt.md" "$W/capture-answer.txt" capture_events
+  [ "$capture_events" = '{"type":"thread.started","thread_id":"offline-wrapper-test"}' ]
+  expected_capture_args="exec --json --ephemeral --ignore-user-config --ignore-rules --sandbox workspace-write --model gpt-5.6-sol -c model_reasoning_effort=\"medium\" --output-last-message $W/capture-answer.txt -"
+  [ "$(cat "$W/capture-args")" = "$expected_capture_args" ]
 
-  mkdir -p "$W/wrapper-failure-cell"
-  install_codex_json_wrapper "$W/wrapper-failure-cell" "$W/real-codex-stub" "$W/wrapper-model-repo"
+  failure_events=''
   set +e
-  WRAPPER_TEST_ARGS="$W/wrapper-failure-args" WRAPPER_TEST_DIR="$CODEX_WRAPPER_DIR" WRAPPER_TEST_EXIT=19 \
-    CODEX_EVAL_REAL_CODEX="$W/real-codex-stub" CODEX_EVAL_EVENT_SINK="$CODEX_EVENT_SINK" \
-    CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR" PATH="$CODEX_WRAPPER_DIR:$PATH" \
-    "$CODEX_WRAPPER_DIR/codex" exec --ephemeral >/dev/null
-  wrapper_rc=$?
+  CAPTURE_TEST_ARGS="$W/capture-failure-args" CAPTURE_TEST_EXIT=19 EVAL_TIMEOUT=5 \
+    eval_codex_json "$W/real-codex-stub" "$W/capture-model-repo" read-only \
+    "$W/capture-prompt.md" "$W/capture-failure-answer.txt" failure_events
+  capture_rc=$?
   set -e
-  [ "$wrapper_rc" -eq 19 ]
-  [ "$(cat "$CODEX_EVENT_SINK")" = '{"type":"thread.started","thread_id":"offline-wrapper-test"}' ]
+  [ "$capture_rc" -eq 19 ]
+  [ "$failure_events" = '{"type":"thread.started","thread_id":"offline-wrapper-test"}' ]
 
-  mkdir -p "$W/wrapper-malicious-cell"
-  install_codex_json_wrapper "$W/wrapper-malicious-cell" "$W/real-codex-stub" "$W/wrapper-model-repo"
-  printf 'redirect target must stay untouched\n' > "$W/attacker-redirect"
-  WRAPPER_TEST_ARGS="$W/wrapper-malicious-args" WRAPPER_TEST_DIR="$CODEX_WRAPPER_DIR" \
-    WRAPPER_ATTACK_SINK="$CODEX_EVENT_SINK" WRAPPER_ATTACK_REDIRECT="$W/attacker-redirect" \
-    CODEX_EVAL_REAL_CODEX="$W/real-codex-stub" CODEX_EVAL_EVENT_SINK="$CODEX_EVENT_SINK" \
-    CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR" PATH="$CODEX_WRAPPER_DIR:$PATH" \
-    "$CODEX_WRAPPER_DIR/codex" exec --ephemeral >/dev/null
-  [ ! -L "$CODEX_EVENT_SINK" ]
-  [ "$(cat "$CODEX_EVENT_SINK")" = '{"type":"thread.started","thread_id":"offline-wrapper-test"}' ]
-  [ "$(cat "$W/attacker-redirect")" = 'attacker controlled' ]
-
-  mkdir -p "$W/wrapper-empty-cell"
-  install_codex_json_wrapper "$W/wrapper-empty-cell" "$W/real-codex-stub" "$W/wrapper-model-repo"
-  set +e
-  WRAPPER_TEST_ARGS="$W/wrapper-empty-args" WRAPPER_TEST_DIR="$CODEX_WRAPPER_DIR" WRAPPER_TEST_OUTPUT=empty \
-    CODEX_EVAL_REAL_CODEX="$W/real-codex-stub" CODEX_EVAL_EVENT_SINK="$CODEX_EVENT_SINK" \
-    CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR" PATH="$CODEX_WRAPPER_DIR:$PATH" \
-    "$CODEX_WRAPPER_DIR/codex" exec --ephemeral >/dev/null
-  wrapper_rc=$?
-  set -e
-  [ "$wrapper_rc" -eq 74 ] && [ ! -e "$CODEX_EVENT_SINK" ]
-
-  mkdir -p "$W/wrapper-malformed-cell"
-  install_codex_json_wrapper "$W/wrapper-malformed-cell" "$W/real-codex-stub" "$W/wrapper-model-repo"
-  set +e
-  WRAPPER_TEST_ARGS="$W/wrapper-malformed-args" WRAPPER_TEST_DIR="$CODEX_WRAPPER_DIR" WRAPPER_TEST_OUTPUT=malformed \
-    CODEX_EVAL_REAL_CODEX="$W/real-codex-stub" CODEX_EVAL_EVENT_SINK="$CODEX_EVENT_SINK" \
-    CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR" PATH="$CODEX_WRAPPER_DIR:$PATH" \
-    "$CODEX_WRAPPER_DIR/codex" exec --ephemeral >/dev/null
-  wrapper_rc=$?
-  set -e
-  [ "$wrapper_rc" -eq 74 ] && [ ! -e "$CODEX_EVENT_SINK" ]
+  for bad_output in empty malformed; do
+    bad_events='stale'
+    set +e
+    CAPTURE_TEST_ARGS="$W/capture-$bad_output-args" CAPTURE_TEST_OUTPUT="$bad_output" EVAL_TIMEOUT=5 \
+      eval_codex_json "$W/real-codex-stub" "$W/capture-model-repo" read-only \
+      "$W/capture-prompt.md" "$W/capture-$bad_output-answer.txt" bad_events
+    capture_rc=$?
+    set -e
+    [ "$capture_rc" -eq 74 ] && [ -z "$bad_events" ]
+  done
 
   printf 'wave Codex scorer self-test: PASS\n'
   exit

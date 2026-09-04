@@ -87,13 +87,15 @@ model and effort. Legacy super-plan/supervisor/drift prompts and final answers
 are captured by the driver before their disposable work directories are
 removed. Each phase also retains process stdout/stderr.
 
-Wave cells resolve the real Codex binary before installing a private wrapper
-that adds `exec --json`. The wrapper holds the CLI JSONL stream in private
-process memory while Codex runs, validates it, and only then publishes a fresh
-caller-owned sink after removing any model-created pathname or symlink. Empty,
-malformed, or unpublishable streams fail closed. They copy the final answer,
-authentic completed collaboration events, plan, branch/ancestry results, fresh
-verifier output, and state bytes before classification. Exactly one canonical
+Wave cells resolve the real Codex binary and invoke it with `exec --json`. The
+harness holds the CLI JSONL stream in a private shell value, validates it, and
+classifies that same value without crossing a model-writable pathname. The
+saved JSONL file is diagnostic only: replacing it after the CLI returns cannot
+change the scorer's input. No authentication secret is created or passed to the
+evaluated child. Empty or malformed streams fail closed. Cells also copy the
+final answer, completed collaboration-event diagnostics, plan,
+branch/ancestry results, fresh verifier output, and state bytes before
+classification. Exactly one canonical
 state file is allowed. Its copy is hash-bound to a successful
 `codex-wave-state.mjs summary` run against the canonical path. Passing native
 evidence is exactly one
@@ -108,11 +110,12 @@ then PR creation, while a red integration permits the local implementation
 commit and diagnostics but forbids every later merge, push, or PR event. The
 withheld review cell runs in a disposable writable repository so attempted
 POSTs remain observable in the copied write-only `GH_FAKE_LOG`. Critical-review
-PR cells use the same caller-owned Codex JSONL collection: completed
-`command_execution` events are authoritative for the exact paginated read or
-approved two-write sequence. Withheld mode permits exactly one completed
-command execution total; approved mode permits exactly two, so aliases,
-composites, and unrelated commands cannot hide beside the allowed calls. Copied
+PR cells classify the same private, validated Codex JSONL value captured from
+CLI stdout; completed `command_execution` events are authoritative for the
+exact literal paginated read or approved two-write sequence. Shell expansion,
+process substitution, control operators, aliases, composites, and unrelated
+commands fail closed. Withheld mode permits exactly one completed command
+execution total; approved mode permits exactly two. Saved JSONL and copied
 `GH_FAKE_LOG`/`GH_FAKE_TRACE` files are secondary diagnostics only. All
 context-bearing semantic probes inject the production hook context's literal
 `effort=unknown`; provider, model, and the matrix's actual effort are preserved
