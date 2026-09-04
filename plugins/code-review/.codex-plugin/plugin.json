@@ -14,5 +14,6 @@
     "critical-review",
     "quality"
   ],
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
 }
