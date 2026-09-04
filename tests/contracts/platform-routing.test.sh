@@ -134,5 +134,11 @@ check "ship leaves adapter selection and subagent execution to multi-model" \
   "grep -qF 'Only multi-model selects that adapter and owns all subagent execution' '$SH'"
 check "ship does not own provider invocation machinery" \
   "grep -qF 'ship never invokes provider CLIs, adapter workflows, or state helpers itself' '$SH'"
+check "ship fixes own findings even without review threads" \
+  "grep -qF 'every approved finding that produces a fix, including an \`own\` finding with no PR threads' '$SH'"
+check "ship holds every review fix commit locally through verification" \
+  "grep -qF 'Keep every resulting fix commit local through apply, commit, and verification' '$SH'"
+check "critical-review gate is the first review-fix publication point" \
+  "grep -qF 'Only after that approval does publication run \`push → replies → resolves\`' '$SH' && ! sed -n '/^## Stage 3 — Review$/,/^## Stage 4 — Handoff$/p' '$SH' | grep -qF 'pushed like any wave'"
 
 summary

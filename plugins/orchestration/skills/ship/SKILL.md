@@ -120,17 +120,18 @@ from a pre-approved plan. After approval, consume the approved plan’s provider
    the "Not verified" section above. This step adds no gate and no new
    machinery — a missing or failing capability is not a ship failure.
 4. Invoke **critical-review** on the PR.
-5. Route every finding by behavior, not size:
+5. Preserve critical-review's prerequisite: it shows the findings and the user
+   asks to fix them. Then run its post-review fix phase for every approved finding that produces a fix, including an `own` finding with no PR threads.
+   Route within that phase by behavior, not size:
    - the fix **changes behavior** (code paths, tests, contracts, scripts) →
-     a fix-wave: a contract and a judge through the runner, merged and
-     pushed like any wave;
+     the selected multi-model runs a supervised fix-wave; merge its reviewed
+     result locally into the feature branch and verify it;
    - the fix **changes no behavior** (prose, docs, comments, config strings)
-     → the orchestrator applies it inline and commits.
+     → apply it inline, commit locally, and verify it.
    The line is what the change can break, not how many lines it takes.
-6. If the PR has review threads, run critical-review's post-review fix phase
-   end-to-end. Its own single gate — the exact reply texts, then
-   `push → replies → resolves` — is the only barrier before anything is
-   published. Approved fixes are pushed before replies and resolution.
+6. Keep every resulting fix commit local through apply, commit, and verification. critical-review's own single exact-text gate prepares the
+   replies (an empty set when there are no threads) and presents `push → replies → resolves`. Only after that approval does publication run `push → replies → resolves`; replies and resolves are naturally empty when
+   there are no threads.
 
 ## Stage 4 — Handoff
 

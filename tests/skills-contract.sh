@@ -181,6 +181,12 @@ check "ship routes provider protocol selection through multi-model" \
   "grep -qF 'native Codex protocol for Codex plan waves and the Claude Workflow adapter for Claude plan waves' $SH"
 check "ship does not take over provider execution" \
   "grep -qF 'Only multi-model selects that adapter and owns all subagent execution' $SH && grep -qF 'ship never invokes provider CLIs, adapter workflows, or state helpers itself' $SH"
+check "post-review fixes include own findings without threads" \
+  "grep -qF 'every approved finding that produces a fix, including an \`own\` finding with no PR threads' $SH"
+check "review fix commits remain unpublished until critical-review approval" \
+  "grep -qF 'Keep every resulting fix commit local through apply, commit, and verification' $SH && grep -qF 'Only after that approval does publication run \`push → replies → resolves\`' $SH"
+check "post-review behavior fixes are not pushed like ordinary waves" \
+  "! sed -n '/^## Stage 3 — Review$/,/^## Stage 4 — Handoff$/p' $SH | grep -qF 'pushed like any wave'"
 
 section "Fable 5.1: every skill routes the new model ID to its own profile"
 OF=plugins/orchestration/skills/multi-model/references/orchestrator-fable-5-1.md
