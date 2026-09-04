@@ -1,6 +1,6 @@
 ---
 name: super-plan
-description: 'Use to design and write a lint-clean wave plan with machine-checkable task contracts before supervised implementation. Trigger on planning features for parallel agents or converting a request into executable waves. Do not implement the plan.'
+description: 'Use when a feature or change needs a wave-ready implementation plan for parallel or multi-agent execution. Do not use to implement the plan.'
 metadata:
   author: https://github.com/TemMax
   version: 2.5.0

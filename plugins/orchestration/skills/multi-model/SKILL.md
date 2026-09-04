@@ -1,6 +1,6 @@
 ---
 name: multi-model
-description: 'Use for supervised parallel implementation: decompose coding work into isolated worktree tasks, route Claude or GPT-5.6 executors, mechanically verify contracts, and supervise every result with a different model. Trigger on requests to delegate, orchestrate, parallelize, or choose a model. Do not use for single-agent work.'
+description: 'Use when implementation work should be delegated, parallelized, or routed across Claude or GPT-5.6 agents, especially when isolated worktrees and independent supervision are required. Do not use for single-agent work.'
 metadata:
   author: https://github.com/TemMax
   version: 2.5.0

@@ -115,9 +115,9 @@ done
 
 section "Both skills: rules must be findable by the model that needs them"
 check "critical-review names the fix-phase triggers" \
-  "sed -n '3p' $CR | grep -qF 'fixing findings, replying, and resolving fully addressed threads'"
+  "sed -n '3p' $CR | grep -qF 'optional follow-up fixes and thread resolution'"
 check "multi-model names Claude and GPT executors" \
-  "sed -n '3p' $MM | grep -qF 'route Claude or GPT-5.6 executors'"
+  "sed -n '3p' $MM | grep -qF 'routed across Claude or GPT-5.6 agents'"
 
 section "super-plan: planning that lands wave-ready"
 check "the skill exists"                        "[ -f $SP ]"

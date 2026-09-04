@@ -1,6 +1,6 @@
 ---
 name: ship
-description: 'Use to conduct the full delivery pipeline: super-plan, supervised waves, critical review, PR creation, and thread resolution. It never merges and adds no execution machinery of its own.'
+description: 'Use when the user wants the complete delivery pipeline from planning through a reviewed pull request. Do not use for a single planning, implementation, or review stage, and never merge.'
 metadata:
   author: https://github.com/TemMax
   version: 2.5.0
