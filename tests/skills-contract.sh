@@ -65,6 +65,21 @@ check "default path is invoking, not writing"  "grep -q 'invoke the shipped runn
 check "the filesystem constraint is named"     "grep -q 'supervisorPromptText' $MM"
 check "no ladder row resurrects the forgery class" "! grep -qi 'forged evidence' $MM"
 
+CP=plugins/orchestration/skills/multi-model/references/codex-wave-protocol.md
+
+section "multi-model: Codex-native supervision preserves the shared contract"
+check "GPT waves use the Codex adapter"             "grep -qF 'references/codex-wave-protocol.md' $MM"
+check "no fresh Codex runner may be written"        "grep -qF 'Never write a fresh runner' $MM"
+check "Codex spawn arguments are explicit"          "grep -qF 'model and reasoning_effort' $MM"
+check "Codex helper command init is named"          "grep -qF 'init' $CP"
+check "Codex helper command next is named"          "grep -qF 'next' $CP"
+check "Codex helper command record-executor is named" "grep -qF 'record-executor' $CP"
+check "Codex helper command verify is named"        "grep -qF 'verify' $CP"
+check "Codex helper command supervisor-prompt is named" "grep -qF 'supervisor-prompt' $CP"
+check "Codex helper command record-verdict is named" "grep -qF 'record-verdict' $CP"
+check "Codex helper command summary is named"       "grep -qF 'summary' $CP"
+check "Codex supervisor uses a different exact model" "grep -qF 'different exact model' $CP"
+
 section "multi-model: research fan-out is routed, never inherited"
 check "the research routing table exists"      "grep -q 'Research Routing' $MM"
 check "inheritance is named as the bug"        "grep -q 'spawn a research agent without naming its model' $MM"

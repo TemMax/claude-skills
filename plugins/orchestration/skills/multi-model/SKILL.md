@@ -69,7 +69,8 @@ English does not mean English replies.
    and record the base SHA. You do this, not the user — the plan's lifecycle is
    yours to open and close, and nobody should have to hand-edit a field to make
    supervision work.
-6. **Launch.** Independent tasks — in parallel via Workflow.
+6. **Launch.** Select the host adapter below; independent tasks remain isolated
+   by the shared wave contract.
 7. **Review** (see the checklist below). Fixes — as one concrete list. Two misses
    in the same place — fix the task spec, don't repeat the prompt.
 8. **The final end-to-end review is the orchestrator's own.** Before it you may
@@ -414,14 +415,32 @@ block. Spending the supervisor's credibility on flaky tests buys nothing.
 | The contract cannot be satisfied | Stop immediately — no rework, no stronger model. Return the task to yourself to amend the contract (below) |
 | Stop | Hand the user the task, every verdict in order, and the branch name |
 
-### Running a wave — invoke the shipped runner, do not write one
+## Host adapter
 
-The ladder above is implemented once, in
+- Claude-only wave: invoke `references/wave-runner.workflow.mjs` exactly as
+  documented below.
+- GPT-5.6-only wave: read and follow
+  `references/codex-wave-protocol.md`; do not invoke Claude Workflow.
+- Mixed or unknown-provider wave: stop before spawning and return the linter or
+  identity error.
+
+Every Codex spawn names model and reasoning_effort from the exact returned
+action. Never write a fresh runner, hand-edit state, or replace a
+missing model with a default or alias. The shared contract, verifier,
+supervisor schema, escalation ladder, and result review remain single-sourced
+in this skill; the adapter selects only the host invocation.
+
+### Claude-only wave — invoke the shipped runner
+
+For a Claude-only wave, the ladder above is implemented once, in
 `references/wave-runner.workflow.mjs`, and covered by the deterministic
 simulator tier in `tests/`. Your job is to assemble its inputs, not to
 re-implement its rules — every hand-written wave script is a fresh chance to
 get "two strikes escalate" subtly wrong, and the one hand-written run on
 record was rejected at launch four times before it worked.
+
+Its `opts.model` accepts the documented Claude short names and the one pinned full ID
+`claude-opus-4-8`; do not replace that identifier with an alias.
 
 1. **Preflight the contracts at the base.** Before the first wave forks, run
    each distinct `must_run` command once against the recorded base — route
@@ -487,9 +506,9 @@ Escalated rungs run at `high` effort.
    sibling's third attempt). The wave's full suite still runs once, after
    all of the wave's invocations settle, before the push.
 
-Write a custom wave script only when the runner genuinely cannot express the
-wave — and then follow "Delegating the Workflow Script Itself" below, because
-every rule listed there was learned from a rejection.
+Never write a custom wave script. If the shipped runner cannot express the
+wave, stop before spawning and return the unsupported requirement for a plan or
+adapter change.
 
 ### When the contract is what is broken
 
@@ -696,44 +715,6 @@ in an all-Claude pipeline, and the bound is the magnitude plus the contract's
 mechanical half — so it judges Opus 5, and Opus 5 judges it. Opus 5 may execute under supervision but
 does not supervise: the property that would justify it is unmeasured, and an
 unmeasured property is not a permission.
-
-## Delegating the Workflow Script Itself
-
-This applies only to the rare wave the shipped runner cannot express; the
-default path is invoking `references/wave-runner.workflow.mjs`, not writing a
-script. An executor asked to *write* a workflow script cannot read the
-`Workflow` tool's documentation — the tool is not in its prompt and not
-available to it. It will
-code against whatever it can infer, produce something plausible, and the script
-will be rejected at launch or, worse, run on assumptions that quietly void the
-result. Hand it these constraints in the task prompt, because it cannot discover
-them:
-
-- `meta` must be a **pure literal** — no concatenation, no variables, no template
-  strings. A wrapped description string is the most common rejection.
-- Exactly **one** `export` (the `meta` block). A second one makes the whole file
-  unparseable to the harness.
-- `Date.now()`, `new Date()` and `Math.random()` **throw** inside a script; they
-  would break resume. Timestamps come in through `args`.
-- `opts.model` takes the short names (`haiku`, `sonnet`, `opus`, `fable`) or
-  the one pinned full ID `claude-opus-4-8`. Workflow's `agent()` accepts
-  full model IDs — measured 2026-09-01, probe `wf_93d94701-ae1`:
-  `claude-opus-4-8` → Opus 4.8, `opus-4-8` rejected — and the runner and the
-  plan linter accept exactly that one full ID and no other.
-- The script's **return value** is the result. `console.log` is not a channel;
-  `log()` emits progress, not results.
-- `agent()` returns `null` when a subagent dies after retries — every call site
-  needs a guard, or one API error takes the whole wave down.
-- The tool-call layer may deliver `args` as a JSON-encoded string. Parse it
-  first — guarded, failing closed with a named error when the parse throws —
-  then validate; that is what the shipped runner does. A script that skips
-  both will read `args.foo` as `undefined` and run to a plausible,
-  meaningless result.
-
-Verified 2026-08-12 the hard way: a carefully built harness, dry-run by its
-author across seven scenarios, was still rejected four times at launch for four
-different items on this list. The author was not careless — the information was
-not reachable from where it stood.
 
 ## Result Review Checklist
 

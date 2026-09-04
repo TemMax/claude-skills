@@ -78,4 +78,17 @@ check "super-plan keeps exact headless heading" \
 check "super-plan no longer pins a Claude-only question tool" \
   "! grep -q 'AskUserQuestion' '$SP'"
 
+CP=plugins/orchestration/skills/multi-model/references/codex-wave-protocol.md
+
+section "multi-model selects the native host adapter"
+
+check "Claude adapter remains the shipped Workflow runner" \
+  "grep -qF 'references/wave-runner.workflow.mjs' '$MM'"
+check "GPT adapter names the Codex protocol" \
+  "grep -qF 'references/codex-wave-protocol.md' '$MM'"
+check "Codex spawns name exact model and effort" \
+  "grep -qF 'model and reasoning_effort' '$MM'"
+check "Codex protocol ships" \
+  "[ -f '$CP' ]"
+
 summary
