@@ -48,9 +48,101 @@ print(hashlib.sha256(open(sys.argv[1], 'rb').read()).hexdigest())
 PY
 }
 
+publish_diagnostic_jsonl() { # destination; authentic diagnostic bytes on stdin
+  python3 /dev/fd/3 "$1" 3<<'PY'
+import os
+import secrets
+import stat
+import sys
+
+target = sys.argv[1]
+directory = os.path.dirname(target) or "."
+name = os.path.basename(target)
+limit = 64 * 1024 * 1024
+directory_fd = None
+temporary_fd = None
+temporary_name = None
+
+def abort(message):
+    print(f"diagnostic publish failed: {message}", file=sys.stderr)
+    raise SystemExit(74)
+
+if name in {"", ".", ".."}:
+    abort("unsupported destination")
+
+try:
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) \
+        | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    directory_fd = os.open(directory, directory_flags)
+    if not stat.S_ISDIR(os.fstat(directory_fd).st_mode):
+        abort("destination parent is not a directory")
+    try:
+        destination_mode = os.stat(name, dir_fd=directory_fd, follow_symlinks=False).st_mode
+    except FileNotFoundError:
+        destination_mode = None
+    if destination_mode is not None and not any(check(destination_mode) for check in (
+            stat.S_ISREG, stat.S_ISLNK, stat.S_ISFIFO)):
+        abort("unsupported existing destination type")
+
+    payload = sys.stdin.buffer.read(limit + 1)
+    if len(payload) > limit:
+        abort("diagnostic exceeds 64 MiB limit")
+
+    for _ in range(128):
+        candidate = f".{name}.{secrets.token_hex(16)}.tmp"
+        try:
+            temporary_fd = os.open(
+                candidate,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+                dir_fd=directory_fd,
+            )
+            temporary_name = candidate
+            break
+        except FileExistsError:
+            continue
+    if temporary_fd is None:
+        abort("could not create a private temporary file")
+    if not stat.S_ISREG(os.fstat(temporary_fd).st_mode):
+        abort("temporary destination is not a regular file")
+
+    view = memoryview(payload)
+    while view:
+        written = os.write(temporary_fd, view)
+        if written <= 0:
+            abort("short write")
+        view = view[written:]
+    os.close(temporary_fd)
+    temporary_fd = None
+    os.replace(temporary_name, name, src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
+    temporary_name = None
+except SystemExit:
+    raise
+except (OSError, ValueError) as error:
+    abort(str(error))
+finally:
+    if temporary_fd is not None:
+        try:
+            os.close(temporary_fd)
+        except OSError:
+            pass
+    if temporary_name is not None and directory_fd is not None:
+        try:
+            os.unlink(temporary_name, dir_fd=directory_fd)
+        except OSError:
+            pass
+    if directory_fd is not None:
+        try:
+            os.close(directory_fd)
+        except OSError:
+            pass
+PY
+}
+
 capture_codex_evidence() { # expected repo base answer-source codex-jsonl-source cell
   local expected="$1" repo="$2" base="$3" answer_source="$4" event_source="$5" cell="$6"
-  local evidence state='' candidate state_count=0 before copy_hash after summary_rc wt rc
+  local evidence event_json='' state='' candidate state_count=0 before copy_hash after summary_rc wt rc
   evidence="$cell/evidence"
   mkdir -p "$evidence"
   if [ -f "$answer_source" ]; then
@@ -58,10 +150,18 @@ capture_codex_evidence() { # expected repo base answer-source codex-jsonl-source
   else
     : > "$evidence/final-answer.txt"
   fi
-  if [ -f "$event_source" ]; then
-    command cp "$event_source" "$evidence/codex-exec-events.jsonl"
+  if [ "$event_source" = - ]; then
+    event_json="$(cat)"
+    if [ -n "$event_json" ]; then
+      printf '%s\n' "$event_json" | publish_diagnostic_jsonl \
+        "$evidence/codex-exec-events.jsonl" || return 74
+    else
+      : | publish_diagnostic_jsonl "$evidence/codex-exec-events.jsonl" || return 74
+    fi
+  elif [ -f "$event_source" ]; then
+    publish_diagnostic_jsonl "$evidence/codex-exec-events.jsonl" < "$event_source" || return 74
   else
-    : > "$evidence/codex-exec-events.jsonl"
+    : | publish_diagnostic_jsonl "$evidence/codex-exec-events.jsonl" || return 74
   fi
   printf '%s\n' "$expected" > "$evidence/expected.txt"
   printf '%s\n' "$base" > "$evidence/base.txt"
@@ -483,7 +583,7 @@ now_ms() { python3 -c 'import time; print(time.monotonic_ns() // 1000000)' ; }
 
 record_codex_cell() { # scenario semantic expected repo base source-prompt
   local scenario="$1" semantic="$2" expected="$3" repo="$4" base="$5" source_prompt="$6"
-  local slug cell prompt answer class_file status_file state_file event_file event_json='' start end elapsed eval_rc classification status
+  local slug cell prompt answer class_file status_file state_file event_file event_json='' start end elapsed eval_rc event_publish_rc capture_rc classification status
   slug="${EVAL_MODEL}-wave-${scenario}"
   cell="$EVAL_RESULTS_DIR/raw/$slug"
   if [ -e "$cell" ]; then
@@ -503,23 +603,47 @@ record_codex_cell() { # scenario semantic expected repo base source-prompt
   eval_rc=$?
   set -e
   if [ -n "$event_json" ]; then
-    printf '%s\n' "$event_json" > "$event_file"
+    if printf '%s\n' "$event_json" | publish_diagnostic_jsonl "$event_file"; then
+      event_publish_rc=0
+    else
+      event_publish_rc=$?
+    fi
+    if printf '%s\n' "$event_json" | capture_codex_evidence \
+      "$expected" "$repo" "$base" "$answer" - "$cell"; then
+      capture_rc=0
+    else
+      capture_rc=$?
+    fi
   else
-    : > "$event_file"
+    if : | publish_diagnostic_jsonl "$event_file"; then
+      event_publish_rc=0
+    else
+      event_publish_rc=$?
+    fi
+    if : | capture_codex_evidence "$expected" "$repo" "$base" "$answer" - "$cell"; then
+      capture_rc=0
+    else
+      capture_rc=$?
+    fi
   fi
   end="$(now_ms)"
   elapsed=$((end - start))
-  capture_codex_evidence "$expected" "$repo" "$base" "$answer" "$event_file" "$cell"
   if [ "$eval_rc" -eq 0 ]; then
-    classification="$(printf '%s\n' "$event_json" | classify_codex "$expected" "$cell" "$base" -)"
+    if [ "$event_publish_rc" -ne 0 ]; then
+      classification="fail:diagnostic-publish-$event_publish_rc"
+    elif [ "$capture_rc" -ne 0 ]; then
+      classification="fail:diagnostic-publish-$capture_rc"
+    else
+      classification="$(printf '%s\n' "$event_json" | classify_codex "$expected" "$cell" "$base" -)"
+    fi
   else
     classification="fail:model-exit-$eval_rc"
   fi
   case "$classification" in pass) status=pass ;; *) status=fail ;; esac
   state_file="$(find_state "$repo" 2>/dev/null || true)"
   printf '%s\n' "$classification" > "$class_file"
-  printf 'status=%s\nexit=%s\nelapsed_ms=%s\ncodex_events=%s\ninput_tokens=unavailable\noutput_tokens=unavailable\ncost=unavailable\nstate=%s\n' \
-    "$status" "$eval_rc" "$elapsed" "$event_file" "${state_file:-unavailable}" > "$status_file"
+  printf 'status=%s\nexit=%s\nelapsed_ms=%s\ncodex_events=%s\ncodex_event_diagnostic_capture=%s\ncodex_evidence_diagnostic_capture=%s\ninput_tokens=unavailable\noutput_tokens=unavailable\ncost=unavailable\nstate=%s\n' \
+    "$status" "$eval_rc" "$elapsed" "$event_file" "$event_publish_rc" "$capture_rc" "${state_file:-unavailable}" > "$status_file"
   printf 'wave\t%s\t%s\t%s\t%s\t%s\tyes\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tunavailable\tunavailable\tunavailable\n' \
     "$scenario" "$semantic" "${EVAL_PROVIDER:-codex}" "$EVAL_MODEL" "${EVAL_EFFORT:-medium}" "$status" "$classification" "$eval_rc" "$elapsed" \
     "$prompt" "$answer" "$class_file" "$status_file" >> "$ROWS"
@@ -632,7 +756,42 @@ if [ "${1:-}" = --self-test ]; then
 
   command cp -R "$W/success-cell" "$W/replaced-events-cell"
   authentic_events='{"type":"thread.started","thread_id":"authentic-invalid-wave"}'
-  printf '%s\n' "$authentic_events" > "$W/replaced-events-cell/evidence/codex-exec-events.jsonl"
+  rm "$W/replaced-events-cell/evidence/codex-exec-events.jsonl"
+  printf 'wave-symlink-target-sentinel\n' > "$W/wave-symlink-target"
+  ln -s "$W/wave-symlink-target" \
+    "$W/replaced-events-cell/evidence/codex-exec-events.jsonl"
+  set +e
+  printf '%s\n' "$authentic_events" | publish_diagnostic_jsonl \
+    "$W/replaced-events-cell/evidence/codex-exec-events.jsonl"
+  publish_rc=$?
+  set -e
+  if [ "$publish_rc" -ne 0 ]; then
+    printf 'wave RED: atomic diagnostic publisher returned %s\n' "$publish_rc" >&2
+    exit 1
+  fi
+  [ "$(cat "$W/wave-symlink-target")" = wave-symlink-target-sentinel ]
+  [ -f "$W/replaced-events-cell/evidence/codex-exec-events.jsonl" ]
+  [ ! -L "$W/replaced-events-cell/evidence/codex-exec-events.jsonl" ]
+  printf '%s\n' "$authentic_events" > "$W/expected-authentic-events.jsonl"
+  command cmp "$W/expected-authentic-events.jsonl" \
+    "$W/replaced-events-cell/evidence/codex-exec-events.jsonl"
+
+  rm "$W/replaced-events-cell/evidence/codex-exec-events.jsonl"
+  mkfifo "$W/replaced-events-cell/evidence/codex-exec-events.jsonl"
+  export -f publish_diagnostic_jsonl
+  set +e
+  timeout 5 bash -c 'printf "%s\n" "$1" | publish_diagnostic_jsonl "$2"' \
+    _ "$authentic_events" "$W/replaced-events-cell/evidence/codex-exec-events.jsonl"
+  fifo_publish_rc=$?
+  set -e
+  if [ "$fifo_publish_rc" -ne 0 ]; then
+    printf 'wave RED: FIFO diagnostic publisher returned %s\n' "$fifo_publish_rc" >&2
+    exit 1
+  fi
+  [ -f "$W/replaced-events-cell/evidence/codex-exec-events.jsonl" ]
+  command cmp "$W/expected-authentic-events.jsonl" \
+    "$W/replaced-events-cell/evidence/codex-exec-events.jsonl"
+
   (command cp "$W/success/codex-events.jsonl" \
     "$W/replaced-events-cell/evidence/codex-exec-events.jsonl") &
   replace_pid=$!

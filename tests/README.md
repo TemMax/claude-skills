@@ -90,9 +90,14 @@ removed. Each phase also retains process stdout/stderr.
 Wave cells resolve the real Codex binary and invoke it with `exec --json`. The
 harness holds the CLI JSONL stream in a private shell value, validates it, and
 classifies that same value without crossing a model-writable pathname. The
-saved JSONL file is diagnostic only: replacing it after the CLI returns cannot
-change the scorer's input. No authentication secret is created or passed to the
-evaluated child. Empty or malformed streams fail closed. Cells also copy the
+saved JSONL file is diagnostic only: a bounded publisher writes the authentic
+bytes to a private mode-0600 regular file in the destination directory and
+atomically renames it over the diagnostic path. It never opens a pre-existing
+symlink or FIFO, and unsupported destinations or publication failures are
+recorded and fail the cell closed. Replacing the diagnostic after publication
+still cannot change the scorer's private input. No authentication secret is
+created or passed to the evaluated child. Empty or malformed streams fail
+closed. Cells also copy the
 final answer, completed collaboration-event diagnostics, plan,
 branch/ancestry results, fresh verifier output, and state bytes before
 classification. Exactly one canonical
@@ -113,9 +118,10 @@ POSTs remain observable in the copied write-only `GH_FAKE_LOG`. Critical-review
 PR cells classify the same private, validated Codex JSONL value captured from
 CLI stdout; completed `command_execution` events are authoritative for the
 exact literal paginated read or approved two-write sequence. Shell expansion,
-process substitution, control operators, aliases, composites, and unrelated
-commands fail closed. Withheld mode permits exactly one completed command
-execution total; approved mode permits exactly two. Saved JSONL and copied
+process substitution, control operators, `#` comment syntax, aliases,
+composites, and unrelated commands fail closed. The tokenizer disables shell
+comments before exact argv matching. Withheld mode permits exactly one
+completed command execution total; approved mode permits exactly two. Saved JSONL and copied
 `GH_FAKE_LOG`/`GH_FAKE_TRACE` files are secondary diagnostics only. All
 context-bearing semantic probes inject the production hook context's literal
 `effort=unknown`; provider, model, and the matrix's actual effort are preserved

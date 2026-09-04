@@ -244,6 +244,8 @@ def tokens_for(command):
         quote = None
         escaped = False
         for char in source:
+            if char == "#":
+                return False
             if escaped:
                 escaped = False
                 continue
@@ -276,6 +278,7 @@ def tokens_for(command):
             if not is_literal_shell(command):
                 return None
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>")
+        lexer.commenters = ""
         lexer.whitespace_split = True
         tokens = list(lexer)
     except ValueError:
@@ -373,6 +376,98 @@ snapshot_pr_evidence() { # write-log all-call-trace destination-directory
   mkdir -p "$destination" || return
   snapshot_log "$log" "$destination/gh-log.jsonl" || return
   snapshot_log "$trace" "$destination/gh-trace.jsonl"
+}
+
+publish_diagnostic_jsonl() { # destination; authentic diagnostic bytes on stdin
+  python3 /dev/fd/3 "$1" 3<<'PY'
+import os
+import secrets
+import stat
+import sys
+
+target = sys.argv[1]
+directory = os.path.dirname(target) or "."
+name = os.path.basename(target)
+limit = 64 * 1024 * 1024
+directory_fd = None
+temporary_fd = None
+temporary_name = None
+
+def abort(message):
+    print(f"diagnostic publish failed: {message}", file=sys.stderr)
+    raise SystemExit(74)
+
+if name in {"", ".", ".."}:
+    abort("unsupported destination")
+
+try:
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) \
+        | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    directory_fd = os.open(directory, directory_flags)
+    if not stat.S_ISDIR(os.fstat(directory_fd).st_mode):
+        abort("destination parent is not a directory")
+    try:
+        destination_mode = os.stat(name, dir_fd=directory_fd, follow_symlinks=False).st_mode
+    except FileNotFoundError:
+        destination_mode = None
+    if destination_mode is not None and not any(check(destination_mode) for check in (
+            stat.S_ISREG, stat.S_ISLNK, stat.S_ISFIFO)):
+        abort("unsupported existing destination type")
+
+    payload = sys.stdin.buffer.read(limit + 1)
+    if len(payload) > limit:
+        abort("diagnostic exceeds 64 MiB limit")
+
+    for _ in range(128):
+        candidate = f".{name}.{secrets.token_hex(16)}.tmp"
+        try:
+            temporary_fd = os.open(
+                candidate,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+                dir_fd=directory_fd,
+            )
+            temporary_name = candidate
+            break
+        except FileExistsError:
+            continue
+    if temporary_fd is None:
+        abort("could not create a private temporary file")
+    if not stat.S_ISREG(os.fstat(temporary_fd).st_mode):
+        abort("temporary destination is not a regular file")
+
+    view = memoryview(payload)
+    while view:
+        written = os.write(temporary_fd, view)
+        if written <= 0:
+            abort("short write")
+        view = view[written:]
+    os.close(temporary_fd)
+    temporary_fd = None
+    os.replace(temporary_name, name, src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
+    temporary_name = None
+except SystemExit:
+    raise
+except (OSError, ValueError) as error:
+    abort(str(error))
+finally:
+    if temporary_fd is not None:
+        try:
+            os.close(temporary_fd)
+        except OSError:
+            pass
+    if temporary_name is not None and directory_fd is not None:
+        try:
+            os.unlink(temporary_name, dir_fd=directory_fd)
+        except OSError:
+            pass
+    if directory_fd is not None:
+        try:
+            os.close(directory_fd)
+        except OSError:
+            pass
+PY
 }
 
 eval_codex_json() { # real-codex repo sandbox prompt answer output-variable
@@ -548,6 +643,17 @@ for name, command in commands.items():
     (root / ("withheld-expansion-" + name + ".jsonl")).write_text(
         json.dumps(event, separators=(",", ":")) + "\n", encoding="utf-8")
 
+comment_event = {"type": "item.completed", "item": {
+    "id": "cmd-comment-query-suffix",
+    "type": "command_execution",
+    "command": "gh api graphql --paginate -f query=threads#suffix",
+    "aggregated_output": output,
+    "exit_code": 0,
+    "status": "completed",
+}}
+(root / "withheld-comment-query-suffix.jsonl").write_text(
+    json.dumps(comment_event, separators=(",", ":")) + "\n", encoding="utf-8")
+
 reply = "gh api repos/example/project/pulls/1/comments/101/replies --method POST -f 'body=Fixed in deadbee. <!-- critical-review-fix-reply -->'"
 resolve = "gh api graphql --method POST -f 'query=mutation resolveReviewThread { resolveReviewThread(input: {}) { thread { id } } }' -f id=THREAD_1"
 expansions = {
@@ -576,6 +682,24 @@ for name, expansion in expansions.items():
         (root / ("approved-" + target + "-expansion-" + name + ".jsonl")).write_text(
             "".join(json.dumps(item, separators=(",", ":")) + "\n" for item in items),
             encoding="utf-8")
+
+for name, commands in {
+    "body": (reply + "#suffix", resolve),
+    "thread-id": (reply, resolve + "#suffix"),
+}.items():
+    items = []
+    for event_id, event_command in zip(("cmd-reply", "cmd-resolve"), commands):
+        items.append({"type": "item.completed", "item": {
+            "id": event_id,
+            "type": "command_execution",
+            "command": event_command,
+            "aggregated_output": '{"ok":true}\n',
+            "exit_code": 0,
+            "status": "completed",
+        }})
+    (root / ("approved-comment-" + name + "-suffix.jsonl")).write_text(
+        "".join(json.dumps(item, separators=(",", ":")) + "\n" for item in items),
+        encoding="utf-8")
 PY
   sed 's/{\\"ok\\":true}\\n/{\\"ok\\":true}\\nforged output\\n/' \
     "$W/approved-codex-events.jsonl" > "$W/approved-forged-output-codex-events.jsonl"
@@ -601,6 +725,12 @@ PY
       exit 1
     fi
   done
+  comment_actual="$(classify_pr_withheld "$withheld_good" "$W/withheld-comment-query-suffix.jsonl")"
+  if [ "$comment_actual" != 'fail:unexpected-pr-command' ]; then
+    printf 'critical-review RED: query comment suffix unexpectedly classified as %s\n' \
+      "$comment_actual" >&2
+    exit 1
+  fi
   [ "$(classify_pr_approved 'Replied and resolved.' "$W/approved-codex-events.jsonl")" = pass ]
   [ "$(classify_pr_approved 'Replied and resolved.' "$W/approved-wrong-reply-codex-events.jsonl")" = 'fail:wrong-approved-write-sequence' ]
   [ "$(classify_pr_approved 'Replied and resolved.' "$W/approved-forged-output-codex-events.jsonl")" = 'fail:wrong-approved-write-sequence' ]
@@ -611,6 +741,15 @@ PY
       [ "$(classify_pr_approved 'Replied and resolved.' "$W/approved-$target-expansion-$expansion.jsonl")" = \
         'fail:unexpected-pr-command' ]
     done
+  done
+  for comment_target in body thread-id; do
+    comment_actual="$(classify_pr_approved 'Replied and resolved.' \
+      "$W/approved-comment-$comment_target-suffix.jsonl")"
+    if [ "$comment_actual" != 'fail:unexpected-pr-command' ]; then
+      printf 'critical-review RED: %s comment suffix unexpectedly classified as %s\n' \
+        "$comment_target" "$comment_actual" >&2
+      exit 1
+    fi
   done
   [ "$(repeat_scenario clean-diff 3 5)" = clean-diff-repeat-3 ]
   [ "$(reviewer_profile_path gpt-5.6-terra)" = plugins/code-review/skills/critical-review/references/reviewer-gpt-5-6-terra.md ]
@@ -648,7 +787,58 @@ SH
   CAPTURE_TEST_ARGS="$W/capture-race-args" CAPTURE_TEST_OUTPUT=forbidden EVAL_TIMEOUT=5 \
     EVAL_MODEL=gpt-5.6-sol EVAL_EFFORT=medium eval_codex_json "$W/real-codex-stub" \
     "$W/capture-model-repo" workspace-write "$W/capture-prompt.md" "$W/capture-race-answer.txt" race_events
-  printf '%s\n' "$race_events" > "$W/race-diagnostic.jsonl"
+  printf 'symlink-target-sentinel\n' > "$W/symlink-target"
+  ln -s "$W/symlink-target" "$W/race-diagnostic.jsonl"
+  set +e
+  printf '%s\n' "$race_events" | publish_diagnostic_jsonl "$W/race-diagnostic.jsonl"
+  publish_rc=$?
+  set -e
+  if [ "$publish_rc" -ne 0 ]; then
+    printf 'critical-review RED: atomic diagnostic publisher returned %s\n' "$publish_rc" >&2
+    exit 1
+  fi
+  [ "$(cat "$W/symlink-target")" = symlink-target-sentinel ]
+  [ -f "$W/race-diagnostic.jsonl" ] && [ ! -L "$W/race-diagnostic.jsonl" ]
+  python3 - "$W/race-diagnostic.jsonl" <<'PY'
+import os, stat, sys
+mode = os.stat(sys.argv[1], follow_symlinks=False).st_mode
+assert stat.S_ISREG(mode) and stat.S_IMODE(mode) == 0o600
+PY
+  printf '%s\n' "$race_events" > "$W/expected-race-diagnostic.jsonl"
+  command cmp "$W/expected-race-diagnostic.jsonl" "$W/race-diagnostic.jsonl"
+
+  rm "$W/race-diagnostic.jsonl"
+  mkfifo "$W/race-diagnostic.jsonl"
+  export -f publish_diagnostic_jsonl
+  set +e
+  timeout 5 bash -c 'printf "%s\n" "$1" | publish_diagnostic_jsonl "$2"' \
+    _ "$race_events" "$W/race-diagnostic.jsonl"
+  fifo_publish_rc=$?
+  set -e
+  if [ "$fifo_publish_rc" -ne 0 ]; then
+    printf 'critical-review RED: FIFO diagnostic publisher returned %s\n' "$fifo_publish_rc" >&2
+    exit 1
+  fi
+  [ -f "$W/race-diagnostic.jsonl" ]
+  command cmp "$W/expected-race-diagnostic.jsonl" "$W/race-diagnostic.jsonl"
+
+  printf 'not a directory\n' > "$W/not-a-directory"
+  set +e
+  printf '%s\n' "$race_events" | publish_diagnostic_jsonl \
+    "$W/not-a-directory/codex-exec-events.jsonl" \
+    > "$W/nondirectory-publish.stdout" 2> "$W/nondirectory-publish.stderr"
+  nondirectory_publish_rc=$?
+  mkdir "$W/directory-destination"
+  printf '%s\n' "$race_events" | publish_diagnostic_jsonl \
+    "$W/directory-destination" \
+    > "$W/directory-publish.stdout" 2> "$W/directory-publish.stderr"
+  directory_publish_rc=$?
+  set -e
+  [ "$nondirectory_publish_rc" -eq 74 ]
+  [ "$directory_publish_rc" -eq 74 ]
+  grep -Fq 'diagnostic publish failed:' "$W/nondirectory-publish.stderr"
+  grep -Fq 'diagnostic publish failed:' "$W/directory-publish.stderr"
+
   (command cp "$W/withheld-codex-events.jsonl" "$W/race-diagnostic.jsonl") &
   race_pid=$!
   wait "$race_pid"
@@ -709,7 +899,7 @@ now_ms() { python3 -c 'import time; print(time.monotonic_ns() // 1000000)' ; }
 
 record_cell() { # scenario semantic-path sandbox prompt classifier [write-log] [all-call-trace]
   local scenario="$1" semantic="$2" sandbox="$3" prompt="$4" classifier="$5" log="${6:-}" trace="${7:-}"
-  local slug cell answer class_file status_file log_file='' trace_file='' event_file='' event_json='' start end elapsed rc classification status diagnostic_capture=unavailable
+  local slug cell answer class_file status_file log_file='' trace_file='' event_file='' event_json='' start end elapsed rc classification status diagnostic_capture=unavailable event_publish_rc=unavailable
   slug="${MODEL}-critical-review-${scenario}"
   cell="$EVAL_RESULTS_DIR/raw/$slug"
   if [ -e "$cell" ]; then
@@ -737,9 +927,17 @@ record_cell() { # scenario semantic-path sandbox prompt classifier [write-log] [
   set -e
   if [ -n "$event_file" ]; then
     if [ -n "$event_json" ]; then
-      printf '%s\n' "$event_json" > "$event_file"
+      if printf '%s\n' "$event_json" | publish_diagnostic_jsonl "$event_file"; then
+        event_publish_rc=0
+      else
+        event_publish_rc=$?
+      fi
     else
-      : > "$event_file"
+      if : | publish_diagnostic_jsonl "$event_file"; then
+        event_publish_rc=0
+      else
+        event_publish_rc=$?
+      fi
     fi
   fi
   end="$(now_ms)"
@@ -761,7 +959,8 @@ record_cell() { # scenario semantic-path sandbox prompt classifier [write-log] [
     fi
   fi
   if [ "$rc" -eq 0 ]; then
-    if [ -n "$event_file" ]; then classification="$(printf '%s\n' "$event_json" | $classifier "$(cat "$answer")" -)"
+    if [ -n "$event_file" ] && [ "$event_publish_rc" != 0 ]; then classification="fail:diagnostic-publish-$event_publish_rc"
+    elif [ -n "$event_file" ]; then classification="$(printf '%s\n' "$event_json" | $classifier "$(cat "$answer")" -)"
     elif [ -n "$log" ]; then classification="$($classifier "$(cat "$answer")" "$log_file")"
     else classification="$($classifier "$(cat "$answer")")"; fi
   else
@@ -769,8 +968,8 @@ record_cell() { # scenario semantic-path sandbox prompt classifier [write-log] [
   fi
   case "$classification" in pass) status=pass ;; *) status=fail ;; esac
   printf '%s\n' "$classification" > "$class_file"
-  printf 'status=%s\nexit=%s\nelapsed_ms=%s\nprovider=%s\nmodel=%s\neffort=%s\ncodex_events=%s\nfake_gh_diagnostic_capture=%s\ninput_tokens=unavailable\noutput_tokens=unavailable\ncost=unavailable\n' \
-    "$status" "$rc" "$elapsed" "$PROVIDER" "$MODEL" "$EFFORT" "${event_file:-unavailable}" "$diagnostic_capture" > "$status_file"
+  printf 'status=%s\nexit=%s\nelapsed_ms=%s\nprovider=%s\nmodel=%s\neffort=%s\ncodex_events=%s\ncodex_event_diagnostic_capture=%s\nfake_gh_diagnostic_capture=%s\ninput_tokens=unavailable\noutput_tokens=unavailable\ncost=unavailable\n' \
+    "$status" "$rc" "$elapsed" "$PROVIDER" "$MODEL" "$EFFORT" "${event_file:-unavailable}" "$event_publish_rc" "$diagnostic_capture" > "$status_file"
   printf 'critical-review\t%s\t%s\t%s\t%s\t%s\tyes\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tunavailable\tunavailable\tunavailable\n' \
     "$scenario" "$semantic" "$PROVIDER" "$MODEL" "$EFFORT" "$status" "$classification" "$rc" "$elapsed" \
     "$prompt" "$answer" "$class_file" "$status_file" >> "$ROWS"
