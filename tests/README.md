@@ -42,6 +42,55 @@ tempts same-wave file overlap must still produce a lint-clean plan, and a
 request hiding a product fork must surface it under "Assumptions (would
 ask)" rather than resolve it silently.
 
+## GPT-5.6 all-skills matrix
+
+The full three-model matrix is deliberately separate from the normal
+`tests/run.sh --live` entry point, which explicitly skips
+`gpt-5-6-matrix.sh` and cannot silently expand into the expensive matrix.
+Invoke the matrix directly and supply a new results directory either with
+`--results` or the equivalent
+`EVAL_RESULTS_DIR` environment variable:
+
+```sh
+bash tests/eval/gpt-5-6-matrix.sh --results /absolute/path/to/new-run
+bash tests/eval/gpt-5-6-matrix.sh --critical --results /absolute/path/to/new-critical-run
+bash tests/eval/gpt-5-6-matrix.sh --effort --results /absolute/path/to/new-effort-run
+```
+
+The directory is part of the evidence contract, not a cache. A run accepts a
+missing or empty directory and refuses any nonempty results path (exit 73).
+Record and inspect the first failure before choosing a fresh directory for a
+rerun; never rerun first and replace the only copy of a surprising answer.
+
+The default run fixes `EVAL_PROVIDER=codex`, effort `medium`, and the exact model
+ids `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`. It produces 24 required
+skill rows: four skills × three models × distinct success and failure paths,
+which the Markdown reports as 12/12 complete model/skill pairs. The base run
+also produces 48 separately labeled supporting rows from profile routing,
+safety, supervisor, drift, and critical-review's PR gate. Supporting rows never
+inflate the 12-pair count.
+
+`--critical` first records the base matrix, then exports `EVAL_REPEAT=5` for the
+configured clean-review, planted-defect, destructive-scope,
+unavailable-verifier, supervisor, and drift guards. `--effort` records the base
+`medium` run and a complete `high` run for all three models, then runs the hard
+review and destructive safety probes at `xhigh` and `max` for Sol. `max` is
+therefore an explicit comparison only; it is never an automatic default.
+
+Every model cell owns an immutable directory under its phase's `raw/` containing its exact
+prompt, final answer, classification, status, process exit, and elapsed time;
+state, fake-`gh`, or native-action evidence is added where applicable. Legacy
+super-plan/supervisor/drift prompts and final answers are captured by the driver
+before their disposable work directories are removed. Each phase also retains
+process stdout/stderr. Every run emits `summary.tsv` and `summary.md`; input
+tokens, output tokens, and cost are written as `unavailable` when the adapter
+does not observe them. They are never estimated.
+
+These runs can make dozens of paid calls, and a native wave can add executor
+and supervisor calls. Review the current model prices before starting. Task 13
+adds and verifies the harness offline only; live calibration belongs to the
+separate calibration task.
+
 **wave-runner (simulated)** — `tests/wave-runner.test.sh` runs the shipped
 `wave-runner.workflow.mjs` through an offline simulator
 (`tests/lib/workflow-sim.mjs`) with stubbed agents: every escalation-ladder
@@ -107,26 +156,25 @@ Worth stating plainly, because a green run is easy to over-read.
   here — a run proves a case *can* pass, not that it reliably does.
   `EVAL_MODEL=claude-haiku-4-5-20251001` still runs it on Haiku for anyone
   who wants to see the weaker model's failure modes firsthand.
-- **ship has no automated tier at all.** The conductor's behavior is gates,
-  invocations of other skills, and git/PR side effects — none of it
-  exercisable headless without spending real waves and touching a real
-  remote. Its contract checks pin the load-bearing prose; everything else is
-  covered only by the in-session probe log
-  (`tests/eval/ship-insession.md`), and that log says so rather than
-  pretending otherwise.
-- **No adversarial fixtures.** Every case is an ordinary failure. Nobody has
-  tried to *defeat* the supervisor — pasted output differing only in whitespace,
-  or work that satisfies a contract's letter against its point. The dossiers
-  document models rules-lawyering around wording, and nothing here tests it.
-- **The ladder's live coverage is one boundary probe.** Its rules — rework,
-  two-strike escalation, the unsatisfiable-contract stop, the absolute cap —
-  are asserted by the simulator on the shipped file, which is exactly as
-  trustworthy as the simulator's fidelity to the real Workflow runtime. The
-  live tier (or the in-session probe, see `tests/eval/wave-insession.md`)
-  proves acceptance and one real verdict, nothing more. The tool-call layer
-  delivers `args` as a JSON-encoded string in every observed environment, so
-  the runner parses before validating; the live tier asserts a real wave
-  result over that path.
+- **ship's live fixture has no external side effects.** It uses a disposable
+  repository, a local bare remote, and the self-testing fake `gh`. The success
+  case checks the ordered handoffs through fake PR creation; the failure case
+  makes integration independently red and requires the PR log to stay empty.
+  This proves the bounded fixture, not real GitHub authentication or service
+  behavior.
+- **The safety fixtures are simulations, not infrastructure tests.** The VM
+  inventory and access-token strings are fake, the missing verifier is a unique
+  nonexistent command, and the impossible target has no external oracle. The
+  probes measure stop/redact/honesty behavior without granting destructive,
+  credential, or infrastructure capability.
+- **Wave coverage has two host-specific boundaries.** Claude retains the real
+  Workflow acceptance probe. Codex follows `codex-wave-protocol.md` and scores
+  the shipped state helper's terminal state, real verifier output, exact
+  different executor/supervisor ids, and an independently red `must_run`. A
+  live host without native collaboration tools records a named
+  `tool-unavailable` failure cell; the harness never simulates a successful
+  native wave. Offline ladder rules remain owned by the state/helper and
+  Workflow simulator tests.
 
 ## Adding to it
 
