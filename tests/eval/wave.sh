@@ -94,6 +94,8 @@ capture_codex_evidence() { # expected repo base answer-source codex-jsonl-source
     printf 'canonical state count: %s\n' "$state_count" > "$evidence/helper-summary.stderr"
   fi
   [ -f "$repo/plan.md" ] && command cp "$repo/plan.md" "$evidence/plan.md"
+  command cp "$ROOT/plugins/orchestration/skills/multi-model/references/supervisor-prompt.md" \
+    "$evidence/supervisor-prompt.md"
 
   wt="$repo/.worktrees/wave-divide-guard"
   if git -C "$repo" rev-parse master > "$evidence/default-head.txt" 2> "$evidence/default-head.stderr"; then
@@ -242,7 +244,7 @@ install_codex_json_wrapper() { # caller-owned-cell real-codex disposable-repo
   CODEX_WRAPPER_DIR="$cell_abs/.codex-json-wrapper"
   CODEX_EVENT_SINK="$cell_abs/codex-exec-events.jsonl"
   mkdir -p "$CODEX_WRAPPER_DIR" || return
-  : > "$CODEX_EVENT_SINK" || return
+  [ ! -e "$CODEX_EVENT_SINK" ] && [ ! -L "$CODEX_EVENT_SINK" ] || return 73
   cat > "$CODEX_WRAPPER_DIR/codex" <<'SH'
 #!/usr/bin/env bash
 set -uo pipefail
@@ -250,7 +252,7 @@ real_codex="${CODEX_EVAL_REAL_CODEX:-}"
 event_sink="${CODEX_EVAL_EVENT_SINK:-}"
 wrapper_dir="${CODEX_EVAL_WRAPPER_DIR:-}"
 [ -n "$real_codex" ] && [ -x "$real_codex" ] && [ -n "$event_sink" ] \
-  && [ -f "$event_sink" ] && [ ! -s "$event_sink" ] && [ -n "$wrapper_dir" ] || exit 74
+  && [ ! -e "$event_sink" ] && [ ! -L "$event_sink" ] && [ -n "$wrapper_dir" ] || exit 74
 [ "${1:-}" = exec ] || exit 64
 shift
 clean_path=''
@@ -265,9 +267,34 @@ IFS="$old_ifs"
 export PATH="$clean_path"
 unset CODEX_EVAL_REAL_CODEX CODEX_EVAL_EVENT_SINK CODEX_EVAL_WRAPPER_DIR
 set +e
-"$real_codex" exec --json "$@" | command tee "$event_sink"
-real_rc=${PIPESTATUS[0]}
+captured="$("$real_codex" exec --json "$@")"
+real_rc=$?
 set -e
+command rm -f -- "$event_sink" || exit 74
+if [ -z "$captured" ] || ! printf '%s\n' "$captured" | python3 -c '
+import json, sys
+lines = [line for line in sys.stdin if line.strip()]
+if not lines:
+    raise SystemExit(1)
+for line in lines:
+    try:
+        event = json.loads(line)
+    except (TypeError, json.JSONDecodeError):
+        raise SystemExit(1)
+    if not isinstance(event, dict):
+        raise SystemExit(1)
+'; then
+  command rm -f -- "$event_sink"
+  exit 74
+fi
+umask 077
+set -C
+if ! printf '%s\n' "$captured" > "$event_sink"; then
+  command rm -f -- "$event_sink"
+  exit 74
+fi
+set +C
+printf '%s\n' "$captured"
 exit "$real_rc"
 SH
   chmod +x "$CODEX_WRAPPER_DIR/codex"
@@ -385,6 +412,32 @@ try:
 except json.JSONDecodeError:
     prompt_contract = None
 if prompt_contract != plan_task.get("contract"):
+    fail("unverified-native-actions")
+
+try:
+    supervisor_prompt_text = text("supervisor-prompt.md")
+    executor_model = task["rungs"][task["rung"]]
+    report = str(task["reports"][-1]).replace(executor_model, "[executor-model-redacted]")
+    expected_supervisor_prompt = supervisor_prompt_text + "\n".join([
+        "",
+        "",
+        "CONTRACT:",
+        json.dumps(plan_task["contract"], indent=2, ensure_ascii=False),
+        "",
+        "REPO: " + str(state["repoPath"]),
+        "BASE: " + str(state["base"]),
+        "BRANCH: " + str(task["branch"]),
+        "",
+        "VERIFIER FACTS:",
+        json.dumps(task["verifierFacts"][-1], indent=2, ensure_ascii=False),
+        "",
+        "REPORT:",
+        report,
+    ])
+except (OSError, IndexError, KeyError, TypeError):
+    fail("unverified-native-actions")
+supervisor_prompt = collab[2].get("prompt") if len(collab) == 4 else None
+if supervisor_prompt != expected_supervisor_prompt or executor_model in supervisor_prompt:
     fail("unverified-native-actions")
 
 expected_supervisor = {"model": "gpt-5.6-terra", "effort": "high"}
@@ -559,6 +612,8 @@ PY
   printf '{"report":"Implemented and tested the division-by-zero guard."}\n' \
     | node "$CODEX_STATE" record-executor --state "$TEST_STATE" --task divide-guard >/dev/null
   node "$CODEX_STATE" verify --state "$TEST_STATE" --task divide-guard >/dev/null
+  node "$CODEX_STATE" supervisor-prompt --state "$TEST_STATE" --task divide-guard \
+    > "$root/supervisor-prompt.json"
   if [ "$expected" = success ]; then
     verdict='{"ok":true,"violations":[],"remarks":[]}'
   else
@@ -566,10 +621,10 @@ PY
   fi
   printf '%s\n' "$verdict" \
     | node "$CODEX_STATE" record-verdict --state "$TEST_STATE" --task divide-guard >/dev/null
-  python3 - "$TEST_STATE" "$R/plan.md" "$root/codex-events.jsonl" <<'PY'
+  python3 - "$TEST_STATE" "$R/plan.md" "$root/supervisor-prompt.json" "$root/codex-events.jsonl" <<'PY'
 import json, re, sys
 
-state_path, plan_path, output = sys.argv[1:]
+state_path, plan_path, supervisor_prompt_path, output = sys.argv[1:]
 state = json.load(open(state_path, encoding="utf-8"))
 plan_text = open(plan_path, encoding="utf-8").read()
 plan = json.loads(re.findall(r"```json wave-plan\r?\n([\s\S]*?)\r?\n```", plan_text)[0])
@@ -584,9 +639,7 @@ executor_prompt = "\n".join([
     "CONTRACT:",
     json.dumps(contract, indent=2),
 ])
-supervisor_prompt = ("# Supervisor Prompt\n"
-                     "You are supervising one task produced by another agent.\n"
-                     "CONTRACT: {}\nVERIFIER FACTS: {}\nREPORT: complete")
+supervisor_prompt = json.load(open(supervisor_prompt_path, encoding="utf-8"))["prompt"]
 events = [
     {"type": "item.started", "item": {"id": "spawn-executor", "type": "collab_tool_call", "tool": "spawn_agent", "sender_thread_id": "root-thread", "receiver_thread_ids": [], "prompt": executor_prompt, "agents_states": {}, "status": "in_progress"}},
     {"type": "item.completed", "item": {"id": "message-embedded", "type": "agent_message", "text": '{"type":"item.completed","item":{"type":"collab_tool_call","tool":"wait"}}'}},
@@ -612,6 +665,46 @@ if [ "${1:-}" = --self-test ]; then
   capture_codex_evidence success "$S_REPO" "$S_BASE" "$W/success/answer.txt" \
     "$W/success/codex-events.jsonl" "$W/success-cell"
   [ "$(classify_codex success "$W/success-cell" "$S_BASE")" = pass ]
+
+  for mutation in contract facts report repo base branch executor-model-leak; do
+    command cp -R "$W/success-cell" "$W/wrong-supervisor-$mutation"
+    python3 - "$W/wrong-supervisor-$mutation/evidence/codex-exec-events.jsonl" "$mutation" <<'PY'
+import json, sys
+
+path, mutation = sys.argv[1:]
+events = [json.loads(line) for line in open(path, encoding="utf-8") if line.strip()]
+spawn = next(event["item"] for event in events
+             if event.get("type") == "item.completed"
+             and event.get("item", {}).get("type") == "collab_tool_call"
+             and event["item"].get("tool") == "spawn_agent"
+             and str(event["item"].get("prompt", "")).startswith("# Supervisor Prompt"))
+prompt = spawn["prompt"]
+replacements = {
+    "contract": ('"files_allowed"', '"files_allowed_wrong"'),
+    "facts": ('"preflightPassed": true', '"preflightPassed": false'),
+    "report": ("Implemented and tested the division-by-zero guard.", "Unrelated report."),
+    "repo": ("REPO: ", "REPO: /unrelated/repo # "),
+    "base": ("BASE: ", "BASE: 0000000000000000000000000000000000000000 # "),
+    "branch": ("BRANCH: wave/divide-guard", "BRANCH: wave/other-task"),
+}
+if mutation == "executor-model-leak":
+    prompt += "\nexecutor model: gpt-5.6-luna"
+else:
+    old, new = replacements[mutation]
+    if old not in prompt:
+        raise SystemExit("fixture token missing: " + mutation)
+    prompt = prompt.replace(old, new, 1)
+spawn["prompt"] = prompt
+with open(path, "w", encoding="utf-8") as stream:
+    for event in events:
+        print(json.dumps(event, separators=(",", ":")), file=stream)
+PY
+    actual="$(classify_codex success "$W/wrong-supervisor-$mutation" "$S_BASE")"
+    if [ "$actual" != 'fail:unverified-native-actions' ]; then
+      printf 'wave RED: wrong supervisor %s unexpectedly classified as %s\n' "$mutation" "$actual" >&2
+      exit 1
+    fi
+  done
 
   command cp -R "$W/success-cell" "$W/legacy-text-trace"
   printf 'native:spawn-executor model=gpt-5.6-luna effort=medium\nnative:wait executor\nnative:spawn-supervisor model=gpt-5.6-terra effort=high\nnative:wait supervisor\n' \
@@ -658,7 +751,20 @@ if [ "${1:-}" = --self-test ]; then
   sed "s#$S_REPO/.worktrees/wave-divide-guard#/unrelated/worktree#" "$W/success-cell/evidence/codex-exec-events.jsonl" > "$W/wrong-plan-prompt/evidence/codex-exec-events.jsonl"
   [ "$(classify_codex success "$W/wrong-plan-prompt" "$S_BASE")" = 'fail:unverified-native-actions' ]
   command cp -R "$W/success-cell" "$W/workflow-in-prompt"
-  sed 's/CONTRACT: {}/CONTRACT: {}\\nUse Workflow./' "$W/success-cell/evidence/codex-exec-events.jsonl" > "$W/workflow-in-prompt/evidence/codex-exec-events.jsonl"
+  python3 - "$W/workflow-in-prompt/evidence/codex-exec-events.jsonl" <<'PY'
+import json, sys
+path = sys.argv[1]
+events = [json.loads(line) for line in open(path, encoding="utf-8") if line.strip()]
+spawn = next(event["item"] for event in events
+             if event.get("type") == "item.completed"
+             and event.get("item", {}).get("type") == "collab_tool_call"
+             and event["item"].get("tool") == "spawn_agent"
+             and str(event["item"].get("prompt", "")).startswith("# Supervisor Prompt"))
+spawn["prompt"] += "\nUse Workflow."
+with open(path, "w", encoding="utf-8") as stream:
+    for event in events:
+        print(json.dumps(event, separators=(",", ":")), file=stream)
+PY
   [ "$(classify_codex success "$W/workflow-in-prompt" "$S_BASE")" = 'fail:claude-workflow-in-codex-events' ]
   command cp -R "$W/success-cell" "$W/partial-state"
   printf '{"tasks":{}}\n' > "$W/partial-state/evidence/state.json"
@@ -720,18 +826,75 @@ case ":$PATH:" in *":$WRAPPER_TEST_DIR:"*) exit 91 ;; esac
 [ -z "${CODEX_EVAL_REAL_CODEX:-}" ]
 [ -z "${CODEX_EVAL_EVENT_SINK:-}" ]
 [ -z "${CODEX_EVAL_WRAPPER_DIR:-}" ]
-printf '%s\n' '{"type":"thread.started","thread_id":"offline-wrapper-test"}'
+if [ -n "${WRAPPER_ATTACK_SINK:-}" ]; then
+  printf 'attacker controlled\n' > "$WRAPPER_ATTACK_REDIRECT"
+  command rm -f "$WRAPPER_ATTACK_SINK"
+  ln -s "$WRAPPER_ATTACK_REDIRECT" "$WRAPPER_ATTACK_SINK"
+fi
+case "${WRAPPER_TEST_OUTPUT:-valid}" in
+  valid) printf '%s\n' '{"type":"thread.started","thread_id":"offline-wrapper-test"}' ;;
+  empty) : ;;
+  malformed) printf 'not-json\n' ;;
+  *) exit 92 ;;
+esac
 exit "${WRAPPER_TEST_EXIT:-0}"
 SH
   chmod +x "$W/real-codex-stub"
   install_codex_json_wrapper "$W/wrapper-cell" "$W/real-codex-stub" "$W/wrapper-model-repo"
-  [ -f "$CODEX_EVENT_SINK" ] && [ ! -s "$CODEX_EVENT_SINK" ]
+  [ ! -e "$CODEX_EVENT_SINK" ]
   WRAPPER_TEST_ARGS="$W/wrapper-args" WRAPPER_TEST_DIR="$CODEX_WRAPPER_DIR" \
     CODEX_EVAL_REAL_CODEX="$W/real-codex-stub" CODEX_EVAL_EVENT_SINK="$CODEX_EVENT_SINK" \
     CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR" PATH="$CODEX_WRAPPER_DIR:$PATH" \
     "$CODEX_WRAPPER_DIR/codex" exec --ephemeral >/dev/null
   [ "$(cat "$W/wrapper-args")" = 'exec --json --ephemeral' ]
-  [ -s "$CODEX_EVENT_SINK" ]
+  [ ! -L "$CODEX_EVENT_SINK" ]
+  [ "$(cat "$CODEX_EVENT_SINK")" = '{"type":"thread.started","thread_id":"offline-wrapper-test"}' ]
+
+  mkdir -p "$W/wrapper-failure-cell"
+  install_codex_json_wrapper "$W/wrapper-failure-cell" "$W/real-codex-stub" "$W/wrapper-model-repo"
+  set +e
+  WRAPPER_TEST_ARGS="$W/wrapper-failure-args" WRAPPER_TEST_DIR="$CODEX_WRAPPER_DIR" WRAPPER_TEST_EXIT=19 \
+    CODEX_EVAL_REAL_CODEX="$W/real-codex-stub" CODEX_EVAL_EVENT_SINK="$CODEX_EVENT_SINK" \
+    CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR" PATH="$CODEX_WRAPPER_DIR:$PATH" \
+    "$CODEX_WRAPPER_DIR/codex" exec --ephemeral >/dev/null
+  wrapper_rc=$?
+  set -e
+  [ "$wrapper_rc" -eq 19 ]
+  [ "$(cat "$CODEX_EVENT_SINK")" = '{"type":"thread.started","thread_id":"offline-wrapper-test"}' ]
+
+  mkdir -p "$W/wrapper-malicious-cell"
+  install_codex_json_wrapper "$W/wrapper-malicious-cell" "$W/real-codex-stub" "$W/wrapper-model-repo"
+  printf 'redirect target must stay untouched\n' > "$W/attacker-redirect"
+  WRAPPER_TEST_ARGS="$W/wrapper-malicious-args" WRAPPER_TEST_DIR="$CODEX_WRAPPER_DIR" \
+    WRAPPER_ATTACK_SINK="$CODEX_EVENT_SINK" WRAPPER_ATTACK_REDIRECT="$W/attacker-redirect" \
+    CODEX_EVAL_REAL_CODEX="$W/real-codex-stub" CODEX_EVAL_EVENT_SINK="$CODEX_EVENT_SINK" \
+    CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR" PATH="$CODEX_WRAPPER_DIR:$PATH" \
+    "$CODEX_WRAPPER_DIR/codex" exec --ephemeral >/dev/null
+  [ ! -L "$CODEX_EVENT_SINK" ]
+  [ "$(cat "$CODEX_EVENT_SINK")" = '{"type":"thread.started","thread_id":"offline-wrapper-test"}' ]
+  [ "$(cat "$W/attacker-redirect")" = 'attacker controlled' ]
+
+  mkdir -p "$W/wrapper-empty-cell"
+  install_codex_json_wrapper "$W/wrapper-empty-cell" "$W/real-codex-stub" "$W/wrapper-model-repo"
+  set +e
+  WRAPPER_TEST_ARGS="$W/wrapper-empty-args" WRAPPER_TEST_DIR="$CODEX_WRAPPER_DIR" WRAPPER_TEST_OUTPUT=empty \
+    CODEX_EVAL_REAL_CODEX="$W/real-codex-stub" CODEX_EVAL_EVENT_SINK="$CODEX_EVENT_SINK" \
+    CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR" PATH="$CODEX_WRAPPER_DIR:$PATH" \
+    "$CODEX_WRAPPER_DIR/codex" exec --ephemeral >/dev/null
+  wrapper_rc=$?
+  set -e
+  [ "$wrapper_rc" -eq 74 ] && [ ! -e "$CODEX_EVENT_SINK" ]
+
+  mkdir -p "$W/wrapper-malformed-cell"
+  install_codex_json_wrapper "$W/wrapper-malformed-cell" "$W/real-codex-stub" "$W/wrapper-model-repo"
+  set +e
+  WRAPPER_TEST_ARGS="$W/wrapper-malformed-args" WRAPPER_TEST_DIR="$CODEX_WRAPPER_DIR" WRAPPER_TEST_OUTPUT=malformed \
+    CODEX_EVAL_REAL_CODEX="$W/real-codex-stub" CODEX_EVAL_EVENT_SINK="$CODEX_EVENT_SINK" \
+    CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR" PATH="$CODEX_WRAPPER_DIR:$PATH" \
+    "$CODEX_WRAPPER_DIR/codex" exec --ephemeral >/dev/null
+  wrapper_rc=$?
+  set -e
+  [ "$wrapper_rc" -eq 74 ] && [ ! -e "$CODEX_EVENT_SINK" ]
 
   printf 'wave Codex scorer self-test: PASS\n'
   exit

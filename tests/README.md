@@ -88,14 +88,20 @@ are captured by the driver before their disposable work directories are
 removed. Each phase also retains process stdout/stderr.
 
 Wave cells resolve the real Codex binary before installing a private wrapper
-that adds `exec --json` and tees the CLI JSONL stream to the caller-owned cell,
-outside the disposable model workspace. They copy the final answer, authentic
-completed collaboration events, plan, branch/ancestry results, fresh verifier
-output, and state bytes before classification. Exactly one canonical state file
-is allowed. Its copy is hash-bound to a successful `codex-wave-state.mjs
-summary` run against the canonical path. Passing native evidence is exactly one
-executor spawn and wait followed by one distinct supervisor spawn and wait,
-with plan-bound role prompts and terminal child states; missing or unsupported
+that adds `exec --json`. The wrapper holds the CLI JSONL stream in private
+process memory while Codex runs, validates it, and only then publishes a fresh
+caller-owned sink after removing any model-created pathname or symlink. Empty,
+malformed, or unpublishable streams fail closed. They copy the final answer,
+authentic completed collaboration events, plan, branch/ancestry results, fresh
+verifier output, and state bytes before classification. Exactly one canonical
+state file is allowed. Its copy is hash-bound to a successful
+`codex-wave-state.mjs summary` run against the canonical path. Passing native
+evidence is exactly one
+executor spawn and wait followed by one distinct supervisor spawn and wait.
+The executor prompt is contract-bound; the supervisor prompt must equal the
+canonical helper construction byte-for-byte, including the full prompt text,
+contract, repo/base/branch, latest verifier facts, and redacted latest report.
+Both waits require terminal child states; missing or unsupported
 collaboration events fail closed. Ship cells copy the harness event sequence and fake-`gh`
 log before classification; success proves integration, critical review, push,
 then PR creation, while a red integration permits the local implementation
@@ -104,11 +110,13 @@ withheld review cell runs in a disposable writable repository so attempted
 POSTs remain observable in the copied write-only `GH_FAKE_LOG`. Critical-review
 PR cells use the same caller-owned Codex JSONL collection: completed
 `command_execution` events are authoritative for the exact paginated read or
-approved two-write sequence, while copied `GH_FAKE_LOG`/`GH_FAKE_TRACE` files
-are secondary diagnostics only. All context-bearing semantic probes inject the production hook
-context's literal `effort=unknown`; provider, model, and the matrix's actual
-effort are preserved separately as `EVALUATION_SESSION_METADATA_V1` and status
-evidence.
+approved two-write sequence. Withheld mode permits exactly one completed
+command execution total; approved mode permits exactly two, so aliases,
+composites, and unrelated commands cannot hide beside the allowed calls. Copied
+`GH_FAKE_LOG`/`GH_FAKE_TRACE` files are secondary diagnostics only. All
+context-bearing semantic probes inject the production hook context's literal
+`effort=unknown`; provider, model, and the matrix's actual effort are preserved
+separately as `EVALUATION_SESSION_METADATA_V1` and status evidence.
 
 Every run emits `summary.tsv` and `summary.md`; input tokens, output tokens, and
 cost are written as `unavailable` when the adapter does not observe them. They
