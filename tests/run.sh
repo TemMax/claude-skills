@@ -21,6 +21,7 @@ run() {
 run "structure — manifests, frontmatter, versions, prohibitions" bash tests/structure.sh
 run "contracts — the invariants behaviour depends on"            bash tests/skills-contract.sh
 run "behaviour — hermetic test environment" bash tests/test-env.test.sh
+export LC_COLLATE=C
 for t in tests/contracts/*.test.sh; do
   [ -e "$t" ] || continue
   run "contracts — $(basename "$t" .test.sh)" bash "$t"
