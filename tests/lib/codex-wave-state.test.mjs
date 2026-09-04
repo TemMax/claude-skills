@@ -8,13 +8,14 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(here, '..', '..')
 const CLI = join(ROOT, 'plugins', 'orchestration', 'skills', 'multi-model',
   'references', 'codex-wave-state.mjs')
 const FIXTURE = join(ROOT, 'tests', 'fixtures', 'plans', 'codex-clean.md')
+const { recordExecutor: transitionRecordExecutor } = await import(pathToFileURL(CLI).href)
 
 const roots = []
 process.on('exit', () => roots.forEach((path) => rmSync(path, { recursive: true, force: true })))
@@ -595,6 +596,50 @@ test('C18e malformed selected plan wave produces a named state rejection', () =>
   const result = invoke(['next', '--state', env.statePath])
   assert.notEqual(result.status, 0)
   assert.match(result.json.errors.join('; '), /state-schema.*plan wave/)
+  assert.deepEqual(readFileSync(env.statePath), before)
+})
+
+test('C18f ready state at the six-attempt cap is rejected without action or write', () => {
+  const env = init()
+  const tampered = state(env.statePath)
+  const task = tampered.tasks['divide-guard']
+  task.status = 'ready'
+  task.totalAttempts = 6
+  task.reports = ['one', 'two', 'three', 'four', 'five', 'six']
+  writeFileSync(env.statePath, JSON.stringify(tampered, null, 2) + '\n')
+  const before = readFileSync(env.statePath)
+  const result = invoke(['next', '--state', env.statePath])
+  assert.notEqual(result.status, 0)
+  assert.equal(result.json.status, 'invalid')
+  assert.match(result.json.errors.join('; '), /state-schema.*ready.*attempt cap/)
+  assert.equal(result.json.action, undefined)
+  assert.deepEqual(readFileSync(env.statePath), before)
+})
+
+test('C18g recordExecutor transition cannot create a seventh report', () => {
+  const env = init()
+  const tampered = state(env.statePath)
+  const task = tampered.tasks['divide-guard']
+  task.status = 'ready'
+  task.totalAttempts = 6
+  task.reports = ['one', 'two', 'three', 'four', 'five', 'six']
+  const before = structuredClone(tampered)
+  assert.throws(
+    () => transitionRecordExecutor(tampered, 'divide-guard', { report: 'seven' }),
+    /state-transition:.*executor attempt cap reached/)
+  assert.deepEqual(tampered, before)
+})
+
+test('C18h attempt-on-rung count cannot exceed total executor attempts', () => {
+  const env = init()
+  const tampered = state(env.statePath)
+  tampered.tasks['divide-guard'].attemptOnRung = 1
+  writeFileSync(env.statePath, JSON.stringify(tampered, null, 2) + '\n')
+  const before = readFileSync(env.statePath)
+  const result = invoke(['next', '--state', env.statePath])
+  assert.notEqual(result.status, 0)
+  assert.equal(result.json.status, 'invalid')
+  assert.match(result.json.errors.join('; '), /state-schema.*attemptOnRung.*totalAttempts/)
   assert.deepEqual(readFileSync(env.statePath), before)
 })
 

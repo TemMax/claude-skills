@@ -366,9 +366,18 @@ function validateStoredState(state, statePath) {
     }
     const rungMax = Array.isArray(task.rungs) && task.rungs.length ? task.rungs.length - 1 : -1
     if (!boundedInteger(task.rung, rungMax)) err('tasks.' + id + '.rung', 'out of bounds')
-    if (!boundedInteger(task.attemptOnRung, 2)) err('tasks.' + id + '.attemptOnRung', '0..2 required')
-    if (!boundedInteger(task.totalAttempts, MAX_EXECUTOR_ATTEMPTS)) {
+    const attemptOnRungValid = boundedInteger(task.attemptOnRung, 2)
+    const totalAttemptsValid = boundedInteger(task.totalAttempts, MAX_EXECUTOR_ATTEMPTS)
+    if (!attemptOnRungValid) err('tasks.' + id + '.attemptOnRung', '0..2 required')
+    if (!totalAttemptsValid) {
       err('tasks.' + id + '.totalAttempts', '0..' + MAX_EXECUTOR_ATTEMPTS + ' required')
+    }
+    if (attemptOnRungValid && totalAttemptsValid && task.attemptOnRung > task.totalAttempts) {
+      err('tasks.' + id + '.attemptOnRung', 'cannot exceed totalAttempts')
+    }
+    if (totalAttemptsValid && task.status === 'ready'
+      && task.totalAttempts === MAX_EXECUTOR_ATTEMPTS) {
+      err('tasks.' + id + '.status', 'ready at executor attempt cap')
     }
     if (!boundedInteger(task.pasteStrikes, 2)) err('tasks.' + id + '.pasteStrikes', '0..2 required')
     if (!Array.isArray(task.reports) || task.reports.some((report) => typeof report !== 'string')) {
@@ -509,6 +518,9 @@ export function recordExecutor(state, id, result) {
   const updated = clone(state)
   const task = requireTask(updated, id)
   if (task.status !== 'ready') throw new NamedError('state-transition', id + ': executor not expected')
+  if (task.totalAttempts >= MAX_EXECUTOR_ATTEMPTS) {
+    throw new NamedError('state-transition', id + ': executor attempt cap reached')
+  }
   if (isAgentError(result)) {
     appendAgentFailure(task, 'executor', result.error.kind, task.totalAttempts + 1)
     return updated
