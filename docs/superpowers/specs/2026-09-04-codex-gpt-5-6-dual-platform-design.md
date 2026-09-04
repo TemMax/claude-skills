@@ -243,15 +243,19 @@ Initial routing hypotheses, used only to seed live evaluation, are:
 | Demanding planning, ambiguous implementation | Sol | medium | Terra high |
 | Read-heavy exploration and large-file review | Terra | medium | Sol high |
 | Narrow repetitive/mechanical work | Luna | low or medium | Terra high |
-| Review of Luna or Terra output | Sol | high | mechanical checks first |
+| Review of Luna output | Terra | high | mechanical checks first |
+| Review of Terra output | Sol | high | mechanical checks first |
 | Review of Sol output | Terra | high | mechanical checks first |
 
 The release routing table is written from live results, not copied from this
 seed. A supervisor is never the executor's exact model. The initial escalation
-ladder is Luna -> Terra -> Sol; Terra -> Sol; Sol -> one raised-effort rework
-then user. `max` is never a default: Sol's persistence risk increases at the
-highest reasoning settings, so `xhigh` and `max` require measured task benefit
-and the destructive-action guard suite.
+ladder is Luna -> Sol under a Terra supervisor. Terra under Sol supervision and
+Sol under Terra supervision are terminal after one raised-effort rework. A new
+wave with a newly selected supervisor is required to change that pairing; no
+wave may place its supervisor model in an executor or ladder position. `max` is
+never a default: Sol's persistence risk increases at the highest reasoning
+settings, so `xhigh` and `max` require measured task benefit and the
+destructive-action guard suite.
 
 ## 4. Shared skill content
 
@@ -308,7 +312,7 @@ The helper is a dependency-free Node CLI. Every command writes one JSON object
 to stdout; commands that accept model output read one JSON object from stdin:
 
 ```text
-node codex-wave-state.mjs init --plan <path> --repo <path> --base <sha>
+node codex-wave-state.mjs init --plan <path> --wave <number> --repo <path> --base <sha>
 node codex-wave-state.mjs next --state <path>
 node codex-wave-state.mjs record-executor --state <path> --task <id>
 node codex-wave-state.mjs verify --state <path> --task <id>
@@ -317,17 +321,26 @@ node codex-wave-state.mjs record-verdict --state <path> --task <id>
 node codex-wave-state.mjs summary --state <path>
 ```
 
-`record-executor` accepts `{"report":"..."}`. `record-verdict` accepts the
-existing supervisor verdict object. `next` returns exactly one of
+`record-executor` accepts exactly one of `{"report":"..."}` or
+`{"error":{"kind":"null-result|transport|tool-unavailable"}}`.
+`record-verdict` accepts either the existing supervisor verdict object or the
+same fixed error shape. Arbitrary error messages are not persisted. `next`
+returns exactly one of
 `spawn-executor`, `verify`, `spawn-supervisor`, `merge-ready`, or `stop`, plus
-the task, model, effort, and prompt required for that action. Invalid input
-returns `status: "invalid"` and a non-zero exit without advancing state.
+the task, model, and effort required for that action. Executor actions include
+their prompt; a supervisor prompt is returned by the separate
+`supervisor-prompt` command after verifier facts exist. Invalid input returns
+`status: "invalid"` and a non-zero exit without advancing state.
+The Codex helper accepts only `gpt-5.6-sol`, `gpt-5.6-terra`, and
+`gpt-5.6-luna`; a Claude model id is a named host-mismatch error.
 
-State is written to
-`.worktrees/codex-wave/<plan-basename>-<base-prefix>.json`, already covered by
-the repository's `.worktrees/` ignore rule. It contains the schema version,
-plan path, base, task/rung/attempt status, reports, verifier facts, and verdicts;
-it never contains credentials or hidden reasoning.
+State is one file per wave, written to
+`.worktrees/codex-wave/<plan-basename>-w<wave>-<base-prefix>.json`, already
+covered by the repository's `.worktrees/` ignore rule. A later wave is
+initialized only after earlier `ok` branches merge and the new pushed base SHA
+is known. State contains the schema version, plan path, wave number, base,
+task/rung/attempt status, reports, verifier facts, and verdicts; it never
+contains credentials or hidden reasoning.
 
 The Codex protocol is:
 
@@ -338,7 +351,9 @@ The Codex protocol is:
    it the task contract but not the supervisor's detection method.
 4. Gather the branch diff and run every `must_run` command mechanically.
 5. Spawn the wave's different-model supervisor with the contract, diff,
-   verifier facts, and executor report. The verdict uses the existing schema.
+   verifier facts, and executor report. Redact literal occurrences of the
+   executor's exact model id from the report and omit executor identity
+   metadata. The verdict uses the existing schema.
 6. Apply the same rework, escalation, unsatisfiable-contract, and absolute-cap
    rules as the Claude runner.
 7. Persist task status and verdict history so Stop continuation can detect an
@@ -351,9 +366,15 @@ the plan path, task id, base SHA, branch, and verdict JSON; it returns a named
 next action or a schema error. Its state lives under the repository's existing
 ignored wave-worktree area and contains no credentials or hidden reasoning.
 
-Native-subagent failure follows the existing ladder semantics: retry one null
-or transport failure at the same point, then mark the task `error`; never
-reinterpret infrastructure failure as an `ok` verdict.
+Native-subagent failure follows the existing ladder semantics: record the fixed
+error kind, retry one null/transport/tool-unavailable failure at the same
+executor or supervisor point, then mark the task `error`; never reinterpret
+infrastructure failure as an `ok` verdict or store an arbitrary error string.
+
+Plan lint, Claude runner validation, and Codex helper validation reject any task
+whose executor or ladder contains the wave's supervisor model. This makes
+different-model supervision a schema property instead of relying on the
+orchestrator to notice a collision.
 
 ## 6. Provider-aware drift hook
 
@@ -363,7 +384,8 @@ Split host-specific invocation and output shaping behind it:
 - Claude path invokes the existing Claude judge and preserves current output;
 - Codex path invokes an explicit different-model Codex judge in read-only,
   ephemeral mode and requests structured output;
-- Codex continuation returns `{"decision":"block","reason":"..."}`;
+- Codex continuation returns a concrete message such as
+  `{"decision":"block","reason":"Task gamma has no verifier evidence."}`;
 - a clean result emits no continuation decision;
 - an inherited recursion-guard variable prevents a nested judge session from
   re-entering the same Stop hook.
@@ -417,8 +439,11 @@ network or model calls:
 5. **Codex wave state:** exercise valid run, rework, escalation, two evidence
    strikes, unsatisfiable contract, terminal Sol, agent error, invalid schema,
    and unfinished Stop-state scenarios.
-6. **Existing Claude simulator and plan linter:** remain unchanged except for
-   accepting the three exact GPT ids and their supported efforts.
+6. **Existing Claude simulator and plan linter:** the Claude Workflow runner
+   and simulator retain their Claude-only model set. The shared plan linter
+   accepts both the existing Claude ids and the three exact GPT ids, rejects a
+   wave that mixes providers, and leaves host-specific executability to the
+   selected wave adapter.
 
 The test harness disables commit signing and pins the temporary repository's
 default branch locally. Tests must not depend on the developer's global Git
