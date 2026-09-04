@@ -307,6 +307,7 @@ else
     ( cd "$neutral_dir" && printf '%s' "$full_prompt" \
       | DRIFT_CHECK_ACTIVE=1 timeout 300 codex exec \
           --ephemeral --ignore-user-config --ignore-rules \
+          --skip-git-repo-check \
           --sandbox read-only \
           --model "$judge" \
           -c 'model_reasoning_effort="high"' \

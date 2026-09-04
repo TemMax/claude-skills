@@ -359,15 +359,28 @@ cat > "$STUBBIN/codex" <<'EOF'
 : > "$CODEX_ARGS"
 answer_file=""
 previous=""
+has_skip_git_repo_check=0
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  printf 'git\n' > "$CODEX_CWD_KIND"
+else
+  printf 'non-git\n' > "$CODEX_CWD_KIND"
+fi
 for argument in "$@"; do
   printf '%s\n' "$argument" >> "$CODEX_ARGS"
   if [ "$previous" = "--output-last-message" ]; then answer_file="$argument"; fi
+  if [ "$argument" = "--skip-git-repo-check" ]; then has_skip_git_repo_check=1; fi
   previous="$argument"
 done
+if [ "$(cat "$CODEX_CWD_KIND")" = "non-git" ] && [ "$has_skip_git_repo_check" -ne 1 ]; then
+  exit 86
+fi
+printf 'accepted\n' > "$CODEX_ACCEPTED"
 cat > "$CODEX_STDIN"
 printf 'provider stdout must not become hook output\n'
 [ "${CODEX_STUB_STATUS:-0}" = 0 ] || exit "$CODEX_STUB_STATUS"
-printf '%s' "${CODEX_STUB_ANSWER:-{\"status\":\"nothing\",\"advice\":[]}}" > "$answer_file"
+stub_answer="${CODEX_STUB_ANSWER:-}"
+[ -n "$stub_answer" ] || stub_answer='{"status":"nothing","advice":[]}'
+printf '%s' "$stub_answer" > "$answer_file"
 EOF
 cat > "$STUBBIN/claude" <<'EOF'
 #!/bin/sh
@@ -380,12 +393,20 @@ chmod +x "$STUBBIN/timeout" "$STUBBIN/codex" "$STUBBIN/claude"
 invoke_provider_stub() {
   local session="$1" model="$2"
   ( cd "$WORK/repo" && printf '{"hook_event_name":"Stop","model":"%s","stop_hook_active":false,"last_assistant_message":"Summary: all tasks done, nothing remaining.","session_id":"%s"}' "$model" "$session" \
-    | PATH="$STUBBIN:$PATH" TIMEOUT_ARGS="$WORK/timeout.args" CODEX_ARGS="$WORK/codex.args" CODEX_STDIN="$WORK/codex.stdin" CLAUDE_ARGS="$WORK/claude.args" CLAUDE_STDIN="$WORK/claude.stdin" CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" "$HOOK" )
+    | PATH="$STUBBIN:$PATH" TIMEOUT_ARGS="$WORK/timeout.args" CODEX_ARGS="$WORK/codex.args" CODEX_STDIN="$WORK/codex.stdin" CODEX_CWD_KIND="$WORK/codex.cwd-kind" CODEX_ACCEPTED="$WORK/codex.accepted" CLAUDE_ARGS="$WORK/claude.args" CLAUDE_STDIN="$WORK/claude.stdin" CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" "$HOOK" )
 }
 
-rm -f "$WORK/timeout.args" "$WORK/codex.args" "$WORK/codex.stdin"
-expect "Codex judge captures only its final answer file" "{}" \
-  "$(CODEX_STUB_ANSWER='{"status":"nothing","advice":[]}' invoke_provider_stub codex-cli gpt-5.6-sol)"
+rm -f "$WORK/timeout.args" "$WORK/codex.args" "$WORK/codex.stdin" \
+  "$WORK/codex.cwd-kind" "$WORK/codex.accepted" \
+  "${TMPDIR:-/tmp}/claude-drift-memo-codex-cli" \
+  "${TMPDIR:-/tmp}/claude-drift-log/codex-cli.jsonl"
+expect "Codex judge runs successfully from the neutral directory" \
+  '{"decision":"block","reason":"Task gamma has no verifier evidence."}' \
+  "$(CODEX_STUB_ANSWER="$CODEX_ADVICE" invoke_provider_stub codex-cli gpt-5.6-sol)"
+expect "Codex judge cwd is intentionally outside a Git repository" "non-git" \
+  "$(cat "$WORK/codex.cwd-kind" 2>/dev/null)"
+expect "non-Git Codex invocation was authorized and accepted" "accepted" \
+  "$(cat "$WORK/codex.accepted" 2>/dev/null)"
 if [ -s "$WORK/timeout.args" ] && [ "$(sed -n '1p' "$WORK/timeout.args")" = 300 ]; then
   echo "PASS  Codex judge has an exact 300-second process timeout"
 else
@@ -397,17 +418,27 @@ args=open(sys.argv[1]).read().splitlines()
 schema=sys.argv[2]
 expected=[
   "exec", "--ephemeral", "--ignore-user-config", "--ignore-rules",
-  "--sandbox", "read-only", "--model", "gpt-5.6-terra",
-  "-c", "model_reasoning_effort=\"high\"", "--output-schema", schema,
-  "--output-last-message",
+  "--skip-git-repo-check", "--sandbox", "read-only", "--model",
+  "gpt-5.6-terra", "-c", "model_reasoning_effort=\"high\"",
+  "--output-schema", schema, "--output-last-message",
 ]
-ok=(args[:13] == expected and len(args) == 15 and args[13] and args[14] == "-"
-    and not any("dangerously-bypass" in arg for arg in args))
+ok=(args[:14] == expected and len(args) == 16 and args[14] and args[15] == "-")
 sys.exit(0 if ok else 1)
 ' "$WORK/codex.args" "$PLUGIN_ROOT/hooks/drift-verdict.schema.json"; then
-  echo "PASS  Codex judge invocation is exact, read-only, and headless"
+  echo "PASS  Codex judge invocation is exact, non-Git, read-only, and headless"
 else
   echo "FAIL  Codex judge invocation was missing or unsafe"; fail=1
+fi
+if python3 -c '
+import sys
+args=open(sys.argv[1]).read().splitlines()
+banned={"--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust"}
+unsafe=[arg for arg in args if arg in banned or "danger" in arg.lower() or "bypass" in arg.lower()]
+sys.exit(0 if not unsafe else 1)
+' "$WORK/codex.args"; then
+  echo "PASS  Codex judge has no danger or bypass flags"
+else
+  echo "FAIL  Codex judge included a danger or bypass flag"; fail=1
 fi
 if [ -s "$WORK/codex.stdin" ] && grep -qF 'Plan (' "$WORK/codex.stdin" \
    && grep -qF 'Summary: all tasks done, nothing remaining.' "$WORK/codex.stdin"; then
