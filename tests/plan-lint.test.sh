@@ -119,4 +119,62 @@ out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
 expect "unpinned full-looking id exits 1" "1" "$rc"
 contains "unpinned full-looking id named" "executor.model" "$out"
 
+section "Codex exact ids"
+while read -r executor supervisor rung; do
+  cp "$CLEAN" "$W/m.md"
+  python3 - "$W/m.md" "$executor" "$supervisor" "$rung" <<'PY'
+import sys
+p, executor, supervisor, rung = sys.argv[1:]
+s = open(p).read()
+s = s.replace('"model": "sonnet"', f'"model": "{executor}"')
+s = s.replace('"model": "haiku"', f'"model": "{executor}"')
+s = s.replace('"model": "fable"', f'"model": "{supervisor}"')
+s = s.replace('"ladder": ["opus"]', f'"ladder": ["{rung}"]')
+open(p, 'w').write(s)
+PY
+  out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+  expect "$executor plan exits 0" "0" "$rc"
+done <<'CASES'
+gpt-5.6-sol gpt-5.6-terra gpt-5.6-luna
+gpt-5.6-terra gpt-5.6-sol gpt-5.6-luna
+gpt-5.6-luna gpt-5.6-terra gpt-5.6-sol
+CASES
+
+mutate '"model": "sonnet"' '"model": "gpt-5.6"'
+out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+expect "gpt-5.6 alias exits 1" "1" "$rc"
+contains "gpt-5.6 alias is rejected" "executor.model" "$out"
+
+mutate '"model": "sonnet"' '"model": "gpt-5.6-mini"'
+out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+expect "gpt-5.6-mini alias exits 1" "1" "$rc"
+contains "gpt-5.6-mini alias is rejected" "executor.model" "$out"
+
+cp "$CLEAN" "$W/m.md"
+python3 - "$W/m.md" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+s = s.replace('"model": "sonnet"', '"model": "gpt-5.6-sol"')
+open(p, 'w').write(s)
+PY
+out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+expect "mixed-provider wave exits 1" "1" "$rc"
+contains "mixed-provider wave is named" "mixes providers" "$out"
+
+cp "$CLEAN" "$W/m.md"
+python3 - "$W/m.md" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+s = s.replace('"model": "sonnet"', '"model": "gpt-5.6-sol"')
+s = s.replace('"model": "haiku"', '"model": "gpt-5.6-luna"')
+s = s.replace('"model": "fable"', '"model": "gpt-5.6-terra"')
+s = s.replace('"ladder": ["opus"]', '"ladder": ["gpt-5.6-terra"]')
+open(p, 'w').write(s)
+PY
+out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+expect "GPT supervisor collision exits 1" "1" "$rc"
+contains "GPT supervisor collision is named" "supervisor model also appears as executor or ladder rung" "$out"
+
 summary

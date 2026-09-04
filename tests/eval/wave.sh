@@ -46,7 +46,7 @@ sup = open('plugins/orchestration/skills/multi-model/references/supervisor-promp
 json.dump({
     "base": base, "defaultBranch": branch, "repoPath": repo,
     "supervisorPromptText": sup,
-    "supervisor": {"model": "haiku", "effort": "medium"},
+    "supervisor": {"model": "sonnet", "effort": "medium"},
     "tasks": [{
         "id": "divide-guard",
         "description": "Make divide() return None when the divisor is zero, so the whole suite passes.",

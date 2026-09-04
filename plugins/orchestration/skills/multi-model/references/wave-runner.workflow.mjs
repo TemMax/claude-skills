@@ -109,6 +109,10 @@ if (!Array.isArray(wave.tasks) || wave.tasks.length === 0) {
     if (t.ladder !== undefined && (!Array.isArray(t.ladder) || t.ladder.some((m) => !MODELS.includes(m)))) {
       errors.push(at + '.ladder: an array of ' + MODELS.join('/') + ' (short names, or the pinned full ID claude-opus-4-8)')
     }
+    if (wave.supervisor && t.executor
+      && [t.executor.model, ...(Array.isArray(t.ladder) ? t.ladder : [])].includes(wave.supervisor.model)) {
+      errors.push(at + ': supervisor model also appears as executor or ladder rung')
+    }
   })
 }
 if (errors.length > 0) return invalid(errors)

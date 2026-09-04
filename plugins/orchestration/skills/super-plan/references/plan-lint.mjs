@@ -8,8 +8,14 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join, isAbsolute } from 'node:path'
 
-// 'claude-opus-4-8' is the one full ID the runner accepts (probe wf_93d94701-ae1, 2026-09-01); every other full ID stays rejected.
-const MODELS = ['haiku', 'sonnet', 'opus', 'fable', 'claude-opus-4-8']
+// Claude plans use short IDs except for the one pinned Opus ID accepted by
+// Workflow. Codex plans use only the exact public GPT-5.6 IDs.
+const CLAUDE_MODELS = ['haiku', 'sonnet', 'opus', 'fable', 'claude-opus-4-8']
+const CODEX_MODELS = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']
+const MODELS = [...CLAUDE_MODELS, ...CODEX_MODELS]
+const providerForModel = (model) => CLAUDE_MODELS.includes(model)
+  ? 'claude'
+  : CODEX_MODELS.includes(model) ? 'codex' : null
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const CONTRACT_KEYS = ['files_allowed', 'files_forbidden', 'must_run',
@@ -106,6 +112,10 @@ if (plan) {
         if (t.ladder !== undefined && (!Array.isArray(t.ladder) || t.ladder.some((m) => !MODELS.includes(m)))) {
           err(tat + '.ladder: array of ' + MODELS.join('/') + ' (short names, or the pinned full ID claude-opus-4-8)')
         }
+        if (w.supervisor && t.executor
+          && [t.executor.model, ...(Array.isArray(t.ladder) ? t.ladder : [])].includes(w.supervisor.model)) {
+          err(tat + ': supervisor model also appears as executor or ladder rung')
+        }
         const c = t.contract
         if (!c || typeof c !== 'object') { err(tat + '.contract: required, with all five keys'); return }
         for (const k of CONTRACT_KEYS) {
@@ -131,6 +141,16 @@ if (plan) {
           }
         }
       })
+      const waveModels = [
+        w.supervisor && w.supervisor.model,
+        ...w.tasks.flatMap((t) => t && typeof t === 'object'
+          ? [t.executor && t.executor.model, ...(Array.isArray(t.ladder) ? t.ladder : [])]
+          : []),
+      ]
+      const providers = new Set(waveModels.map(providerForModel).filter(Boolean))
+      if (providers.size > 1) {
+        err(at + ': mixes providers; one wave must be entirely claude or entirely codex')
+      }
       // The rule the whole linter exists for: same-wave tasks must not share files.
       const list = w.tasks.filter((t) => t && t.contract && Array.isArray(t.contract.files_allowed))
       for (let i = 0; i < list.length; i++) {

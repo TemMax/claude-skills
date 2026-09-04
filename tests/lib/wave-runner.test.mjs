@@ -52,7 +52,7 @@ function waveArgs(over = {}) {
     defaultBranch: 'main',
     repoPath: '/tmp/simrepo',
     supervisorPromptText: SUP,
-    supervisor: { model: 'opus', effort: 'high' },
+    supervisor: { model: 'fable', effort: 'high' },
     tasks: [task()],
     ...over,
   }
@@ -159,9 +159,9 @@ test('S8d a null task entry fails closed, not with a crash', async () => {
   assert.equal(calls.length, 0)
 })
 
-test('S9a the pinned full ID claude-opus-4-8 runs executor and supervisor', async () => {
+test('S9a the pinned full ID claude-opus-4-8 runs as executor under a fable supervisor', async () => {
   const pinned = waveArgs({
-    supervisor: { model: 'claude-opus-4-8', effort: 'high' },
+    supervisor: { model: 'fable', effort: 'high' },
     tasks: [task({ executor: { model: 'claude-opus-4-8', effort: 'high' }, ladder: [] })],
   })
   const { result, calls } = await runWorkflow(SCRIPT, {
@@ -173,7 +173,35 @@ test('S9a the pinned full ID claude-opus-4-8 runs executor and supervisor', asyn
   assert.ok(calls.some((c) => c.opts.model === 'claude-opus-4-8'))
 })
 
-test('S9b an unpinned short form is rejected while the pinned ID elsewhere is not enough to save it', async () => {
+test('S9b the pinned full ID claude-opus-4-8 runs as supervisor over a short-ID ladder', async () => {
+  const pinned = waveArgs({
+    supervisor: { model: 'claude-opus-4-8', effort: 'high' },
+    tasks: [task({ executor: { model: 'sonnet', effort: 'medium' }, ladder: ['opus'] })],
+  })
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: pinned,
+    agentStub: stub({ 't-one': [V.ok()] }),
+  })
+  assert.equal(result.status, 'done')
+  assert.equal(result.tasks[0].status, 'ok')
+  assert.ok(calls.some((c) => c.opts.model === 'claude-opus-4-8'))
+})
+
+test('S9c a ladder containing the supervisor model fails closed with zero agent calls', async () => {
+  const bad = waveArgs({
+    supervisor: { model: 'fable', effort: 'high' },
+    tasks: [task({ ladder: ['fable'] })],
+  })
+  const { result, calls } = await runWorkflow(SCRIPT, {
+    args: bad,
+    agentStub: () => { throw new Error('no agent may be called') },
+  })
+  assert.equal(result.status, 'invalid-args')
+  assert.match(result.errors.join('; '), /supervisor model also appears as executor or ladder rung/)
+  assert.equal(calls.length, 0)
+})
+
+test('S9d an unpinned short form is rejected while the pinned ID elsewhere is not enough to save it', async () => {
   const bad = waveArgs()
   bad.tasks = [task({ executor: { model: 'opus-4-8' }, ladder: ['claude-sonnet-5'] })]
   const { result, calls } = await runWorkflow(SCRIPT, {
