@@ -96,5 +96,17 @@ check "Codex protocol resolves sibling plan linter" \
   "grep -qF '../super-plan/references/plan-lint.mjs' '$CP'"
 check "Codex protocol resolves state helper from its skill base" \
   "grep -qF 'multi-model skill base directory' '$CP'"
+check "Codex helper declaration is exactly seven commands" \
+  "sed -n '/^\`\`\`text$/, /^\`\`\`$/p' '$CP' | grep -qFx 'init  next  record-executor  verify  supervisor-prompt  record-verdict  summary'"
+check "Codex follow-up reuse pins the complete child tuple" \
+  "grep -qF 'same role, exact model, and exact effort' '$CP'"
+check "Codex retry spawns fresh on model or effort change" \
+  "grep -qF 'model or effort changes' '$CP'"
+check "Codex spawn identity is valid and collision-free" \
+  "grep -qF 'wave_<task_id>_<role>_<spawn_id>' '$CP'"
+check "both Codex spawn examples name exact model" \
+  "[ \$(grep -cF 'model: action.model' '$CP') -eq 2 ]"
+check "both Codex spawn examples name exact effort" \
+  "[ \$(grep -cF 'reasoning_effort: action.effort' '$CP') -eq 2 ]"
 
 summary

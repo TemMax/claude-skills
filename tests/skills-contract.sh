@@ -71,13 +71,8 @@ section "multi-model: Codex-native supervision preserves the shared contract"
 check "GPT waves use the Codex adapter"             "grep -qF 'references/codex-wave-protocol.md' $MM"
 check "no fresh Codex runner may be written"        "grep -qF 'Never write a fresh runner' $MM"
 check "Codex spawn arguments are explicit"          "grep -qF 'model and reasoning_effort' $MM"
-check "Codex helper command init is named"          "grep -qF 'init' $CP"
-check "Codex helper command next is named"          "grep -qF 'next' $CP"
-check "Codex helper command record-executor is named" "grep -qF 'record-executor' $CP"
-check "Codex helper command verify is named"        "grep -qF 'verify' $CP"
-check "Codex helper command supervisor-prompt is named" "grep -qF 'supervisor-prompt' $CP"
-check "Codex helper command record-verdict is named" "grep -qF 'record-verdict' $CP"
-check "Codex helper command summary is named"       "grep -qF 'summary' $CP"
+check "Codex helper declares exactly seven commands" \
+  "sed -n '/^\`\`\`text$/, /^\`\`\`$/p' $CP | grep -qFx 'init  next  record-executor  verify  supervisor-prompt  record-verdict  summary'"
 check "Codex supervisor uses a different exact model" "grep -qF 'different exact model' $CP"
 check "approved plan outranks profile during execution" \
   "grep -qF 'approved plan is authoritative for adapter execution' $MM"
@@ -85,6 +80,16 @@ check "Codex linter uses a sibling-skill path" \
   "grep -qF '../super-plan/references/plan-lint.mjs' $CP"
 check "Codex helper path has a declared base" \
   "grep -qF 'multi-model skill base directory' $CP"
+check "child reuse requires matching role model effort" \
+  "grep -qF 'same role, exact model, and exact effort' $CP"
+check "changed retry tuple uses fresh spawn" \
+  "grep -qF 'model or effort changes' $CP"
+check "spawn identities are valid and collision-free" \
+  "grep -qF 'wave_<task_id>_<role>_<spawn_id>' $CP"
+check "executor and supervisor examples name model" \
+  "[ \$(grep -cF 'model: action.model' $CP) -eq 2 ]"
+check "executor and supervisor examples name effort" \
+  "[ \$(grep -cF 'reasoning_effort: action.effort' $CP) -eq 2 ]"
 
 section "multi-model: research fan-out is routed, never inherited"
 check "the research routing table exists"      "grep -q 'Research Routing' $MM"

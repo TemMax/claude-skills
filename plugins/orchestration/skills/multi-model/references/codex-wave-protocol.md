@@ -49,20 +49,31 @@ init  next  record-executor  verify  supervisor-prompt  record-verdict  summary
 
 3. Call `next --state <state-path>`. Perform exactly its one returned action.
    Do not infer a next action, synthesize a prompt, or advance a task yourself.
-   Native coordination uses `spawn_agent`, `followup_task`, and `wait_agent`:
-   wait for a child’s final response with `wait_agent`; use `followup_task` only
-   to deliver the helper-returned prompt as the entire message to an existing
-   child. Do not add context, summaries, or supervision instructions.
+   Native coordination uses `spawn_agent`, `followup_task`, and `wait_agent`.
+   Track every child handle with its role, exact model, and exact effort, plus
+   whether that exact child remains available. Wait for a child’s final response
+   with `wait_agent`. `followup_task` is allowed only when the new helper action
+   has the same role, exact model, and exact effort and that exact child remains
+   available; its message is the helper-returned prompt only. If no such child
+   exists, or the model or effort changes, use a fresh `spawn_agent`. Never
+   follow up an old child under a changed tuple.
 
-4. For `spawn-executor`, create or re-trigger the executor with the returned
-   `prompt` as its only task text. The executor receives only that
-   helper-returned prompt and works only in the exact returned `worktree`.
+   Every fresh spawn gets a collision-free `task_name` matching `[a-z0-9_]+`.
+   Replace every hyphen in the helper's kebab-case task id with `_`, retain a
+   monotonically increasing `spawn_id`, and form the name as
+   `wave_<task_id>_<role>_<spawn_id>`.
+
+4. For `spawn-executor`, use a matching available executor child only under the
+   tuple rule above; otherwise spawn a new executor. The executor receives only
+   the helper-returned `prompt` and works only in the exact returned `worktree`.
    Every new `spawn_agent` call explicitly passes the returned exact `model`
    and exact `effort` as `reasoning_effort`; a missing value stops the wave.
 
    ```js
+   const task_id = action.task.replaceAll("-", "_")
+   const spawn_id = ++spawnCounter
    await spawn_agent({
-     task_name: `wave-${action.task}-executor`,
+     task_name: `wave_${task_id}_executor_${spawn_id}`,
      fork_turns: "none",
      model: action.model,
      reasoning_effort: action.effort,
@@ -99,13 +110,18 @@ init  next  record-executor  verify  supervisor-prompt  record-verdict  summary
 
 6. For `spawn-supervisor`, use the returned `model` and `effort`. It is the
    different exact model selected by `next`; never choose an alternative based
-   on a label, availability guess, or default. Spawn the supervisor with the
-   helper-returned supervisor prompt as its only task text and require its fixed
-   verdict JSON. Pass that JSON unchanged to the recorder:
+   on a label, availability guess, or default. The same tuple rule applies to
+   supervisor retries: use `followup_task` only for the same role, exact model,
+   and exact effort on an available supervisor child. On a changed model or
+   effort, or no suitable live child, spawn a fresh supervisor. Pass the
+   helper-returned supervisor prompt as its only task text, require its fixed
+   verdict JSON, and pass that JSON unchanged to the recorder:
 
    ```js
+   const task_id = action.task.replaceAll("-", "_")
+   const spawn_id = ++spawnCounter
    await spawn_agent({
-     task_name: `wave-${action.task}-supervisor`,
+     task_name: `wave_${task_id}_supervisor_${spawn_id}`,
      fork_turns: "none",
      model: action.model,
      reasoning_effort: action.effort,
