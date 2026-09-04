@@ -3,6 +3,8 @@
 # offline, deterministic and costs nothing. The live end-to-end path is checked
 # separately — see the last case, which is skipped unless LIVE=1.
 set -uo pipefail
+cd "$(dirname "$0")/../../.." || exit 1
+. tests/test-env.sh
 
 HOOK="$(cd "$(dirname "$0")" && pwd)/drift-check"
 PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

@@ -6,6 +6,7 @@
 #   ./tests/run.sh --live   the above, plus the evaluation tiers (~1 min, ~7 calls)
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
+. tests/test-env.sh
 
 LIVE=""
 [ "${1:-}" = "--live" ] && LIVE=1
@@ -19,6 +20,11 @@ run() {
 
 run "structure — manifests, frontmatter, versions, prohibitions" bash tests/structure.sh
 run "contracts — the invariants behaviour depends on"            bash tests/skills-contract.sh
+run "behaviour — hermetic test environment" bash tests/test-env.test.sh
+for t in tests/contracts/*.test.sh; do
+  [ -e "$t" ] || continue
+  run "contracts — $(basename "$t" .test.sh)" bash "$t"
+done
 run "behaviour — wave-runner reference implementation (simulated)" bash tests/wave-runner.test.sh
 run "behaviour — plan linter on fixture mutants"                   bash tests/plan-lint.test.sh
 
