@@ -13,6 +13,14 @@ orchestrator_profile_path() {
   printf 'plugins/orchestration/skills/multi-model/references/orchestrator-%s.md' "$model_token"
 }
 
+runtime_context() {
+  printf 'PLUGIN_RUNTIME_CONTEXT_V1 plugin=%s host=codex model=%s effort=unknown' "$1" "$2"
+}
+
+evaluation_metadata() {
+  printf 'EVALUATION_SESSION_METADATA_V1 provider=%s model=%s effort=%s' "$1" "$2" "$3"
+}
+
 success_change_is_exact() { # repo base
   [ "$(git -C "$1" diff --name-only "$2"..HEAD)" = src/calc.py ] \
     && [ -z "$(git -C "$1" status --porcelain)" ]
@@ -316,6 +324,8 @@ if [ "${1:-}" = --self-test ]; then
   git -C "$R" push -q origin "$BASE":refs/heads/feature/divide-guard
   [ "$(classify_failure 'Integration failed; stopped before PR creation.' "$R" "$BARE" "$BASE" "$W/empty" "$W/failure-events")" = 'fail:feature-pushed-after-red-integration' ]
   [ "$(orchestrator_profile_path gpt-5.6-luna)" = plugins/orchestration/skills/multi-model/references/orchestrator-gpt-5-6-luna.md ]
+  [ "$(runtime_context orchestration gpt-5.6-luna)" = 'PLUGIN_RUNTIME_CONTEXT_V1 plugin=orchestration host=codex model=gpt-5.6-luna effort=unknown' ]
+  [ "$(evaluation_metadata codex gpt-5.6-luna max)" = 'EVALUATION_SESSION_METADATA_V1 provider=codex model=gpt-5.6-luna effort=max' ]
   printf 'ship self-test: PASS\n'
   exit
 fi
@@ -396,8 +406,8 @@ record_cell() { # scenario semantic repo bare base prompt classifier gh-log even
   fi
   case "$classification" in pass) status=pass ;; *) status=fail ;; esac
   printf '%s\n' "$classification" > "$class_file"
-  printf 'status=%s\nexit=%s\nelapsed_ms=%s\ninput_tokens=unavailable\noutput_tokens=unavailable\ncost=unavailable\nlocal_remote=%s\ndefault_base=%s\n' \
-    "$status" "$eval_rc" "$elapsed" "$bare" "$base" > "$status_file"
+  printf 'status=%s\nexit=%s\nelapsed_ms=%s\nprovider=%s\nmodel=%s\neffort=%s\ninput_tokens=unavailable\noutput_tokens=unavailable\ncost=unavailable\nlocal_remote=%s\ndefault_base=%s\n' \
+    "$status" "$eval_rc" "$elapsed" "$PROVIDER" "$MODEL" "$EFFORT" "$bare" "$base" > "$status_file"
   printf 'ship\t%s\t%s\t%s\t%s\t%s\tyes\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tunavailable\tunavailable\tunavailable\n' \
     "$scenario" "$semantic" "$PROVIDER" "$MODEL" "$EFFORT" "$status" "$classification" "$eval_rc" "$elapsed" \
     "$prompt" "$answer" "$class_file" "$status_file" >> "$ROWS"
@@ -445,7 +455,8 @@ EOF
 }
 
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
-CONTEXT="PLUGIN_RUNTIME_CONTEXT_V1 plugin=orchestration host=codex model=$MODEL effort=$EFFORT"
+CONTEXT="$(runtime_context orchestration "$MODEL")"
+SESSION_METADATA="$(evaluation_metadata "$PROVIDER" "$MODEL" "$EFFORT")"
 SKILL=plugins/orchestration/skills/ship/SKILL.md
 PROFILE="$(orchestrator_profile_path "$MODEL")"
 rc=0
@@ -458,6 +469,7 @@ cat > "$W/success-prompt.md" <<EOF
 $(cat "$SKILL")
 
 $CONTEXT
+$SESSION_METADATA
 
 ACTIVE PROFILE (selected by the exact runtime context; use only this profile):
 $(cat "$PROFILE")
@@ -474,6 +486,7 @@ cat > "$W/failure-prompt.md" <<EOF
 $(cat "$SKILL")
 
 $CONTEXT
+$SESSION_METADATA
 
 ACTIVE PROFILE (selected by the exact runtime context; use only this profile):
 $(cat "$PROFILE")

@@ -52,20 +52,52 @@ with open(sys.argv[1], "a", encoding="utf-8") as stream:
 PY
 }
 
+trace_call() {
+  [ -n "${GH_FAKE_TRACE:-}" ] || return 0
+  python3 - "$GH_FAKE_TRACE" "$@" <<'PY'
+import json, sys
+with open(sys.argv[1], "a", encoding="utf-8") as stream:
+    json.dump({"event": "call", "argv": sys.argv[2:]}, stream, separators=(",", ":"))
+    stream.write("\n")
+PY
+}
+
+trace_yield() {
+  [ -n "${GH_FAKE_TRACE:-}" ] || return 0
+  python3 - "$GH_FAKE_TRACE" "$1" "$2" <<'PY'
+import json, sys
+with open(sys.argv[1], "a", encoding="utf-8") as stream:
+    json.dump({"event": "yield", "page": int(sys.argv[2]), "fixture": sys.argv[3]},
+              stream, separators=(",", ":"))
+    stream.write("\n")
+PY
+}
+
 self_test() {
-  local work log output rc
+  local work log trace output rc
   work="$(mktemp -d)"
   log="$work/writes.jsonl"
+  trace="$work/all-calls.jsonl"
   trap 'rm -rf "$work"' RETURN
   : > "$log"
+  : > "$trace"
 
   output="$(GH_FAKE_LOG="$log" "$self" pr view 17 --json number,title)"
   [ "$output" = '{"number":1,"title":"Offline fixture","headRefName":"feature","baseRefName":"main","url":"https://example.invalid/pr/1"}' ]
 
   output="$(GH_FAKE_LOG="$log" "$self" api graphql -f query=threads)"
   case "$output" in *'"hasNextPage":true'*'"endCursor":"PAGE_2"'*) ;; *) return 1 ;; esac
-  output="$(GH_FAKE_LOG="$log" "$self" api graphql --paginate -f query=threads)"
+  output="$(GH_FAKE_LOG="$log" GH_FAKE_TRACE="$trace" "$self" api graphql --paginate -f query=threads)"
   case "$output" in *'"databaseId":101'*'"databaseId":102'*) ;; *) return 1 ;; esac
+  python3 - "$trace" <<'PY'
+import json, sys
+rows = [json.loads(line) for line in open(sys.argv[1], encoding="utf-8")]
+assert rows == [
+    {"event": "call", "argv": ["api", "graphql", "--paginate", "-f", "query=threads"]},
+    {"event": "yield", "page": 1, "fixture": "graphql-page1"},
+    {"event": "yield", "page": 2, "fixture": "graphql-page2"},
+]
+PY
   output="$(GH_FAKE_LOG="$log" "$self" api graphql -f query=threads -F cursor=PAGE_2)"
   case "$output" in *'"hasNextPage":false'*) ;; *) return 1 ;; esac
   case "$output" in *'"databaseId":102'*) ;; *) return 1 ;; esac
@@ -117,6 +149,8 @@ if [ "${1:-}" = --self-test ] && [ "$#" -eq 1 ]; then
   exit
 fi
 
+trace_call "$@"
+
 for arg in "$@"; do
   case "$arg" in
     -X|-X*)
@@ -144,18 +178,22 @@ if [ "${1:-}" = api ] && [ "${2:-}" = graphql ]; then
   if [ "${3:-}" = --paginate ] || case " $* " in *' --paginate '*) true;; *) false;; esac; then
     fixture_or_default "${GH_FAKE_GRAPHQL_PAGE1_FILE:-}" \
       '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"THREAD_1","isResolved":false,"comments":{"nodes":[{"databaseId":101,"body":"First page thread"}]}}],"pageInfo":{"hasNextPage":true,"endCursor":"PAGE_2"}}}}}}'
+    trace_yield 1 graphql-page1
     fixture_or_default "${GH_FAKE_GRAPHQL_PAGE2_FILE:-}" \
       '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"THREAD_2","isResolved":false,"comments":{"nodes":[{"databaseId":102,"body":"Second page thread"}]}}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}'
+    trace_yield 2 graphql-page2
     exit
   fi
   case " $* " in
     *'PAGE_2'*)
       fixture_or_default "${GH_FAKE_GRAPHQL_PAGE2_FILE:-}" \
         '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"THREAD_2","isResolved":false,"comments":{"nodes":[{"databaseId":102,"body":"Second page thread"}]}}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}'
+      trace_yield 2 graphql-page2
       ;;
     *)
       fixture_or_default "${GH_FAKE_GRAPHQL_PAGE1_FILE:-}" \
         '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"THREAD_1","isResolved":false,"comments":{"nodes":[{"databaseId":101,"body":"First page thread"}]}}],"pageInfo":{"hasNextPage":true,"endCursor":"PAGE_2"}}}}}}'
+      trace_yield 1 graphql-page1
       ;;
   esac
   exit

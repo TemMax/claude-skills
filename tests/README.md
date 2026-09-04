@@ -88,15 +88,21 @@ are captured by the driver before their disposable work directories are
 removed. Each phase also retains process stdout/stderr.
 
 Wave cells copy the final answer, native trace, plan, branch/ancestry results,
-fresh verifier output, and state bytes before classification. The state copy is
-hash-bound to a successful `codex-wave-state.mjs summary` run against the
-canonical state path. Ship cells copy the harness event sequence and fake-`gh`
+fresh verifier output, and state bytes before classification. Exactly one
+canonical state file is allowed. Its copy is hash-bound to a successful
+`codex-wave-state.mjs summary` run against the canonical path, and the native
+trace must be exactly the executor, wait, different-model supervisor, wait
+sequence for the plan. Ship cells copy the harness event sequence and fake-`gh`
 log before classification; success proves integration, critical review, push,
 then PR creation, while a red integration permits the local implementation
 commit and diagnostics but forbids every later merge, push, or PR event. The
 withheld review cell runs in a disposable writable repository so attempted
-POSTs are observable in the copied fake log. Profile-routing uses the production
-context's literal `effort=unknown`; matrix effort remains separate metadata.
+POSTs are observable in the copied write-only `GH_FAKE_LOG`. Its separately
+copied optional `GH_FAKE_TRACE` must show exactly one paginated GraphQL read and
+both fixture-page yields. All context-bearing semantic probes inject the production hook
+context's literal `effort=unknown`; provider, model, and the matrix's actual
+effort are preserved separately as `EVALUATION_SESSION_METADATA_V1` and status
+evidence.
 
 Every run emits `summary.tsv` and `summary.md`; input tokens, output tokens, and
 cost are written as `unavailable` when the adapter does not observe them. They

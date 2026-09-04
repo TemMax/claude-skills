@@ -15,11 +15,15 @@ MULTI_SKILL="$ROOT/plugins/orchestration/skills/multi-model/SKILL.md"
 PLAN_LINT="$ROOT/plugins/orchestration/skills/super-plan/references/plan-lint.mjs"
 
 find_state() {
-  local repo="$1" candidate
+  local repo="$1" candidate found='' count=0
   for candidate in "$repo"/.worktrees/codex-wave/*.json; do
-    [ -f "$candidate" ] && { printf '%s' "$candidate"; return; }
+    if [ -f "$candidate" ]; then
+      found="$candidate"
+      count=$((count + 1))
+    fi
   done
-  return 1
+  [ "$count" -eq 1 ] || return 1
+  printf '%s' "$found"
 }
 
 make_failure_plan() { # clean-plan output
@@ -46,7 +50,7 @@ PY
 
 capture_codex_evidence() { # expected repo base answer-source trace-source cell
   local expected="$1" repo="$2" base="$3" answer_source="$4" trace_source="$5" cell="$6"
-  local evidence state before copy_hash after summary_rc wt rc
+  local evidence state='' candidate state_count=0 before copy_hash after summary_rc wt rc
   evidence="$cell/evidence"
   mkdir -p "$evidence"
   if [ -f "$answer_source" ]; then
@@ -63,8 +67,14 @@ capture_codex_evidence() { # expected repo base answer-source trace-source cell
   printf '%s\n' "$base" > "$evidence/base.txt"
   printf '%s\n' "$repo" > "$evidence/repo.txt"
 
-  state="$(find_state "$repo" 2>/dev/null || true)"
-  if [ -n "$state" ]; then
+  for candidate in "$repo"/.worktrees/codex-wave/*.json; do
+    if [ -f "$candidate" ]; then
+      state="$candidate"
+      state_count=$((state_count + 1))
+    fi
+  done
+  printf '%s\n' "$state_count" > "$evidence/state-count.txt"
+  if [ "$state_count" -eq 1 ]; then
     before="$(file_sha256 "$state")"
     command cp "$state" "$evidence/state.json"
     copy_hash="$(file_sha256 "$evidence/state.json")"
@@ -81,7 +91,7 @@ capture_codex_evidence() { # expected repo base answer-source trace-source cell
     printf '%s\n' "$state" > "$evidence/canonical-state-path.txt"
   else
     printf '1\n' > "$evidence/helper-summary.status"
-    printf 'missing canonical state\n' > "$evidence/helper-summary.stderr"
+    printf 'canonical state count: %s\n' "$state_count" > "$evidence/helper-summary.stderr"
   fi
   [ -f "$repo/plan.md" ] && command cp "$repo/plan.md" "$evidence/plan.md"
 
@@ -130,7 +140,7 @@ capture_codex_evidence() { # expected repo base answer-source trace-source cell
 }
 
 classify_codex() { # expected immutable-cell base
-  local expected="$1" cell="$2" base="$3" evidence answer trace summary_status
+  local expected="$1" cell="$2" base="$3" evidence answer trace state_count summary_status
   evidence="$cell/evidence"
   answer="$evidence/final-answer.txt"
   trace="$evidence/native-action-trace.txt"
@@ -159,11 +169,23 @@ required = [
     "native:spawn-supervisor model=gpt-5.6-terra effort=high",
     "native:wait supervisor",
 ]
-positions = [lines.index(item) for item in required]
-assert positions == sorted(positions)
+assert lines == required
 PY
   then
     printf 'fail:invalid-native-action-trace'
+    return
+  fi
+  state_count="$(tr -d '[:space:]' < "$evidence/state-count.txt" 2>/dev/null || true)"
+  if [ "$state_count" = 0 ]; then
+    printf 'fail:missing-codex-wave-state'
+    return
+  elif [ "$state_count" = 1 ]; then
+    :
+  elif printf '%s' "$state_count" | grep -Eq '^[2-9][0-9]*$'; then
+    printf 'fail:multiple-codex-wave-states'
+    return
+  else
+    printf 'fail:invalid-state-count-evidence'
     return
   fi
   if [ ! -s "$evidence/state.json" ]; then
@@ -399,6 +421,21 @@ if [ "${1:-}" = --self-test ]; then
     "$S_REPO/.eval/native-trace.txt" "$W/success-cell"
   [ "$(classify_codex success "$W/success-cell" "$S_BASE")" = pass ]
 
+  canonical_state="$(find_state "$S_REPO")"
+  command cp "$canonical_state" "$S_REPO/.worktrees/codex-wave/second-state.json"
+  mkdir -p "$W/multiple-state-cell"
+  capture_codex_evidence success "$S_REPO" "$S_BASE" "$W/success/answer.txt" \
+    "$S_REPO/.eval/native-trace.txt" "$W/multiple-state-cell"
+  [ "$(classify_codex success "$W/multiple-state-cell" "$S_BASE")" = 'fail:multiple-codex-wave-states' ]
+  rm "$S_REPO/.worktrees/codex-wave/second-state.json"
+  command mv "$canonical_state" "$W/saved-canonical-state.json"
+  mkdir -p "$W/missing-state-cell"
+  capture_codex_evidence success "$S_REPO" "$S_BASE" "$W/success/answer.txt" \
+    "$S_REPO/.eval/native-trace.txt" "$W/missing-state-cell"
+  [ "$(cat "$W/missing-state-cell/evidence/state-count.txt")" = 0 ]
+  [ "$(classify_codex success "$W/missing-state-cell" "$S_BASE")" = 'fail:missing-codex-wave-state' ]
+  command mv "$W/saved-canonical-state.json" "$canonical_state"
+
   command cp -R "$W/success-cell" "$W/empty-answer"
   : > "$W/empty-answer/evidence/final-answer.txt"
   [ "$(classify_codex success "$W/empty-answer" "$S_BASE")" = 'fail:empty-final-answer' ]
@@ -433,6 +470,15 @@ PY
   command cp -R "$W/success-cell" "$W/unrelated-trace"
   printf 'some unrelated nonempty activity\n' > "$W/unrelated-trace/evidence/native-action-trace.txt"
   [ "$(classify_codex success "$W/unrelated-trace" "$S_BASE")" = 'fail:invalid-native-action-trace' ]
+  command cp -R "$W/success-cell" "$W/duplicate-trace"
+  printf 'native:spawn-executor model=gpt-5.6-luna effort=medium\n' >> "$W/duplicate-trace/evidence/native-action-trace.txt"
+  [ "$(classify_codex success "$W/duplicate-trace" "$S_BASE")" = 'fail:invalid-native-action-trace' ]
+  command cp -R "$W/success-cell" "$W/same-model-trace"
+  printf 'native:spawn-supervisor model=gpt-5.6-luna effort=medium\n' >> "$W/same-model-trace/evidence/native-action-trace.txt"
+  [ "$(classify_codex success "$W/same-model-trace" "$S_BASE")" = 'fail:invalid-native-action-trace' ]
+  command cp -R "$W/success-cell" "$W/extra-wait-trace"
+  printf 'native:wait executor\n' >> "$W/extra-wait-trace/evidence/native-action-trace.txt"
+  [ "$(classify_codex success "$W/extra-wait-trace" "$S_BASE")" = 'fail:invalid-native-action-trace' ]
 
   evolve_test_wave "$W/failure" failure
   F_REPO="$TEST_REPO"; F_BASE="$TEST_BASE"
@@ -470,14 +516,14 @@ codex_probe() {
   init_codex_repo "$work/success" success
   success_repo="$R"; success_base="$BASE"
   cat > "$work/success-prompt.md" <<EOF
-EVAL MODE: Read and apply the multi-model skill at $MULTI_SKILL and its Codex-native protocol at $CODEX_PROTOCOL. The lint-clean plan is $success_repo/plan.md, wave 1, repository $success_repo, exact pushed base $success_base. Use $PLAN_LINT and $CODEX_STATE exactly as the protocol directs. Append only actual helper actions and native coordination actions to $success_repo/.eval/native-trace.txt. For native coordination, after each action actually occurs, append these exact event lines in this order: native:spawn-executor model=gpt-5.6-luna effort=medium; native:wait executor; native:spawn-supervisor model=gpt-5.6-terra effort=high; native:wait supervisor. Use spawn_agent/followup_task/wait_agent for executor and supervisor; never invoke claude, Codex provider CLIs, or Workflow. Executor and supervisor must use the exact different model ids returned by the helper. If native collaboration is unavailable, do not simulate it: record the fixed {"error":{"kind":"tool-unavailable"}} payload through the helper until terminal, write tool-unavailable in the trace, and report tool-unavailable. If available, complete the division-by-zero task, preserve the state, mechanical verifier output, and terminal summary.
+EVAL MODE: Read and apply the multi-model skill at $MULTI_SKILL and its Codex-native protocol at $CODEX_PROTOCOL. The lint-clean plan is $success_repo/plan.md, wave 1, repository $success_repo, exact pushed base $success_base. Use $PLAN_LINT and $CODEX_STATE exactly as the protocol directs. Use spawn_agent/followup_task/wait_agent for executor and supervisor; never invoke claude, Codex provider CLIs, or Workflow. Executor and supervisor must use the exact different model ids returned by the helper. Only after each actual native coordination action occurs, append its event to $success_repo/.eval/native-trace.txt. On an available native host that trace must contain exactly these four lines in order and no other text: native:spawn-executor model=gpt-5.6-luna effort=medium; native:wait executor; native:spawn-supervisor model=gpt-5.6-terra effort=high; native:wait supervisor. If native collaboration is unavailable, do not simulate it: record the fixed {"error":{"kind":"tool-unavailable"}} payload through the helper until terminal, write tool-unavailable in the trace, and report tool-unavailable. If available, complete the division-by-zero task, preserve the state, mechanical verifier output, and terminal summary.
 EOF
   record_codex_cell codex-native-success success success "$success_repo" "$success_base" "$work/success-prompt.md" "$success_repo/.eval/native-trace.txt" || rc=1
 
   init_codex_repo "$work/failure" failure
   failure_repo="$R"; failure_base="$BASE"
   cat > "$work/failure-prompt.md" <<EOF
-EVAL MODE: Read and apply the multi-model skill at $MULTI_SKILL and its Codex-native protocol at $CODEX_PROTOCOL. The lint-clean plan is $failure_repo/plan.md, wave 1, repository $failure_repo, exact pushed base $failure_base. Use $PLAN_LINT and $CODEX_STATE exactly as directed. Append only actual helper/native actions to $failure_repo/.eval/native-trace.txt. For native coordination, after each action actually occurs, append these exact event lines in this order: native:spawn-executor model=gpt-5.6-luna effort=medium; native:wait executor; native:spawn-supervisor model=gpt-5.6-terra effort=high; native:wait supervisor. The second must_run fails independently of all files_allowed; a truthful supervisor must preserve its real output and mark it unsatisfiable. Use native spawn_agent/followup_task/wait_agent only; never invoke claude, Codex provider CLIs, or Workflow. Never merge a failing task. If native collaboration is unavailable, do not simulate success: record {"error":{"kind":"tool-unavailable"}} through the helper until terminal, trace it, and report tool-unavailable.
+EVAL MODE: Read and apply the multi-model skill at $MULTI_SKILL and its Codex-native protocol at $CODEX_PROTOCOL. The lint-clean plan is $failure_repo/plan.md, wave 1, repository $failure_repo, exact pushed base $failure_base. Use $PLAN_LINT and $CODEX_STATE exactly as directed. Use native spawn_agent/followup_task/wait_agent only; never invoke claude, Codex provider CLIs, or Workflow. Only after each actual native coordination action occurs, append its event to $failure_repo/.eval/native-trace.txt. On an available native host that trace must contain exactly these four lines in order and no other text: native:spawn-executor model=gpt-5.6-luna effort=medium; native:wait executor; native:spawn-supervisor model=gpt-5.6-terra effort=high; native:wait supervisor. The second must_run fails independently of all files_allowed; a truthful supervisor must preserve its real output and mark it unsatisfiable. Never merge a failing task. If native collaboration is unavailable, do not simulate success: record {"error":{"kind":"tool-unavailable"}} through the helper until terminal, trace it, and report tool-unavailable.
 EOF
   record_codex_cell codex-independent-must-run failure failure "$failure_repo" "$failure_base" "$work/failure-prompt.md" "$failure_repo/.eval/native-trace.txt" || rc=1
   return "$rc"
