@@ -14,6 +14,22 @@ for f in plugins/*/hooks/hooks.json; do
   check "valid JSON: $f" "python3 -c 'import json;json.load(open(\"$f\"))'"
 done
 
+section "Codex plugin manifests"
+check "Codex marketplace exists: .agents/plugins/marketplace.json" \
+  "[ -f '.agents/plugins/marketplace.json' ]"
+check "Codex marketplace parses: .agents/plugins/marketplace.json" \
+  "python3 -c 'import json;json.load(open(\".agents/plugins/marketplace.json\"))'"
+for p in plugins/*/; do
+  c="$p.codex-plugin/plugin.json"
+  check "Codex manifest exists: $c" "[ -f '$c' ]"
+  check "Codex manifest parses: $c" "python3 -c 'import json;json.load(open(\"$c\"))'"
+  skills="$(python3 -c "import json;print(json.load(open('$c'))['skills'])" 2>/dev/null)"
+  expect "Codex skills path: $(basename "$p")" "./skills/" "$skills"
+  cv="$(python3 -c "import json;print(json.load(open('$c'))['version'])" 2>/dev/null)"
+  av="$(python3 -c "import json;print(json.load(open('$p.claude-plugin/plugin.json'))['version'])" 2>/dev/null)"
+  expect "Claude/Codex version: $(basename "$p")" "$av" "$cv"
+done
+
 section "Skill frontmatter parses and is complete"
 for f in plugins/*/skills/*/SKILL.md; do
   out="$(ruby -ryaml -e '

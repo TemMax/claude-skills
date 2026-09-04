@@ -1,0 +1,16 @@
+{
+  "name": "temmax-skills",
+  "owner": { "name": "TemMax" },
+  "plugins": [
+    {
+      "name": "orchestration",
+      "source": { "source": "local", "path": "./plugins/orchestration" },
+      "description": "Plan and execute supervised multi-model development waves."
+    },
+    {
+      "name": "code-review",
+      "source": { "source": "local", "path": "./plugins/code-review" },
+      "description": "Run evidence-based code and pull-request reviews."
+    }
+  ]
+}
