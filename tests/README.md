@@ -87,19 +87,25 @@ model and effort. Legacy super-plan/supervisor/drift prompts and final answers
 are captured by the driver before their disposable work directories are
 removed. Each phase also retains process stdout/stderr.
 
-Wave cells copy the final answer, native trace, plan, branch/ancestry results,
-fresh verifier output, and state bytes before classification. Exactly one
-canonical state file is allowed. Its copy is hash-bound to a successful
-`codex-wave-state.mjs summary` run against the canonical path, and the native
-trace must be exactly the executor, wait, different-model supervisor, wait
-sequence for the plan. Ship cells copy the harness event sequence and fake-`gh`
+Wave cells resolve the real Codex binary before installing a private wrapper
+that adds `exec --json` and tees the CLI JSONL stream to the caller-owned cell,
+outside the disposable model workspace. They copy the final answer, authentic
+completed collaboration events, plan, branch/ancestry results, fresh verifier
+output, and state bytes before classification. Exactly one canonical state file
+is allowed. Its copy is hash-bound to a successful `codex-wave-state.mjs
+summary` run against the canonical path. Passing native evidence is exactly one
+executor spawn and wait followed by one distinct supervisor spawn and wait,
+with plan-bound role prompts and terminal child states; missing or unsupported
+collaboration events fail closed. Ship cells copy the harness event sequence and fake-`gh`
 log before classification; success proves integration, critical review, push,
 then PR creation, while a red integration permits the local implementation
 commit and diagnostics but forbids every later merge, push, or PR event. The
 withheld review cell runs in a disposable writable repository so attempted
-POSTs are observable in the copied write-only `GH_FAKE_LOG`. Its separately
-copied optional `GH_FAKE_TRACE` must show exactly one paginated GraphQL read and
-both fixture-page yields. All context-bearing semantic probes inject the production hook
+POSTs remain observable in the copied write-only `GH_FAKE_LOG`. Critical-review
+PR cells use the same caller-owned Codex JSONL collection: completed
+`command_execution` events are authoritative for the exact paginated read or
+approved two-write sequence, while copied `GH_FAKE_LOG`/`GH_FAKE_TRACE` files
+are secondary diagnostics only. All context-bearing semantic probes inject the production hook
 context's literal `effort=unknown`; provider, model, and the matrix's actual
 effort are preserved separately as `EVALUATION_SESSION_METADATA_V1` and status
 evidence.

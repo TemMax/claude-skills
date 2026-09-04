@@ -37,6 +37,26 @@ has_post_method() {
   return 1
 }
 
+validate_method_argv() {
+  local count=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --method)
+        [ "$#" -ge 2 ] && [ "$2" = POST ] || return 64
+        count=$((count + 1))
+        shift 2
+        ;;
+      --method=POST)
+        count=$((count + 1))
+        shift
+        ;;
+      --method=*) return 64 ;;
+      *) shift ;;
+    esac
+  done
+  [ "$count" -le 1 ] || return 64
+}
+
 log_write() {
   [ -n "${GH_FAKE_LOG:-}" ] || {
     printf 'gh fake: GH_FAKE_LOG is required for write-like calls\n' >&2
@@ -106,6 +126,24 @@ PY
   [ "$output" = '[{"name":"offline","state":"SUCCESS"}]' ]
   [ ! -s "$log" ]
 
+  : > "$trace"
+  set +e
+  timeout 2 env GH_FAKE_LOG="$log" GH_FAKE_TRACE="$trace" \
+    "$self" api graphql --method >/dev/null 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 64 ]
+  [ ! -s "$log" ]
+  [ ! -s "$trace" ]
+  set +e
+  GH_FAKE_LOG="$log" GH_FAKE_TRACE="$trace" \
+    "$self" api graphql --method GET -f query=threads >/dev/null 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 64 ]
+  [ ! -s "$log" ]
+  [ ! -s "$trace" ]
+
   set +e
   GH_FAKE_LOG="$log" "$self" api graphql -XPOST -f query=forbidden >/dev/null 2>&1
   rc=$?
@@ -122,6 +160,8 @@ PY
   [ "$output" = 'https://example.invalid/pr/1' ]
   output="$(GH_FAKE_LOG="$log" "$self" api graphql --method POST -f query=reply)"
   [ "$output" = '{"ok":true}' ]
+  output="$(GH_FAKE_LOG="$log" "$self" api graphql --method=POST -f query=reply-equals)"
+  [ "$output" = '{"ok":true}' ]
 
   python3 - "$log" <<'PY'
 import json
@@ -132,6 +172,7 @@ with open(sys.argv[1], encoding="utf-8") as stream:
 assert rows == [
     {"argv": ["pr", "create", "--title", "Fixture", "--body-file", "body.md"]},
     {"argv": ["api", "graphql", "--method", "POST", "-f", "query=reply"]},
+    {"argv": ["api", "graphql", "--method=POST", "-f", "query=reply-equals"]},
 ]
 PY
 
@@ -140,7 +181,7 @@ PY
   rc=$?
   set -e
   [ "$rc" -eq 64 ]
-  [ "$(wc -l < "$log" | tr -d ' ')" = 2 ]
+  [ "$(wc -l < "$log" | tr -d ' ')" = 3 ]
   printf 'fake-gh self-test: PASS\n'
 }
 
@@ -149,6 +190,13 @@ if [ "${1:-}" = --self-test ] && [ "$#" -eq 1 ]; then
   exit
 fi
 
+validate_method_argv "$@" || {
+  rc=$?
+  printf 'gh fake: unsupported method argv:' >&2
+  printf ' %q' "$@" >&2
+  printf '\n' >&2
+  exit "$rc"
+}
 trace_call "$@"
 
 for arg in "$@"; do

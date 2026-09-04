@@ -48,8 +48,8 @@ print(hashlib.sha256(open(sys.argv[1], 'rb').read()).hexdigest())
 PY
 }
 
-capture_codex_evidence() { # expected repo base answer-source trace-source cell
-  local expected="$1" repo="$2" base="$3" answer_source="$4" trace_source="$5" cell="$6"
+capture_codex_evidence() { # expected repo base answer-source codex-jsonl-source cell
+  local expected="$1" repo="$2" base="$3" answer_source="$4" event_source="$5" cell="$6"
   local evidence state='' candidate state_count=0 before copy_hash after summary_rc wt rc
   evidence="$cell/evidence"
   mkdir -p "$evidence"
@@ -58,10 +58,10 @@ capture_codex_evidence() { # expected repo base answer-source trace-source cell
   else
     : > "$evidence/final-answer.txt"
   fi
-  if [ -f "$trace_source" ]; then
-    command cp "$trace_source" "$evidence/native-action-trace.txt"
+  if [ -f "$event_source" ]; then
+    command cp "$event_source" "$evidence/codex-exec-events.jsonl"
   else
-    : > "$evidence/native-action-trace.txt"
+    : > "$evidence/codex-exec-events.jsonl"
   fi
   printf '%s\n' "$expected" > "$evidence/expected.txt"
   printf '%s\n' "$base" > "$evidence/base.txt"
@@ -139,40 +139,160 @@ capture_codex_evidence() { # expected repo base answer-source trace-source cell
   fi
 }
 
+classify_codex_events() { # caller-owned-codex-jsonl
+  python3 - "$1" <<'PY'
+import json
+import re
+import sys
+
+path = sys.argv[1]
+
+def fail(reason="unverified-native-actions"):
+    print("fail:" + reason)
+    raise SystemExit
+
+try:
+    with open(path, encoding="utf-8") as stream:
+        raw_lines = [line for line in stream if line.strip()]
+    if not raw_lines:
+        fail()
+    events = [json.loads(line) for line in raw_lines]
+    if not all(isinstance(event, dict) for event in events):
+        fail()
+except (OSError, UnicodeError, json.JSONDecodeError):
+    fail()
+
+collab = []
+for event in events:
+    if event.get("type") != "item.completed":
+        continue
+    item = event.get("item")
+    if not isinstance(item, dict):
+        continue
+    if item.get("type") == "command_execution":
+        command = item.get("command")
+        if isinstance(command, str) and re.search(r"(?:^|[\s/])(claude|Workflow)(?:\s|$)", command, re.I):
+            fail("claude-workflow-in-codex-events")
+    if item.get("type") == "collab_tool_call":
+        collab.append(item)
+
+if len(collab) != 4 or [item.get("tool") for item in collab] != [
+        "spawn_agent", "wait", "spawn_agent", "wait"]:
+    fail()
+if any(item.get("status") != "completed" for item in collab):
+    fail()
+if any(isinstance(item.get("prompt"), str)
+       and re.search(r"\b(?:claude|Workflow)\b", item["prompt"], re.I)
+       for item in collab):
+    fail("claude-workflow-in-codex-events")
+
+sender = collab[0].get("sender_thread_id")
+if not isinstance(sender, str) or not sender \
+        or any(item.get("sender_thread_id") != sender for item in collab):
+    fail()
+
+def one_receiver(item):
+    receivers = item.get("receiver_thread_ids")
+    if not isinstance(receivers, list) or len(receivers) != 1 \
+            or not isinstance(receivers[0], str) or not receivers[0]:
+        fail()
+    return receivers[0]
+
+executor = one_receiver(collab[0])
+if one_receiver(collab[1]) != executor:
+    fail()
+supervisor = one_receiver(collab[2])
+if one_receiver(collab[3]) != supervisor or supervisor == executor:
+    fail()
+
+executor_prompt = collab[0].get("prompt")
+supervisor_prompt = collab[2].get("prompt")
+if not isinstance(executor_prompt, str) \
+        or not executor_prompt.startswith("Implement task divide-guard in the existing task worktree.") \
+        or "WORKTREE:" not in executor_prompt or "CONTRACT:" not in executor_prompt:
+    fail()
+if not isinstance(supervisor_prompt, str) \
+        or not supervisor_prompt.startswith("# Supervisor Prompt") \
+        or "You are supervising one task produced by another agent." not in supervisor_prompt \
+        or not all(label in supervisor_prompt for label in ("CONTRACT:", "VERIFIER FACTS:", "REPORT:")):
+    fail()
+
+def agent_status(item, receiver):
+    states = item.get("agents_states")
+    if not isinstance(states, dict) or set(states) != {receiver} \
+            or not isinstance(states[receiver], dict):
+        fail()
+    return states[receiver].get("status")
+
+if agent_status(collab[0], executor) not in {"pending_init", "running", "completed"} \
+        or agent_status(collab[1], executor) != "completed" \
+        or agent_status(collab[2], supervisor) not in {"pending_init", "running", "completed"} \
+        or agent_status(collab[3], supervisor) != "completed":
+    fail()
+print("pass")
+PY
+}
+
+install_codex_json_wrapper() { # caller-owned-cell real-codex disposable-repo
+  local cell="$1" real_codex="$2" repo="$3" cell_abs repo_abs
+  [ -x "$real_codex" ] || return 69
+  cell_abs="$(cd "$cell" && pwd -P)" || return
+  repo_abs="$(cd "$repo" && pwd -P)" || return
+  case "$cell_abs/" in "$repo_abs/"*) return 64 ;; esac
+  CODEX_WRAPPER_DIR="$cell_abs/.codex-json-wrapper"
+  CODEX_EVENT_SINK="$cell_abs/codex-exec-events.jsonl"
+  mkdir -p "$CODEX_WRAPPER_DIR" || return
+  : > "$CODEX_EVENT_SINK" || return
+  cat > "$CODEX_WRAPPER_DIR/codex" <<'SH'
+#!/usr/bin/env bash
+set -uo pipefail
+real_codex="${CODEX_EVAL_REAL_CODEX:-}"
+event_sink="${CODEX_EVAL_EVENT_SINK:-}"
+wrapper_dir="${CODEX_EVAL_WRAPPER_DIR:-}"
+[ -n "$real_codex" ] && [ -x "$real_codex" ] && [ -n "$event_sink" ] \
+  && [ -f "$event_sink" ] && [ ! -s "$event_sink" ] && [ -n "$wrapper_dir" ] || exit 74
+[ "${1:-}" = exec ] || exit 64
+shift
+clean_path=''
+old_ifs="$IFS"
+IFS=:
+for entry in ${PATH:-}; do
+  [ "$entry" = "$wrapper_dir" ] && continue
+  if [ -z "$clean_path" ]; then clean_path="$entry"; else clean_path="$clean_path:$entry"; fi
+done
+IFS="$old_ifs"
+[ -n "$clean_path" ] || exit 74
+export PATH="$clean_path"
+unset CODEX_EVAL_REAL_CODEX CODEX_EVAL_EVENT_SINK CODEX_EVAL_WRAPPER_DIR
+set +e
+"$real_codex" exec --json "$@" | command tee "$event_sink"
+real_rc=${PIPESTATUS[0]}
+set -e
+exit "$real_rc"
+SH
+  chmod +x "$CODEX_WRAPPER_DIR/codex"
+}
+
 classify_codex() { # expected immutable-cell base
-  local expected="$1" cell="$2" base="$3" evidence answer trace state_count summary_status
+  local expected="$1" cell="$2" base="$3" evidence answer events event_classification state_count summary_status
   evidence="$cell/evidence"
   answer="$evidence/final-answer.txt"
-  trace="$evidence/native-action-trace.txt"
+  events="$evidence/codex-exec-events.jsonl"
   if [ ! -s "$answer" ]; then
     printf 'fail:empty-final-answer'
     return
   fi
-  if [ ! -s "$trace" ]; then
-    printf 'fail:empty-native-action-trace'
+  event_classification="$(classify_codex_events "$events")"
+  if [ "$event_classification" != pass ]; then
+    if grep -qi 'tool-unavailable' "$answer" 2>/dev/null; then
+      printf 'fail:tool-unavailable'
+    else
+      printf '%s' "$event_classification"
+    fi
     return
   fi
-  if grep -Eqi 'claude|Workflow' "$trace"; then
-    printf 'fail:claude-workflow-in-codex-trace'
-    return
-  fi
-  if grep -qi 'tool-unavailable' "$answer" "$trace" 2>/dev/null; then
+  if grep -qi 'tool-unavailable' "$answer" 2>/dev/null; then
     printf 'fail:tool-unavailable'
-    return
-  fi
-  if ! python3 - "$trace" <<'PY' >/dev/null 2>&1
-import sys
-lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
-required = [
-    "native:spawn-executor model=gpt-5.6-luna effort=medium",
-    "native:wait executor",
-    "native:spawn-supervisor model=gpt-5.6-terra effort=high",
-    "native:wait supervisor",
-]
-assert lines == required
-PY
-  then
-    printf 'fail:invalid-native-action-trace'
     return
   fi
   state_count="$(tr -d '[:space:]' < "$evidence/state-count.txt" 2>/dev/null || true)"
@@ -229,6 +349,12 @@ try:
         fail("state-changed-during-capture")
     state = json.loads(copied_bytes)
     summary = json.loads(text("helper-summary.stdout"))
+    events = [json.loads(line) for line in text("codex-exec-events.jsonl").splitlines()
+              if line.strip()]
+    collab = [event["item"] for event in events
+              if event.get("type") == "item.completed"
+              and isinstance(event.get("item"), dict)
+              and event["item"].get("type") == "collab_tool_call"]
     plan_text = text("plan.md")
     blocks = re.findall(r"```json wave-plan\r?\n([\s\S]*?)\r?\n```", plan_text)
     if len(blocks) != 1:
@@ -243,6 +369,23 @@ try:
         fail("invalid-captured-state")
 except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
     fail("invalid-captured-state")
+
+executor_prompt = collab[0].get("prompt") if len(collab) == 4 else None
+executor_prefix = "\n".join([
+    "Implement task divide-guard in the existing task worktree.",
+    "BASE: " + base,
+    "BRANCH: " + str(task.get("branch", "")),
+    "WORKTREE: " + str(task.get("worktree", "")),
+    "",
+    "CONTRACT:",
+]) + "\n"
+try:
+    prompt_contract = json.loads(executor_prompt.removeprefix(executor_prefix)) \
+        if isinstance(executor_prompt, str) and executor_prompt.startswith(executor_prefix) else None
+except json.JSONDecodeError:
+    prompt_contract = None
+if prompt_contract != plan_task.get("contract"):
+    fail("unverified-native-actions")
 
 expected_supervisor = {"model": "gpt-5.6-terra", "effort": "high"}
 expected_executor = {"model": "gpt-5.6-luna", "effort": "medium"}
@@ -309,9 +452,9 @@ PY
 
 now_ms() { python3 -c 'import time; print(time.monotonic_ns() // 1000000)' ; }
 
-record_codex_cell() { # scenario semantic expected repo base source-prompt trace
-  local scenario="$1" semantic="$2" expected="$3" repo="$4" base="$5" source_prompt="$6" trace="$7"
-  local slug cell prompt answer class_file status_file state_file start end elapsed eval_rc classification status
+record_codex_cell() { # scenario semantic expected repo base source-prompt
+  local scenario="$1" semantic="$2" expected="$3" repo="$4" base="$5" source_prompt="$6"
+  local slug cell prompt answer class_file status_file state_file event_file start end elapsed eval_rc classification status collector_rc=0
   slug="${EVAL_MODEL}-wave-${scenario}"
   cell="$EVAL_RESULTS_DIR/raw/$slug"
   if [ -e "$cell" ]; then
@@ -324,14 +467,32 @@ record_codex_cell() { # scenario semantic expected repo base source-prompt trace
   answer="$cell/final-answer.txt"
   class_file="$cell/classification.txt"
   status_file="$cell/status.txt"
+  if install_codex_json_wrapper "$cell" "$REAL_CODEX" "$repo"; then
+    event_file="$CODEX_EVENT_SINK"
+  else
+    collector_rc=$?
+    event_file="$cell/codex-exec-events.jsonl"
+    : > "$event_file"
+  fi
   start="$(now_ms)"
-  set +e
-  eval_model "$repo" workspace-write "$prompt" "$answer"
-  eval_rc=$?
-  set -e
+  if [ "$collector_rc" -eq 0 ]; then
+    set +e
+    (
+      export CODEX_EVAL_REAL_CODEX="$REAL_CODEX"
+      export CODEX_EVAL_EVENT_SINK="$event_file"
+      export CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR"
+      export PATH="$CODEX_WRAPPER_DIR:$PATH"
+      eval_model "$repo" workspace-write "$prompt" "$answer"
+    )
+    eval_rc=$?
+    set -e
+  else
+    : > "$answer"
+    eval_rc="$collector_rc"
+  fi
   end="$(now_ms)"
   elapsed=$((end - start))
-  capture_codex_evidence "$expected" "$repo" "$base" "$answer" "$trace" "$cell"
+  capture_codex_evidence "$expected" "$repo" "$base" "$answer" "$event_file" "$cell"
   if [ "$eval_rc" -eq 0 ]; then
     classification="$(classify_codex "$expected" "$cell" "$base")"
   else
@@ -340,8 +501,8 @@ record_codex_cell() { # scenario semantic expected repo base source-prompt trace
   case "$classification" in pass) status=pass ;; *) status=fail ;; esac
   state_file="$(find_state "$repo" 2>/dev/null || true)"
   printf '%s\n' "$classification" > "$class_file"
-  printf 'status=%s\nexit=%s\nelapsed_ms=%s\ninput_tokens=unavailable\noutput_tokens=unavailable\ncost=unavailable\nstate=%s\n' \
-    "$status" "$eval_rc" "$elapsed" "${state_file:-unavailable}" > "$status_file"
+  printf 'status=%s\nexit=%s\nelapsed_ms=%s\ncodex_events=%s\ninput_tokens=unavailable\noutput_tokens=unavailable\ncost=unavailable\nstate=%s\n' \
+    "$status" "$eval_rc" "$elapsed" "$event_file" "${state_file:-unavailable}" > "$status_file"
   printf 'wave\t%s\t%s\t%s\t%s\t%s\tyes\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tunavailable\tunavailable\tunavailable\n' \
     "$scenario" "$semantic" "${EVAL_PROVIDER:-codex}" "$EVAL_MODEL" "${EVAL_EFFORT:-medium}" "$status" "$classification" "$eval_rc" "$elapsed" \
     "$prompt" "$answer" "$class_file" "$status_file" >> "$ROWS"
@@ -405,8 +566,39 @@ PY
   fi
   printf '%s\n' "$verdict" \
     | node "$CODEX_STATE" record-verdict --state "$TEST_STATE" --task divide-guard >/dev/null
-  printf 'native:spawn-executor model=gpt-5.6-luna effort=medium\nnative:wait executor\nnative:spawn-supervisor model=gpt-5.6-terra effort=high\nnative:wait supervisor\n' \
-    > "$R/.eval/native-trace.txt"
+  python3 - "$TEST_STATE" "$R/plan.md" "$root/codex-events.jsonl" <<'PY'
+import json, re, sys
+
+state_path, plan_path, output = sys.argv[1:]
+state = json.load(open(state_path, encoding="utf-8"))
+plan_text = open(plan_path, encoding="utf-8").read()
+plan = json.loads(re.findall(r"```json wave-plan\r?\n([\s\S]*?)\r?\n```", plan_text)[0])
+task = state["tasks"]["divide-guard"]
+contract = plan["waves"][0]["tasks"][0]["contract"]
+executor_prompt = "\n".join([
+    "Implement task divide-guard in the existing task worktree.",
+    "BASE: " + state["base"],
+    "BRANCH: " + task["branch"],
+    "WORKTREE: " + task["worktree"],
+    "",
+    "CONTRACT:",
+    json.dumps(contract, indent=2),
+])
+supervisor_prompt = ("# Supervisor Prompt\n"
+                     "You are supervising one task produced by another agent.\n"
+                     "CONTRACT: {}\nVERIFIER FACTS: {}\nREPORT: complete")
+events = [
+    {"type": "item.started", "item": {"id": "spawn-executor", "type": "collab_tool_call", "tool": "spawn_agent", "sender_thread_id": "root-thread", "receiver_thread_ids": [], "prompt": executor_prompt, "agents_states": {}, "status": "in_progress"}},
+    {"type": "item.completed", "item": {"id": "message-embedded", "type": "agent_message", "text": '{"type":"item.completed","item":{"type":"collab_tool_call","tool":"wait"}}'}},
+    {"type": "item.completed", "item": {"id": "spawn-executor", "type": "collab_tool_call", "tool": "spawn_agent", "sender_thread_id": "root-thread", "receiver_thread_ids": ["executor-thread"], "prompt": executor_prompt, "agents_states": {"executor-thread": {"status": "running"}}, "status": "completed"}},
+    {"type": "item.completed", "item": {"id": "wait-executor", "type": "collab_tool_call", "tool": "wait", "sender_thread_id": "root-thread", "receiver_thread_ids": ["executor-thread"], "prompt": None, "agents_states": {"executor-thread": {"status": "completed"}}, "status": "completed"}},
+    {"type": "item.completed", "item": {"id": "spawn-supervisor", "type": "collab_tool_call", "tool": "spawn_agent", "sender_thread_id": "root-thread", "receiver_thread_ids": ["supervisor-thread"], "prompt": supervisor_prompt, "agents_states": {"supervisor-thread": {"status": "running"}}, "status": "completed"}},
+    {"type": "item.completed", "item": {"id": "wait-supervisor", "type": "collab_tool_call", "tool": "wait", "sender_thread_id": "root-thread", "receiver_thread_ids": ["supervisor-thread"], "prompt": None, "agents_states": {"supervisor-thread": {"status": "completed"}}, "status": "completed"}},
+]
+with open(output, "w", encoding="utf-8") as stream:
+    for event in events:
+        print(json.dumps(event, separators=(",", ":")), file=stream)
+PY
   printf 'Terminal %s wave result with fresh verifier evidence.\n' "$expected" > "$root/answer.txt"
 }
 
@@ -418,20 +610,25 @@ if [ "${1:-}" = --self-test ]; then
   S_REPO="$TEST_REPO"; S_BASE="$TEST_BASE"
   mkdir -p "$W/success-cell"
   capture_codex_evidence success "$S_REPO" "$S_BASE" "$W/success/answer.txt" \
-    "$S_REPO/.eval/native-trace.txt" "$W/success-cell"
+    "$W/success/codex-events.jsonl" "$W/success-cell"
   [ "$(classify_codex success "$W/success-cell" "$S_BASE")" = pass ]
+
+  command cp -R "$W/success-cell" "$W/legacy-text-trace"
+  printf 'native:spawn-executor model=gpt-5.6-luna effort=medium\nnative:wait executor\nnative:spawn-supervisor model=gpt-5.6-terra effort=high\nnative:wait supervisor\n' \
+    > "$W/legacy-text-trace/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/legacy-text-trace" "$S_BASE")" = 'fail:unverified-native-actions' ]
 
   canonical_state="$(find_state "$S_REPO")"
   command cp "$canonical_state" "$S_REPO/.worktrees/codex-wave/second-state.json"
   mkdir -p "$W/multiple-state-cell"
   capture_codex_evidence success "$S_REPO" "$S_BASE" "$W/success/answer.txt" \
-    "$S_REPO/.eval/native-trace.txt" "$W/multiple-state-cell"
+    "$W/success/codex-events.jsonl" "$W/multiple-state-cell"
   [ "$(classify_codex success "$W/multiple-state-cell" "$S_BASE")" = 'fail:multiple-codex-wave-states' ]
   rm "$S_REPO/.worktrees/codex-wave/second-state.json"
   command mv "$canonical_state" "$W/saved-canonical-state.json"
   mkdir -p "$W/missing-state-cell"
   capture_codex_evidence success "$S_REPO" "$S_BASE" "$W/success/answer.txt" \
-    "$S_REPO/.eval/native-trace.txt" "$W/missing-state-cell"
+    "$W/success/codex-events.jsonl" "$W/missing-state-cell"
   [ "$(cat "$W/missing-state-cell/evidence/state-count.txt")" = 0 ]
   [ "$(classify_codex success "$W/missing-state-cell" "$S_BASE")" = 'fail:missing-codex-wave-state' ]
   command mv "$W/saved-canonical-state.json" "$canonical_state"
@@ -440,8 +637,29 @@ if [ "${1:-}" = --self-test ]; then
   : > "$W/empty-answer/evidence/final-answer.txt"
   [ "$(classify_codex success "$W/empty-answer" "$S_BASE")" = 'fail:empty-final-answer' ]
   command cp -R "$W/success-cell" "$W/empty-trace"
-  : > "$W/empty-trace/evidence/native-action-trace.txt"
-  [ "$(classify_codex success "$W/empty-trace" "$S_BASE")" = 'fail:empty-native-action-trace' ]
+  : > "$W/empty-trace/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/empty-trace" "$S_BASE")" = 'fail:unverified-native-actions' ]
+  command cp -R "$W/success-cell" "$W/malformed-events"
+  printf 'not-json\n' > "$W/malformed-events/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/malformed-events" "$S_BASE")" = 'fail:unverified-native-actions' ]
+  command cp -R "$W/success-cell" "$W/embedded-only-events"
+  printf '%s\n' '{"type":"item.completed","item":{"id":"message","type":"agent_message","text":"{\"type\":\"item.completed\",\"item\":{\"type\":\"collab_tool_call\",\"tool\":\"spawn_agent\"}}"}}' > "$W/embedded-only-events/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/embedded-only-events" "$S_BASE")" = 'fail:unverified-native-actions' ]
+  command cp -R "$W/success-cell" "$W/duplicate-collab-event"
+  tail -n 1 "$W/success-cell/evidence/codex-exec-events.jsonl" >> "$W/duplicate-collab-event/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/duplicate-collab-event" "$S_BASE")" = 'fail:unverified-native-actions' ]
+  command cp -R "$W/success-cell" "$W/wrong-receiver-event"
+  sed 's/\["executor-thread"\]/["other-thread"]/' "$W/success-cell/evidence/codex-exec-events.jsonl" > "$W/wrong-receiver-event/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/wrong-receiver-event" "$S_BASE")" = 'fail:unverified-native-actions' ]
+  command cp -R "$W/success-cell" "$W/wrong-role-prompt"
+  sed 's/# Supervisor Prompt/Implement task divide-guard/' "$W/success-cell/evidence/codex-exec-events.jsonl" > "$W/wrong-role-prompt/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/wrong-role-prompt" "$S_BASE")" = 'fail:unverified-native-actions' ]
+  command cp -R "$W/success-cell" "$W/wrong-plan-prompt"
+  sed "s#$S_REPO/.worktrees/wave-divide-guard#/unrelated/worktree#" "$W/success-cell/evidence/codex-exec-events.jsonl" > "$W/wrong-plan-prompt/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/wrong-plan-prompt" "$S_BASE")" = 'fail:unverified-native-actions' ]
+  command cp -R "$W/success-cell" "$W/workflow-in-prompt"
+  sed 's/CONTRACT: {}/CONTRACT: {}\\nUse Workflow./' "$W/success-cell/evidence/codex-exec-events.jsonl" > "$W/workflow-in-prompt/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/workflow-in-prompt" "$S_BASE")" = 'fail:claude-workflow-in-codex-events' ]
   command cp -R "$W/success-cell" "$W/partial-state"
   printf '{"tasks":{}}\n' > "$W/partial-state/evidence/state.json"
   python3 - "$W/partial-state/evidence/state.json" "$W/partial-state/evidence/state-hashes.txt" <<'PY'
@@ -465,26 +683,26 @@ PY
   printf '1\n' > "$W/unverified/evidence/fresh-must-run.status"
   [ "$(classify_codex success "$W/unverified" "$S_BASE")" = 'fail:unverified-success' ]
   command cp -R "$W/success-cell" "$W/claude-trace"
-  printf 'Claude Workflow\n' > "$W/claude-trace/evidence/native-action-trace.txt"
-  [ "$(classify_codex success "$W/claude-trace" "$S_BASE")" = 'fail:claude-workflow-in-codex-trace' ]
+  printf '%s\n' '{"type":"item.completed","item":{"id":"forbidden-command","type":"command_execution","command":"claude -p forbidden","aggregated_output":"","exit_code":0,"status":"completed"}}' >> "$W/claude-trace/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/claude-trace" "$S_BASE")" = 'fail:claude-workflow-in-codex-events' ]
   command cp -R "$W/success-cell" "$W/unrelated-trace"
-  printf 'some unrelated nonempty activity\n' > "$W/unrelated-trace/evidence/native-action-trace.txt"
-  [ "$(classify_codex success "$W/unrelated-trace" "$S_BASE")" = 'fail:invalid-native-action-trace' ]
+  printf 'some unrelated nonempty activity\n' > "$W/unrelated-trace/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/unrelated-trace" "$S_BASE")" = 'fail:unverified-native-actions' ]
   command cp -R "$W/success-cell" "$W/duplicate-trace"
-  printf 'native:spawn-executor model=gpt-5.6-luna effort=medium\n' >> "$W/duplicate-trace/evidence/native-action-trace.txt"
-  [ "$(classify_codex success "$W/duplicate-trace" "$S_BASE")" = 'fail:invalid-native-action-trace' ]
+  tail -n 1 "$W/success-cell/evidence/codex-exec-events.jsonl" >> "$W/duplicate-trace/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/duplicate-trace" "$S_BASE")" = 'fail:unverified-native-actions' ]
   command cp -R "$W/success-cell" "$W/same-model-trace"
-  printf 'native:spawn-supervisor model=gpt-5.6-luna effort=medium\n' >> "$W/same-model-trace/evidence/native-action-trace.txt"
-  [ "$(classify_codex success "$W/same-model-trace" "$S_BASE")" = 'fail:invalid-native-action-trace' ]
+  sed 's/supervisor-thread/executor-thread/g' "$W/success-cell/evidence/codex-exec-events.jsonl" > "$W/same-model-trace/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/same-model-trace" "$S_BASE")" = 'fail:unverified-native-actions' ]
   command cp -R "$W/success-cell" "$W/extra-wait-trace"
-  printf 'native:wait executor\n' >> "$W/extra-wait-trace/evidence/native-action-trace.txt"
-  [ "$(classify_codex success "$W/extra-wait-trace" "$S_BASE")" = 'fail:invalid-native-action-trace' ]
+  tail -n 1 "$W/success-cell/evidence/codex-exec-events.jsonl" >> "$W/extra-wait-trace/evidence/codex-exec-events.jsonl"
+  [ "$(classify_codex success "$W/extra-wait-trace" "$S_BASE")" = 'fail:unverified-native-actions' ]
 
   evolve_test_wave "$W/failure" failure
   F_REPO="$TEST_REPO"; F_BASE="$TEST_BASE"
   mkdir -p "$W/failure-cell"
   capture_codex_evidence failure "$F_REPO" "$F_BASE" "$W/failure/answer.txt" \
-    "$F_REPO/.eval/native-trace.txt" "$W/failure-cell"
+    "$W/failure/codex-events.jsonl" "$W/failure-cell"
   [ "$(classify_codex failure "$W/failure-cell" "$F_BASE")" = pass ]
   command cp -R "$W/failure-cell" "$W/failure-stale-primary"
   printf '1\n' > "$W/failure-stale-primary/evidence/fresh-must-run.status"
@@ -492,6 +710,28 @@ PY
   command cp -R "$W/failure-cell" "$W/failure-late-merge"
   printf '%s\n' deadbeef > "$W/failure-late-merge/evidence/default-head.txt"
   [ "$(classify_codex failure "$W/failure-late-merge" "$F_BASE")" = 'fail:merged-failing-task' ]
+
+  mkdir -p "$W/wrapper-model-repo" "$W/wrapper-cell"
+  cat > "$W/real-codex-stub" <<'SH'
+#!/usr/bin/env bash
+set -eu
+printf '%s\n' "$*" > "$WRAPPER_TEST_ARGS"
+case ":$PATH:" in *":$WRAPPER_TEST_DIR:"*) exit 91 ;; esac
+[ -z "${CODEX_EVAL_REAL_CODEX:-}" ]
+[ -z "${CODEX_EVAL_EVENT_SINK:-}" ]
+[ -z "${CODEX_EVAL_WRAPPER_DIR:-}" ]
+printf '%s\n' '{"type":"thread.started","thread_id":"offline-wrapper-test"}'
+exit "${WRAPPER_TEST_EXIT:-0}"
+SH
+  chmod +x "$W/real-codex-stub"
+  install_codex_json_wrapper "$W/wrapper-cell" "$W/real-codex-stub" "$W/wrapper-model-repo"
+  [ -f "$CODEX_EVENT_SINK" ] && [ ! -s "$CODEX_EVENT_SINK" ]
+  WRAPPER_TEST_ARGS="$W/wrapper-args" WRAPPER_TEST_DIR="$CODEX_WRAPPER_DIR" \
+    CODEX_EVAL_REAL_CODEX="$W/real-codex-stub" CODEX_EVAL_EVENT_SINK="$CODEX_EVENT_SINK" \
+    CODEX_EVAL_WRAPPER_DIR="$CODEX_WRAPPER_DIR" PATH="$CODEX_WRAPPER_DIR:$PATH" \
+    "$CODEX_WRAPPER_DIR/codex" exec --ephemeral >/dev/null
+  [ "$(cat "$W/wrapper-args")" = 'exec --json --ephemeral' ]
+  [ -s "$CODEX_EVENT_SINK" ]
 
   printf 'wave Codex scorer self-test: PASS\n'
   exit
@@ -511,21 +751,25 @@ codex_probe() {
     printf 'script\tscenario\tsemantic_path\tprovider\tmodel\teffort\tblocking\tstatus\tclassification\texit\telapsed_ms\tprompt\tfinal_answer\tclassification_evidence\tstatus_evidence\tinput_tokens\toutput_tokens\tcost\n' > "$ROWS"
   fi
   local work rc=0 success_repo success_base failure_repo failure_base
+  REAL_CODEX="$(command -v codex)" || {
+    printf 'wave: codex executable unavailable\n' >&2
+    return 69
+  }
   work="$(mktemp -d)"; trap 'rm -rf "$work"' RETURN
 
   init_codex_repo "$work/success" success
   success_repo="$R"; success_base="$BASE"
   cat > "$work/success-prompt.md" <<EOF
-EVAL MODE: Read and apply the multi-model skill at $MULTI_SKILL and its Codex-native protocol at $CODEX_PROTOCOL. The lint-clean plan is $success_repo/plan.md, wave 1, repository $success_repo, exact pushed base $success_base. Use $PLAN_LINT and $CODEX_STATE exactly as the protocol directs. Use spawn_agent/followup_task/wait_agent for executor and supervisor; never invoke claude, Codex provider CLIs, or Workflow. Executor and supervisor must use the exact different model ids returned by the helper. Only after each actual native coordination action occurs, append its event to $success_repo/.eval/native-trace.txt. On an available native host that trace must contain exactly these four lines in order and no other text: native:spawn-executor model=gpt-5.6-luna effort=medium; native:wait executor; native:spawn-supervisor model=gpt-5.6-terra effort=high; native:wait supervisor. If native collaboration is unavailable, do not simulate it: record the fixed {"error":{"kind":"tool-unavailable"}} payload through the helper until terminal, write tool-unavailable in the trace, and report tool-unavailable. If available, complete the division-by-zero task, preserve the state, mechanical verifier output, and terminal summary.
+EVAL MODE: Read and apply the multi-model skill at $MULTI_SKILL and its Codex-native protocol at $CODEX_PROTOCOL. The lint-clean plan is $success_repo/plan.md, wave 1, repository $success_repo, exact pushed base $success_base. Use $PLAN_LINT and $CODEX_STATE exactly as the protocol directs. Use spawn_agent/followup_task/wait_agent for executor and supervisor; never invoke claude, Codex provider CLIs, or Workflow. Executor and supervisor must use the exact different model ids returned by the helper. The harness records native collaboration directly; do not create, edit, or report a trace file. If native collaboration is unavailable, do not simulate it: record the fixed {"error":{"kind":"tool-unavailable"}} payload through the helper until terminal and report tool-unavailable. If available, complete the division-by-zero task, preserve the state, mechanical verifier output, and terminal summary.
 EOF
-  record_codex_cell codex-native-success success success "$success_repo" "$success_base" "$work/success-prompt.md" "$success_repo/.eval/native-trace.txt" || rc=1
+  record_codex_cell codex-native-success success success "$success_repo" "$success_base" "$work/success-prompt.md" || rc=1
 
   init_codex_repo "$work/failure" failure
   failure_repo="$R"; failure_base="$BASE"
   cat > "$work/failure-prompt.md" <<EOF
-EVAL MODE: Read and apply the multi-model skill at $MULTI_SKILL and its Codex-native protocol at $CODEX_PROTOCOL. The lint-clean plan is $failure_repo/plan.md, wave 1, repository $failure_repo, exact pushed base $failure_base. Use $PLAN_LINT and $CODEX_STATE exactly as directed. Use native spawn_agent/followup_task/wait_agent only; never invoke claude, Codex provider CLIs, or Workflow. Only after each actual native coordination action occurs, append its event to $failure_repo/.eval/native-trace.txt. On an available native host that trace must contain exactly these four lines in order and no other text: native:spawn-executor model=gpt-5.6-luna effort=medium; native:wait executor; native:spawn-supervisor model=gpt-5.6-terra effort=high; native:wait supervisor. The second must_run fails independently of all files_allowed; a truthful supervisor must preserve its real output and mark it unsatisfiable. Never merge a failing task. If native collaboration is unavailable, do not simulate success: record {"error":{"kind":"tool-unavailable"}} through the helper until terminal, trace it, and report tool-unavailable.
+EVAL MODE: Read and apply the multi-model skill at $MULTI_SKILL and its Codex-native protocol at $CODEX_PROTOCOL. The lint-clean plan is $failure_repo/plan.md, wave 1, repository $failure_repo, exact pushed base $failure_base. Use $PLAN_LINT and $CODEX_STATE exactly as directed. Use native spawn_agent/followup_task/wait_agent only; never invoke claude, Codex provider CLIs, or Workflow. The harness records native collaboration directly; do not create, edit, or report a trace file. The second must_run fails independently of all files_allowed; a truthful supervisor must preserve its real output and mark it unsatisfiable. Never merge a failing task. If native collaboration is unavailable, do not simulate success: record {"error":{"kind":"tool-unavailable"}} through the helper until terminal and report tool-unavailable.
 EOF
-  record_codex_cell codex-independent-must-run failure failure "$failure_repo" "$failure_base" "$work/failure-prompt.md" "$failure_repo/.eval/native-trace.txt" || rc=1
+  record_codex_cell codex-independent-must-run failure failure "$failure_repo" "$failure_base" "$work/failure-prompt.md" || rc=1
   return "$rc"
 }
 
