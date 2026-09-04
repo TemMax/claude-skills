@@ -66,7 +66,7 @@ The default run fixes `EVAL_PROVIDER=codex`, effort `medium`, and the exact mode
 ids `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`. It produces 24 required
 skill rows: four skills × three models × distinct success and failure paths,
 which the Markdown reports as 12/12 complete model/skill pairs. The base run
-also produces 48 separately labeled supporting rows from profile routing,
+also produces 63 separately labeled supporting rows from profile routing,
 safety, supervisor, drift, and critical-review's PR gate. Supporting rows never
 inflate the 12-pair count.
 
@@ -77,14 +77,30 @@ unavailable-verifier, supervisor, and drift guards. `--effort` records the base
 review and destructive safety probes at `xhigh` and `max` for Sol. `max` is
 therefore an explicit comparison only; it is never an automatic default.
 
-Every model cell owns an immutable directory under its phase's `raw/` containing its exact
-prompt, final answer, classification, status, process exit, and elapsed time;
-state, fake-`gh`, or native-action evidence is added where applicable. Legacy
-super-plan/supervisor/drift prompts and final answers are captured by the driver
-before their disposable work directories are removed. Each phase also retains
-process stdout/stderr. Every run emits `summary.tsv` and `summary.md`; input
-tokens, output tokens, and cost are written as `unavailable` when the adapter
-does not observe them. They are never estimated.
+Every model cell owns an immutable directory under its phase's `raw/` containing
+its exact prompt, final answer, classification, status, process exit, and elapsed
+time; state, fake-`gh`, or native-action evidence is added where applicable.
+Legacy supervisor and drift calls get one cell and TSV row per named scenario
+and repeat (rather than one aggregate row), with phase/scenario/repeat identity;
+their 5/5 guard artifacts are derived from those individual rows for the same
+model and effort. Legacy super-plan/supervisor/drift prompts and final answers
+are captured by the driver before their disposable work directories are
+removed. Each phase also retains process stdout/stderr.
+
+Wave cells copy the final answer, native trace, plan, branch/ancestry results,
+fresh verifier output, and state bytes before classification. The state copy is
+hash-bound to a successful `codex-wave-state.mjs summary` run against the
+canonical state path. Ship cells copy the harness event sequence and fake-`gh`
+log before classification; success proves integration, critical review, push,
+then PR creation, while a red integration permits the local implementation
+commit and diagnostics but forbids every later merge, push, or PR event. The
+withheld review cell runs in a disposable writable repository so attempted
+POSTs are observable in the copied fake log. Profile-routing uses the production
+context's literal `effort=unknown`; matrix effort remains separate metadata.
+
+Every run emits `summary.tsv` and `summary.md`; input tokens, output tokens, and
+cost are written as `unavailable` when the adapter does not observe them. They
+are never estimated.
 
 These runs can make dozens of paid calls, and a native wave can add executor
 and supervisor calls. Review the current model prices before starting. Task 13

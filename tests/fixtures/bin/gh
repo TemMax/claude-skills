@@ -22,12 +22,12 @@ has_post_method() {
   local arg
   for arg in "$@"; do
     case "$arg" in
-      --method=POST|-XPOST) return 0 ;;
+      --method=POST) return 0 ;;
     esac
   done
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --method|-X)
+      --method)
         [ "${2:-}" = POST ] && return 0
         shift 2
         ;;
@@ -74,6 +74,18 @@ self_test() {
   [ "$output" = '[{"name":"offline","state":"SUCCESS"}]' ]
   [ ! -s "$log" ]
 
+  set +e
+  GH_FAKE_LOG="$log" "$self" api graphql -XPOST -f query=forbidden >/dev/null 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 64 ]
+  set +e
+  GH_FAKE_LOG="$log" "$self" api graphql -X POST -f query=forbidden >/dev/null 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 64 ]
+  [ ! -s "$log" ]
+
   output="$(GH_FAKE_LOG="$log" "$self" pr create --title Fixture --body-file body.md)"
   [ "$output" = 'https://example.invalid/pr/1' ]
   output="$(GH_FAKE_LOG="$log" "$self" api graphql --method POST -f query=reply)"
@@ -104,6 +116,17 @@ if [ "${1:-}" = --self-test ] && [ "$#" -eq 1 ]; then
   self_test
   exit
 fi
+
+for arg in "$@"; do
+  case "$arg" in
+    -X|-X*)
+      printf 'gh fake: unsupported argv:' >&2
+      printf ' %q' "$@" >&2
+      printf '\n' >&2
+      exit 64
+      ;;
+  esac
+done
 
 if [ "${1:-}" = pr ] && [ "${2:-}" = view ]; then
   fixture_or_default "${GH_FAKE_PR_VIEW_FILE:-}" \
