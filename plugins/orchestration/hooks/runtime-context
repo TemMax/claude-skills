@@ -10,6 +10,9 @@ try:
 except Exception:
     print("{}")
     raise SystemExit
+if not isinstance(data, dict):
+    print("{}")
+    raise SystemExit
 event = data.get("hook_event_name")
 model = data.get("model")
 if event not in {"SessionStart", "SubagentStart"} or not isinstance(model, str):
