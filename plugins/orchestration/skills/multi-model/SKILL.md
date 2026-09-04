@@ -427,11 +427,11 @@ block. Spending the supervisor's credibility on flaky tests buys nothing.
 
 ### Invocation publication contract
 
-Every multi-model invocation declares publication at this composition boundary,
-not in a host adapter, runner, helper, plan, or profile. `publication: push` is
-the normal mode and preserves normal push behavior. `publication: local` is
-available only when the enclosing critical-review post-review fix protocol
-explicitly invokes it; it is not inferred from host or model.
+`publication` is optional: if omitted, it means exactly `publication: push`
+and preserves all normal behavior. The choice belongs at this composition
+boundary, not in a host adapter, runner, helper, plan, or profile. Only
+`publication: local` must be explicit; only the enclosing critical-review
+post-review fix flow may request it; it is never inferred from host or model.
 
 Local mode never weakens lint, the pushed-base requirement, contracts,
 mechanical verification, supervision, verdicts, plan-order integration, or the
@@ -521,12 +521,13 @@ the contract the supervisor enforces are the same object and cannot diverge.
 Escalated rungs run at `high` effort.
 
 Claude adapter completion reads the multi-model publication contract after
-every task is `ok`: it merges branches in plan order, runs the full-wave review,
-and returns the local feature-branch commit(s), task branches, and verdict
-evidence. `publication: push` then pushes as normal. In local mode,
-`publication: local` performs no push. The Claude adapter keeps the shipped
-Workflow implementation unchanged; publication stays at this composition
-boundary, not in the Workflow arguments or script.
+every task is `ok`. `publication: push` merges branches in plan order, runs the
+shared full-wave review, and pushes exactly as normal. With `publication: local`, merge branches in plan
+order only into the local feature branch, run the shared full-wave review,
+return the resulting local feature-branch commit(s), task branches, and verdict
+evidence, and do no push. The Claude adapter keeps the shipped Workflow
+implementation unchanged; publication stays at this composition boundary, not
+in the Workflow arguments or script.
 
 4. Act on the returned statuses, task by task:
    - `ok` — merge `wave/<id>` per the wave plan.

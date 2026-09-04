@@ -162,17 +162,16 @@ init  next  record-executor  verify  supervisor-prompt  record-verdict  summary
 9. On `merge-ready`, wait until the final wave result is merge-ready, then call
    `summary --state <state-path>`. Confirm every task is `ok`, merge all `ok`
    branches in plan/task order, and run the shared full-wave review. Branch
-   final integration on multi-model's explicit publication contract, never on
-   host or model. In normal `publication: push` mode, multi-model pushes and
-   then derives the next wave’s exact base from the pushed branch and
-   initializes its state with `init`, as before. In `publication: local` mode,
-   merge only into the
-   local feature branch, return its resulting local commit(s), task branch
-   names, helper summary, and verdict evidence to the caller, and perform no
-   push. Local mode does not derive or initialize a later wave from that
-   unpushed base. If the approved fixes need dependent bases outside this one
-   supervised wave, stop before publication. Do not merge early in a multi-task
-   wave.
+   final integration on multi-model's publication contract, never on host or
+   model. In normal `publication: push` mode, multi-model pushes and then
+   derives the next wave’s exact base from the pushed branch and initializes its
+   state with `init`, as before. In `publication: local` mode, merge only into
+   the local feature branch, keep the shared full-wave review, return its
+   resulting local commit(s), task branch names, helper summary, and verdict
+   evidence to the caller, and do no push. Local mode does not derive or
+   initialize a later wave from that unpushed base. If approved fixes need
+   dependent bases that cannot safely fit in this one supervised wave, stop
+   before publication. Do not merge early in a multi-task wave.
 
 The action loop is intentionally narrow: helper state records reports, verifier
 facts, and fixed verdicts only. It never stores credentials or hidden reasoning.

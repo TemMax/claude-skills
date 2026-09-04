@@ -92,14 +92,20 @@ check "executor and supervisor examples name model" \
   "[ \$(grep -cF 'model: action.model' $CP) -eq 2 ]"
 check "executor and supervisor examples name effort" \
   "[ \$(grep -cF 'reasoning_effort: action.effort' $CP) -eq 2 ]"
-check "review-local publication is explicit and never host-inferred" \
-  "grep -qF '\`publication: local\`' $MM && grep -qF 'not inferred from host or model' $MM"
-check "normal publication remains the pushed mode" \
-  "sed -n '/^### Invocation publication contract$/,/^- Claude-only wave:/p' $MM | tr '\\n' ' ' | grep -qF '\`publication: push\` is the normal mode and preserves normal push behavior'"
-check "Claude local completion leaves Workflow implementation unchanged" \
-  "sed -n '/^Claude adapter completion /,/^4[.] Act on the returned statuses/p' $MM | tr '\\n' ' ' | grep -qF 'In local mode, \`publication: local\` performs no push. The Claude adapter keeps the shipped Workflow implementation unchanged'"
+check "omitted publication defaults exactly to normal push in its boundary" \
+  "sed -n '/^### Invocation publication contract$/,/^- Claude-only wave:/p' $MM | tr '\\n' ' ' | tr -s ' ' | grep -qF '\`publication\` is optional: if omitted, it means exactly \`publication: push\` and preserves all normal behavior.'"
+check "local publication is explicit critical-review-only and never inferred" \
+  "sed -n '/^### Invocation publication contract$/,/^- Claude-only wave:/p' $MM | tr '\\n' ' ' | tr -s ' ' | grep -qF 'Only \`publication: local\` must be explicit; only the enclosing critical-review post-review fix flow may request it; it is never inferred from host or model.'"
+check "Claude local completion integrates reviews and returns without push" \
+  "sed -n '/^Claude adapter completion /,/^4[.] Act on the returned statuses/p' $MM | tr '\\n' ' ' | tr -s ' ' | grep -qF 'With \`publication: local\`, merge branches in plan order only into the local feature branch, run the shared full-wave review, return the resulting local feature-branch commit(s), task branches, and verdict evidence, and do no push.'"
+check "Claude normal completion still pushes" \
+  "sed -n '/^Claude adapter completion /,/^4[.] Act on the returned statuses/p' $MM | tr '\\n' ' ' | tr -s ' ' | grep -qF '\`publication: push\` merges branches in plan order, runs the shared full-wave review, and pushes exactly as normal.'"
+check "Codex local completion returns reviewed local artifacts without push" \
+  "sed -n '/^9[.] On \`merge-ready\`/,/^The action loop/p' $CP | tr '\\n' ' ' | tr -s ' ' | grep -qF 'In \`publication: local\` mode, merge only into the local feature branch, keep the shared full-wave review, return its resulting local commit(s), task branch names, helper summary, and verdict evidence to the caller, and do no push.'"
 check "Codex local completion cannot create an unpushed next base" \
-  "sed -n '/^9[.] On \`merge-ready\`/,/^The action loop/p' $CP | tr '\\n' ' ' | tr -s ' ' | grep -qF 'Local mode does not derive or initialize a later wave from that unpushed base'"
+  "sed -n '/^9[.] On \`merge-ready\`/,/^The action loop/p' $CP | tr '\\n' ' ' | tr -s ' ' | grep -qF 'Local mode does not derive or initialize a later wave from that unpushed base.'"
+check "Codex local transaction stops instead of publishing unsafe dependent bases" \
+  "sed -n '/^9[.] On \`merge-ready\`/,/^The action loop/p' $CP | tr '\\n' ' ' | tr -s ' ' | grep -qF 'If approved fixes need dependent bases that cannot safely fit in this one supervised wave, stop before publication.'"
 check "Codex normal completion still pushes before next base" \
   "sed -n '/^9[.] On \`merge-ready\`/,/^The action loop/p' $CP | tr '\\n' ' ' | tr -s ' ' | grep -qF 'In normal \`publication: push\` mode, multi-model pushes and then derives the next wave'"
 check "publication remains outside Workflow and the state helper" \
