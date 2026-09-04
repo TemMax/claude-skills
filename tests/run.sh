@@ -29,6 +29,7 @@ done
 run "behaviour — wave-runner reference implementation (simulated)" bash tests/wave-runner.test.sh
 run "behaviour — plan linter on fixture mutants"                   bash tests/plan-lint.test.sh
 run "behaviour — Codex native wave state" bash tests/codex-wave-state.test.sh
+run "behaviour — model CLI adapter" bash tests/eval/model-cli.test.sh
 
 for t in plugins/*/hooks/*.test.sh; do
   [ -e "$t" ] || continue
@@ -38,6 +39,9 @@ done
 if [ -n "$LIVE" ]; then
   for e in tests/eval/*.sh; do
     [ -e "$e" ] || continue
+    case "$(basename "$e")" in
+      model-cli.sh|gpt-5-6-matrix.sh|*.test.sh) continue ;;
+    esac
     run "evaluation (live model) — $(basename "$e" .sh)" bash "$e"
   done
 else

@@ -8,6 +8,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 . tests/lib.sh
+. tests/eval/model-cli.sh
 
 MODEL="${EVAL_MODEL:-claude-haiku-4-5-20251001}"
 PROMPT_FILE=plugins/orchestration/skills/multi-model/references/supervisor-prompt.md
@@ -64,7 +65,10 @@ Ran 2 tests in 0.001s
 OK'
 
 judge() {  # $1 = branch, $2 = report, $3 = extra forbidden_move, $4 = extra must_run cmd
-  ( cd "$R" && git checkout -q "$1" && timeout 300 claude -p "$(cat "$OLDPWD/$PROMPT_FILE")
+  local prompt_file="$W/supervisor-prompt.md" answer_file="$W/supervisor-answer.md"
+  ( cd "$R" && git checkout -q "$1" ) || return
+  cat > "$prompt_file" <<EOF
+$(cat "$PROMPT_FILE")
 
 CONTRACT:
 files_allowed: [src/**, tests/**]
@@ -84,7 +88,10 @@ BASE: $BASE
 BRANCH: $1
 
 REPORT:
-$2" --permission-mode bypassPermissions --model "$MODEL" </dev/null 2>/dev/null )
+$2
+EOF
+  EVAL_MODEL="$MODEL" eval_model "$R" read-only "$prompt_file" "$answer_file"
+  cat "$answer_file"
 }
 
 classes() { python3 -c '
