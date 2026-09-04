@@ -124,8 +124,9 @@ from a pre-approved plan. After approval, consume the approved plan’s provider
    asks to fix them. Then run its post-review fix phase for every approved finding that produces a fix, including an `own` finding with no PR threads.
    Route within that phase by behavior, not size:
    - the fix **changes behavior** (code paths, tests, contracts, scripts) →
-     the selected multi-model runs a supervised fix-wave; merge its reviewed
-     result locally into the feature branch and verify it;
+     the selected multi-model with `publication: local` runs a supervised
+     fix-wave; merge its reviewed result locally into the feature branch and
+     verify it;
    - the fix **changes no behavior** (prose, docs, comments, config strings)
      → apply it inline, commit locally, and verify it.
    The line is what the change can break, not how many lines it takes.

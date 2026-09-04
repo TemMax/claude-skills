@@ -94,6 +94,8 @@ check "Codex effort rework is not duplicated in its model ladder" \
   "grep -qF 'same-model raised-effort rework is state-machine behavior' '$SP' && grep -qF 'ladder lists model transitions only' '$SP'"
 
 CP=plugins/orchestration/skills/multi-model/references/codex-wave-protocol.md
+WR=plugins/orchestration/skills/multi-model/references/wave-runner.workflow.mjs
+CS=plugins/orchestration/skills/multi-model/references/codex-wave-state.mjs
 
 section "multi-model selects the native host adapter"
 
@@ -124,6 +126,21 @@ check "both Codex spawn examples name exact model" \
 check "both Codex spawn examples name exact effort" \
   "[ \$(grep -cF 'reasoning_effort: action.effort' '$CP') -eq 2 ]"
 
+section "multi-model holds reviewed fix waves locally only by explicit invocation"
+
+check "local publication is an explicit multi-model invocation contract" \
+  "grep -qF '\`publication: local\`' '$MM' && grep -qF 'not inferred from host or model' '$MM'"
+check "ordinary multi-model waves keep their pushed publication" \
+  "sed -n '/^### Invocation publication contract$/,/^- Claude-only wave:/p' '$MM' | tr '\\n' ' ' | grep -qF '\`publication: push\` is the normal mode and preserves normal push behavior'"
+check "Claude adapter completes local review waves without changing Workflow" \
+  "sed -n '/^Claude adapter completion /,/^4[.] Act on the returned statuses/p' '$MM' | tr '\\n' ' ' | grep -qF 'In local mode, \`publication: local\` performs no push. The Claude adapter keeps the shipped Workflow implementation unchanged'"
+check "Codex local completion never advances from an unpushed base" \
+  "sed -n '/^9[.] On \`merge-ready\`/,/^The action loop/p' '$CP' | tr '\\n' ' ' | tr -s ' ' | grep -qF 'Local mode does not derive or initialize a later wave from that unpushed base'"
+check "normal Codex completion still pushes and derives the next base" \
+  "sed -n '/^9[.] On \`merge-ready\`/,/^The action loop/p' '$CP' | tr '\\n' ' ' | tr -s ' ' | grep -qF 'In normal \`publication: push\` mode, multi-model pushes and then derives the next wave'"
+check "local publication does not alter either deterministic executor" \
+  "! grep -q 'publication' '$WR' && ! grep -q 'publication' '$CS'"
+
 section "ship composes the approved provider adapter without owning it"
 
 check "ship preserves the approved plan provider and exact ids" \
@@ -140,5 +157,7 @@ check "ship holds every review fix commit locally through verification" \
   "grep -qF 'Keep every resulting fix commit local through apply, commit, and verification' '$SH'"
 check "critical-review gate is the first review-fix publication point" \
   "grep -qF 'Only after that approval does publication run \`push → replies → resolves\`' '$SH' && ! sed -n '/^## Stage 3 — Review$/,/^## Stage 4 — Handoff$/p' '$SH' | grep -qF 'pushed like any wave'"
+check "ship requests local publication for behavior-changing review fixes" \
+  "sed -n '/^## Stage 3 — Review$/,/^## Stage 4 — Handoff$/p' '$SH' | grep -qF 'multi-model with \`publication: local\`'"
 
 summary

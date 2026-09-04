@@ -425,6 +425,23 @@ block. Spending the supervisor's credibility on flaky tests buys nothing.
 
 ## Host adapter
 
+### Invocation publication contract
+
+Every multi-model invocation declares publication at this composition boundary,
+not in a host adapter, runner, helper, plan, or profile. `publication: push` is
+the normal mode and preserves normal push behavior. `publication: local` is
+available only when the enclosing critical-review post-review fix protocol
+explicitly invokes it; it is not inferred from host or model.
+
+Local mode never weakens lint, the pushed-base requirement, contracts,
+mechanical verification, supervision, verdicts, plan-order integration, or the
+full-wave review. Both adapters complete all of that work and return the
+resulting local feature-branch commit(s), task branch names, and state/verdict
+evidence to their caller, but local mode performs no push. The wave still forks
+from the current pushed PR head. Local mode is one publication transaction: if
+approved fixes need dependent bases that cannot safely fit in that one
+supervised wave, stop before publication rather than push around the gate.
+
 - Claude-only wave: invoke `references/wave-runner.workflow.mjs` exactly as
   documented below.
 - GPT-5.6-only wave: read and follow
@@ -502,6 +519,14 @@ mandatory blocks of the Task Prompt Template above, plus a workspace section
 carrying the isolation instructions — so the contract the executor reads and
 the contract the supervisor enforces are the same object and cannot diverge.
 Escalated rungs run at `high` effort.
+
+Claude adapter completion reads the multi-model publication contract after
+every task is `ok`: it merges branches in plan order, runs the full-wave review,
+and returns the local feature-branch commit(s), task branches, and verdict
+evidence. `publication: push` then pushes as normal. In local mode,
+`publication: local` performs no push. The Claude adapter keeps the shipped
+Workflow implementation unchanged; publication stays at this composition
+boundary, not in the Workflow arguments or script.
 
 4. Act on the returned statuses, task by task:
    - `ok` — merge `wave/<id>` per the wave plan.

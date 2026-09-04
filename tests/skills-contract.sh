@@ -66,6 +66,8 @@ check "the filesystem constraint is named"     "grep -q 'supervisorPromptText' $
 check "no ladder row resurrects the forgery class" "! grep -qi 'forged evidence' $MM"
 
 CP=plugins/orchestration/skills/multi-model/references/codex-wave-protocol.md
+CS=plugins/orchestration/skills/multi-model/references/codex-wave-state.mjs
+WR=plugins/orchestration/skills/multi-model/references/wave-runner.workflow.mjs
 
 section "multi-model: Codex-native supervision preserves the shared contract"
 check "GPT waves use the Codex adapter"             "grep -qF 'references/codex-wave-protocol.md' $MM"
@@ -90,6 +92,18 @@ check "executor and supervisor examples name model" \
   "[ \$(grep -cF 'model: action.model' $CP) -eq 2 ]"
 check "executor and supervisor examples name effort" \
   "[ \$(grep -cF 'reasoning_effort: action.effort' $CP) -eq 2 ]"
+check "review-local publication is explicit and never host-inferred" \
+  "grep -qF '\`publication: local\`' $MM && grep -qF 'not inferred from host or model' $MM"
+check "normal publication remains the pushed mode" \
+  "sed -n '/^### Invocation publication contract$/,/^- Claude-only wave:/p' $MM | tr '\\n' ' ' | grep -qF '\`publication: push\` is the normal mode and preserves normal push behavior'"
+check "Claude local completion leaves Workflow implementation unchanged" \
+  "sed -n '/^Claude adapter completion /,/^4[.] Act on the returned statuses/p' $MM | tr '\\n' ' ' | grep -qF 'In local mode, \`publication: local\` performs no push. The Claude adapter keeps the shipped Workflow implementation unchanged'"
+check "Codex local completion cannot create an unpushed next base" \
+  "sed -n '/^9[.] On \`merge-ready\`/,/^The action loop/p' $CP | tr '\\n' ' ' | tr -s ' ' | grep -qF 'Local mode does not derive or initialize a later wave from that unpushed base'"
+check "Codex normal completion still pushes before next base" \
+  "sed -n '/^9[.] On \`merge-ready\`/,/^The action loop/p' $CP | tr '\\n' ' ' | tr -s ' ' | grep -qF 'In normal \`publication: push\` mode, multi-model pushes and then derives the next wave'"
+check "publication remains outside Workflow and the state helper" \
+  "! grep -q 'publication' $WR && ! grep -q 'publication' $CS"
 
 section "multi-model: research fan-out is routed, never inherited"
 check "the research routing table exists"      "grep -q 'Research Routing' $MM"
@@ -187,6 +201,8 @@ check "review fix commits remain unpublished until critical-review approval" \
   "grep -qF 'Keep every resulting fix commit local through apply, commit, and verification' $SH && grep -qF 'Only after that approval does publication run \`push → replies → resolves\`' $SH"
 check "post-review behavior fixes are not pushed like ordinary waves" \
   "! sed -n '/^## Stage 3 — Review$/,/^## Stage 4 — Handoff$/p' $SH | grep -qF 'pushed like any wave'"
+check "ship explicitly invokes review behavior fixes locally" \
+  "sed -n '/^## Stage 3 — Review$/,/^## Stage 4 — Handoff$/p' $SH | grep -qF 'multi-model with \`publication: local\`'"
 
 section "Fable 5.1: every skill routes the new model ID to its own profile"
 OF=plugins/orchestration/skills/multi-model/references/orchestrator-fable-5-1.md
