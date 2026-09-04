@@ -28,6 +28,7 @@ for t in tests/contracts/*.test.sh; do
 done
 run "behaviour — wave-runner reference implementation (simulated)" bash tests/wave-runner.test.sh
 run "behaviour — plan linter on fixture mutants"                   bash tests/plan-lint.test.sh
+run "behaviour — Codex native wave state" bash tests/codex-wave-state.test.sh
 
 for t in plugins/*/hooks/*.test.sh; do
   [ -e "$t" ] || continue

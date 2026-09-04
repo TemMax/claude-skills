@@ -1,0 +1,465 @@
+// CLI-level contract for the deterministic Codex wave helper. Every case uses
+// a real disposable Git repository and the shipped executable.
+import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import {
+  cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync,
+  rmSync, writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const here = dirname(fileURLToPath(import.meta.url))
+const ROOT = resolve(here, '..', '..')
+const CLI = join(ROOT, 'plugins', 'orchestration', 'skills', 'multi-model',
+  'references', 'codex-wave-state.mjs')
+const FIXTURE = join(ROOT, 'tests', 'fixtures', 'plans', 'codex-clean.md')
+
+const roots = []
+process.on('exit', () => roots.forEach((path) => rmSync(path, { recursive: true, force: true })))
+
+function run(command, args, options = {}) {
+  const result = spawnSync(command, args, { encoding: 'utf8', ...options })
+  if (result.status !== 0) {
+    throw new Error([command, ...args].join(' ') + '\n' + result.stdout + result.stderr)
+  }
+  return result.stdout.trim()
+}
+
+function git(repo, ...args) {
+  return run('git', ['-C', repo, ...args])
+}
+
+function makeRepo() {
+  const root = mkdtempSync(join(tmpdir(), 'codex-wave-state-'))
+  roots.push(root)
+  const repo = join(root, 'repo')
+  mkdirSync(join(repo, 'src'), { recursive: true })
+  mkdirSync(join(repo, 'tests'), { recursive: true })
+  writeFileSync(join(repo, 'src', 'divide.py'), 'def divide(a, b):\n    return a / b\n')
+  writeFileSync(join(repo, 'tests', '__init__.py'), '')
+  writeFileSync(join(repo, 'tests', 'test_divide.py'), [
+    'import unittest',
+    'from src.divide import divide',
+    '',
+    'class DivideTest(unittest.TestCase):',
+    '    def test_divide(self):',
+    '        self.assertEqual(divide(6, 3), 2)',
+    '',
+  ].join('\n'))
+  git(repo, 'init')
+  git(repo, 'config', 'user.name', 'Codex Test')
+  git(repo, 'config', 'user.email', 'codex-test@example.invalid')
+  git(repo, 'add', '.')
+  git(repo, 'commit', '-m', 'base')
+  const base = git(repo, 'rev-parse', 'HEAD')
+  const plan = join(root, basename(FIXTURE))
+  cpSync(FIXTURE, plan)
+  return { root, repo, plan, base }
+}
+
+function invoke(args, input) {
+  const result = spawnSync(process.execPath, [CLI, ...args], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    input: input === undefined ? undefined : JSON.stringify(input),
+  })
+  let json
+  try { json = JSON.parse(result.stdout) } catch {
+    json = null
+  }
+  return { ...result, json }
+}
+
+function ok(args, input) {
+  const result = invoke(args, input)
+  assert.equal(result.status, 0, result.stderr || result.stdout)
+  assert.ok(result.json, 'stdout must be one JSON object')
+  return result.json
+}
+
+function init(over = {}) {
+  const env = makeRepo()
+  if (over.planText) writeFileSync(env.plan, over.planText(readFileSync(env.plan, 'utf8')))
+  const result = invoke(['init', '--plan', env.plan, '--wave', '1', '--repo', env.repo,
+    '--base', env.base])
+  if (!over.invalid) {
+    assert.equal(result.status, 0, result.stderr || result.stdout)
+    assert.ok(result.json)
+    env.statePath = result.json.state
+    env.worktree = join(env.repo, '.worktrees', 'wave-divide-guard')
+  }
+  return { ...env, result }
+}
+
+function state(path) {
+  return JSON.parse(readFileSync(path, 'utf8'))
+}
+
+function next(path) {
+  return ok(['next', '--state', path])
+}
+
+function recordExecutor(path, payload) {
+  return ok(['record-executor', '--state', path, '--task', 'divide-guard'], payload)
+}
+
+function verify(path) {
+  return ok(['verify', '--state', path, '--task', 'divide-guard'])
+}
+
+function recordVerdict(path, payload) {
+  return ok(['record-verdict', '--state', path, '--task', 'divide-guard'], payload)
+}
+
+function prepareAttempt(env, report = 'implemented guard') {
+  recordExecutor(env.statePath, { report })
+  verify(env.statePath)
+}
+
+function failed(rule = 'files_allowed: src/**', klass = 'files', extra = {}) {
+  return {
+    ok: false,
+    violations: [{ rule, class: klass, evidence: 'observed failure', quote: '', ...extra }],
+    remarks: [],
+  }
+}
+
+function clean() {
+  return { ok: true, violations: [], remarks: [] }
+}
+
+const tests = []
+const test = (name, fn) => tests.push({ name, fn })
+
+test('C1 init creates one schema-1 state and exact-base worktree branch', () => {
+  const env = init()
+  const files = readdirSync(join(env.repo, '.worktrees', 'codex-wave'))
+  assert.deepEqual(files, ['codex-clean-w1-' + env.base.slice(0, 12) + '.json'])
+  assert.equal(env.statePath, join(env.repo, '.worktrees', 'codex-wave', files[0]))
+  const saved = state(env.statePath)
+  assert.equal(saved.schema, 1)
+  assert.equal(saved.base, env.base)
+  assert.equal(saved.tasks['divide-guard'].branch, 'wave/divide-guard')
+  assert.equal(git(env.worktree, 'rev-parse', 'HEAD'), env.base)
+  assert.equal(git(env.worktree, 'branch', '--show-current'), 'wave/divide-guard')
+  assert.equal(git(env.repo, 'worktree', 'list', '--porcelain').match(/^worktree /gm).length, 2)
+})
+
+test('C2 selected Claude wave is host-mismatch and creates nothing', () => {
+  const env = init({ invalid: true, planText: (text) => text.replace(
+    '"model": "gpt-5.6-luna"', '"model": "sonnet"') })
+  assert.notEqual(env.result.status, 0)
+  assert.equal(env.result.json.status, 'invalid')
+  assert.match(env.result.json.errors.join('; '), /host-mismatch/)
+  assert.equal(existsSync(join(env.repo, '.worktrees')), false)
+  assert.equal(git(env.repo, 'branch', '--list', 'wave/divide-guard'), '')
+})
+
+test('C3 next returns Luna-medium and all five contract keys in its prompt', () => {
+  const env = init()
+  const action = next(env.statePath)
+  assert.equal(action.action, 'spawn-executor')
+  assert.equal(action.task, 'divide-guard')
+  assert.equal(action.model, 'gpt-5.6-luna')
+  assert.equal(action.effort, 'medium')
+  assert.equal(action.worktree, env.worktree)
+  for (const key of ['files_allowed', 'files_forbidden', 'must_run',
+    'forbidden_moves', 'report_must_answer']) assert.match(action.prompt, new RegExp(key))
+})
+
+test('C4 record-executor stores only report text and advances to verify', () => {
+  const env = init()
+  recordExecutor(env.statePath, { report: 'guard added; tests pass' })
+  const saved = state(env.statePath).tasks['divide-guard']
+  assert.deepEqual(saved.reports, ['guard added; tests pass'])
+  assert.equal(saved.totalAttempts, 1)
+  assert.equal(saved.status, 'reported')
+  assert.equal(next(env.statePath).action, 'verify')
+})
+
+test('C5 verifier records diff, paths, commits, and both non-zero command attempts', () => {
+  const env = init({ planText: (text) => text.replace(
+    'python3 -m unittest discover -s tests -t .',
+    "if [ -f .retry-marker ]; then printf second-out; printf second-err >&2; exit 3; else touch .retry-marker; printf first-out; printf first-err >&2; exit 7; fi") })
+  writeFileSync(join(env.worktree, 'src', 'divide.py'),
+    'def divide(a, b):\n    if b == 0:\n        raise ZeroDivisionError\n    return a / b\n')
+  git(env.worktree, 'add', 'src/divide.py')
+  git(env.worktree, 'commit', '-m', 'guard division')
+  recordExecutor(env.statePath, { report: 'implemented and tested' })
+  verify(env.statePath)
+  const facts = state(env.statePath).tasks['divide-guard'].verifierFacts[0]
+  assert.deepEqual(facts.changedPaths, ['src/divide.py'])
+  assert.equal(facts.commitCount, 1)
+  assert.match(facts.diff, /ZeroDivisionError/)
+  assert.match(facts.diff, /diff --git a\/src\/divide.py b\/src\/divide.py/)
+  const command = facts.mustRun[0]
+  assert.match(command.cmd, /^if \[ -f \.retry-marker \]/)
+  assert.deepEqual(command.attempts.map((a) => a.exit), [7, 3])
+  assert.deepEqual(command.attempts.map((a) => a.stdout), ['first-out', 'second-out'])
+  assert.deepEqual(command.attempts.map((a) => a.stderr), ['first-err', 'second-err'])
+  assert.ok(facts.violations.some((v) => v.class === 'must_run'))
+  assert.equal(next(env.statePath).action, 'spawn-supervisor')
+})
+
+test('C6 supervisor prompt carries artifacts but redacts every executor id occurrence', () => {
+  const env = init()
+  writeFileSync(join(env.worktree, 'src', 'divide.py'), 'def divide(a, b):\n    return None if b == 0 else a / b\n')
+  git(env.worktree, 'add', 'src/divide.py')
+  git(env.worktree, 'commit', '-m', 'guard division')
+  prepareAttempt(env, 'gpt-5.6-luna changed the guard; checked by gpt-5.6-luna')
+  const out = ok(['supervisor-prompt', '--state', env.statePath, '--task', 'divide-guard'])
+  assert.equal(out.task, 'divide-guard')
+  assert.match(out.prompt, /CONTRACT/)
+  assert.match(out.prompt, /files_allowed/)
+  assert.match(out.prompt, new RegExp(env.base))
+  assert.match(out.prompt, /wave\/divide-guard/)
+  assert.match(out.prompt, /VERIFIER FACTS/)
+  assert.match(out.prompt, /changedPaths/)
+  assert.match(out.prompt, /REPORT/)
+  assert.equal((out.prompt.match(/\[executor-model-redacted\]/g) || []).length, 2)
+  assert.doesNotMatch(out.prompt, /gpt-5\.6-luna/)
+})
+
+test('C7 clean verdict yields merge-ready and done summary', () => {
+  const env = init()
+  prepareAttempt(env)
+  recordVerdict(env.statePath, clean())
+  assert.equal(next(env.statePath).action, 'merge-ready')
+  const summary = ok(['summary', '--state', env.statePath])
+  assert.equal(summary.status, 'done')
+  assert.equal(summary.tasks[0].id, 'divide-guard')
+  assert.equal(summary.tasks[0].status, 'ok')
+})
+
+test('C8 first violation requests same-model rework with prior verdict', () => {
+  const env = init()
+  prepareAttempt(env)
+  const verdict = failed()
+  recordVerdict(env.statePath, verdict)
+  const action = next(env.statePath)
+  assert.equal(action.action, 'spawn-executor')
+  assert.equal(action.model, 'gpt-5.6-luna')
+  assert.equal(action.effort, 'medium')
+  assert.match(action.prompt, /PRIOR VERDICT/)
+  assert.match(action.prompt, /observed failure/)
+  assert.equal(state(env.statePath).tasks['divide-guard'].verdicts[0].escalation, null)
+})
+
+test('C9a repeated class and rule advances Luna directly to Sol', () => {
+  const env = init()
+  prepareAttempt(env)
+  recordVerdict(env.statePath, failed('same rule'))
+  prepareAttempt(env)
+  recordVerdict(env.statePath, failed('same rule'))
+  const action = next(env.statePath)
+  assert.equal(action.model, 'gpt-5.6-sol')
+  assert.equal(action.effort, 'high')
+  assert.equal(action.reason, 'same-rule-repeat')
+  const task = state(env.statePath).tasks['divide-guard']
+  assert.equal(task.rung, 1)
+  assert.equal(task.verdicts[1].escalation, 'same-rule-repeat')
+})
+
+test('C9b second distinct violation advances Luna directly to Sol', () => {
+  const env = init()
+  prepareAttempt(env)
+  recordVerdict(env.statePath, failed('first rule', 'files'))
+  prepareAttempt(env)
+  recordVerdict(env.statePath, failed('second rule', 'report'))
+  const action = next(env.statePath)
+  assert.equal(action.model, 'gpt-5.6-sol')
+  assert.equal(action.reason, 'rung-exhausted')
+  assert.equal(state(env.statePath).tasks['divide-guard'].verdicts[1].escalation,
+    'rung-exhausted')
+})
+
+test('C10 second paste strike skips remaining rung attempt', () => {
+  const env = init()
+  const paste = failed('must reproduce', 'must_run', { pasteReproduced: false, satisfiable: true })
+  prepareAttempt(env)
+  recordVerdict(env.statePath, paste)
+  prepareAttempt(env)
+  recordVerdict(env.statePath, failed('a distinct command', 'must_run',
+    { pasteReproduced: false, satisfiable: true }))
+  const action = next(env.statePath)
+  assert.equal(action.model, 'gpt-5.6-sol')
+  assert.equal(action.reason, 'paste-two-strikes')
+  const task = state(env.statePath).tasks['divide-guard']
+  assert.equal(task.pasteStrikes, 2)
+  assert.equal(task.verdicts[1].escalation, 'paste-two-strikes')
+})
+
+test('C11 satisfiable:false stops task immediately', () => {
+  const env = init()
+  prepareAttempt(env)
+  recordVerdict(env.statePath, failed('unfixable command', 'must_run',
+    { satisfiable: false }))
+  const action = next(env.statePath)
+  assert.equal(action.action, 'stop')
+  assert.equal(action.reason, 'contract-unsatisfiable')
+  assert.equal(state(env.statePath).tasks['divide-guard'].status, 'contract-unsatisfiable')
+})
+
+test('C12 terminal Sol gets one higher-effort retry, then stops without max', () => {
+  const env = init()
+  prepareAttempt(env)
+  recordVerdict(env.statePath, failed('luna first'))
+  prepareAttempt(env)
+  recordVerdict(env.statePath, failed('luna second'))
+  prepareAttempt(env)
+  recordVerdict(env.statePath, failed('sol first'))
+  let action = next(env.statePath)
+  assert.equal(action.action, 'spawn-executor')
+  assert.equal(action.model, 'gpt-5.6-sol')
+  assert.equal(action.effort, 'xhigh')
+  assert.notEqual(action.effort, 'max')
+  prepareAttempt(env)
+  recordVerdict(env.statePath, failed('sol second'))
+  action = next(env.statePath)
+  assert.equal(action.action, 'stop')
+  assert.equal(action.reason, 'failed')
+  assert.equal(state(env.statePath).tasks['divide-guard'].totalAttempts, 4)
+})
+
+test('C12b absolute executor-attempt cap stops after six reports', () => {
+  const env = init({ planText: (text) => text.replace(
+    '"ladder": ["gpt-5.6-sol"]',
+    '"ladder": ["gpt-5.6-luna", "gpt-5.6-luna", "gpt-5.6-sol"]') })
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    prepareAttempt(env, 'report ' + attempt)
+    recordVerdict(env.statePath, failed('distinct rule ' + attempt))
+  }
+  const action = next(env.statePath)
+  assert.equal(action.action, 'stop')
+  assert.equal(action.reason, 'failed')
+  assert.equal(state(env.statePath).tasks['divide-guard'].totalAttempts, 6)
+})
+
+test('C13 executor errors are typed: retry once, then error without message', () => {
+  const env = init()
+  recordExecutor(env.statePath, { error: { kind: 'transport' } })
+  assert.equal(next(env.statePath).action, 'spawn-executor')
+  recordExecutor(env.statePath, { error: { kind: 'transport' } })
+  const action = next(env.statePath)
+  assert.equal(action.action, 'stop')
+  assert.equal(action.reason, 'error')
+  const task = state(env.statePath).tasks['divide-guard']
+  assert.deepEqual(task.agentFailures, [
+    { point: 'executor', kind: 'transport', attempt: 1 },
+    { point: 'executor', kind: 'transport', attempt: 1 },
+  ])
+  assert.doesNotMatch(JSON.stringify(task), /message/)
+})
+
+test('C13b successful executor result resets the consecutive error count', () => {
+  const env = init()
+  recordExecutor(env.statePath, { error: { kind: 'transport' } })
+  prepareAttempt(env)
+  recordVerdict(env.statePath, failed('first rejected report'))
+  recordExecutor(env.statePath, { error: { kind: 'tool-unavailable' } })
+  const action = next(env.statePath)
+  assert.equal(action.action, 'spawn-executor')
+  assert.equal(state(env.statePath).tasks['divide-guard'].status, 'ready')
+})
+
+test('C14 supervisor errors retry once at supervisor, then mark error', () => {
+  const env = init()
+  prepareAttempt(env)
+  recordVerdict(env.statePath, { error: { kind: 'null-result' } })
+  assert.equal(next(env.statePath).action, 'spawn-supervisor')
+  recordVerdict(env.statePath, { error: { kind: 'null-result' } })
+  const action = next(env.statePath)
+  assert.equal(action.action, 'stop')
+  assert.equal(action.reason, 'error')
+  assert.deepEqual(state(env.statePath).tasks['divide-guard'].agentFailures, [
+    { point: 'supervisor', kind: 'null-result', attempt: 1 },
+    { point: 'supervisor', kind: 'null-result', attempt: 1 },
+  ])
+})
+
+test('C14b successful verdict resets the consecutive supervisor error count', () => {
+  const env = init()
+  prepareAttempt(env)
+  recordVerdict(env.statePath, { error: { kind: 'transport' } })
+  recordVerdict(env.statePath, failed('first rejected report'))
+  prepareAttempt(env)
+  recordVerdict(env.statePath, { error: { kind: 'null-result' } })
+  const action = next(env.statePath)
+  assert.equal(action.action, 'spawn-supervisor')
+  assert.equal(state(env.statePath).tasks['divide-guard'].status, 'verified')
+})
+
+test('C15 malformed stdin is non-zero and leaves state byte-for-byte unchanged', () => {
+  const env = init()
+  const before = readFileSync(env.statePath)
+  const result = spawnSync(process.execPath,
+    [CLI, 'record-executor', '--state', env.statePath, '--task', 'divide-guard'],
+    { cwd: ROOT, encoding: 'utf8', input: '{ definitely not JSON' })
+  assert.notEqual(result.status, 0)
+  assert.equal(JSON.parse(result.stdout).status, 'invalid')
+  assert.match(result.stdout, /stdin-json/)
+  assert.deepEqual(readFileSync(env.statePath), before)
+})
+
+test('C16 existing worktree is a named conflict and is never removed', () => {
+  const env = makeRepo()
+  const occupied = join(env.repo, '.worktrees', 'wave-divide-guard')
+  mkdirSync(occupied, { recursive: true })
+  writeFileSync(join(occupied, 'sentinel'), 'preserve me')
+  const result = invoke(['init', '--plan', env.plan, '--wave', '1', '--repo', env.repo,
+    '--base', env.base])
+  assert.notEqual(result.status, 0)
+  assert.equal(result.json.status, 'invalid')
+  assert.match(result.json.errors.join('; '), /worktree-conflict/)
+  assert.equal(readFileSync(join(occupied, 'sentinel'), 'utf8'), 'preserve me')
+  assert.equal(existsSync(join(env.repo, '.worktrees', 'codex-wave')), false)
+})
+
+test('C16b existing state conflict is detected before any Git mutation', () => {
+  const env = makeRepo()
+  const stateDir = join(env.repo, '.worktrees', 'codex-wave')
+  mkdirSync(stateDir, { recursive: true })
+  const statePath = join(stateDir, 'codex-clean-w1-' + env.base.slice(0, 12) + '.json')
+  writeFileSync(statePath, 'preserve exact bytes\n')
+  const result = invoke(['init', '--plan', env.plan, '--wave', '1', '--repo', env.repo,
+    '--base', env.base])
+  assert.notEqual(result.status, 0)
+  assert.match(result.json.errors.join('; '), /state-conflict/)
+  assert.equal(readFileSync(statePath, 'utf8'), 'preserve exact bytes\n')
+  assert.equal(existsSync(join(env.repo, '.worktrees', 'wave-divide-guard')), false)
+  assert.equal(git(env.repo, 'branch', '--list', 'wave/divide-guard'), '')
+})
+
+test('C17 supervisor collision in executor or ladder is exact schema error', () => {
+  for (const mutate of [
+    (text) => text.replace('"model": "gpt-5.6-luna"', '"model": "gpt-5.6-terra"'),
+    (text) => text.replace('"ladder": ["gpt-5.6-sol"]', '"ladder": ["gpt-5.6-terra"]'),
+  ]) {
+    const env = init({ invalid: true, planText: mutate })
+    assert.notEqual(env.result.status, 0)
+    assert.equal(env.result.json.status, 'invalid')
+    assert.match(env.result.json.errors.join('; '),
+      /supervisor model also appears as executor or ladder rung/)
+    assert.equal(existsSync(join(env.repo, '.worktrees')), false)
+    assert.equal(git(env.repo, 'branch', '--list', 'wave/divide-guard'), '')
+  }
+})
+
+let failedCount = 0
+for (const { name, fn } of tests) {
+  try {
+    await fn()
+    console.log('ok - ' + name)
+  } catch (error) {
+    failedCount++
+    console.error('not ok - ' + name)
+    console.error(error.stack || error)
+  }
+}
+if (failedCount) {
+  console.error(failedCount + ' of ' + tests.length + ' scenarios failed')
+  process.exit(1)
+}
+console.log('C1-C17: ' + tests.length + ' scenarios passed')
