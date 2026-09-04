@@ -17,6 +17,8 @@ eval_model() {
     *) return 2 ;;
   esac
 
+  : > "$answer_file"
+
   case "$provider" in
     claude)
       case "$sandbox" in
@@ -39,4 +41,11 @@ eval_model() {
         --output-last-message "$answer_file" - < "$prompt_file" >/dev/null)
       ;;
   esac
+}
+
+# Print an answer only when its model invocation completed successfully.
+eval_model_answer() {
+  local answer_file="$4"
+  eval_model "$@" || return $?
+  cat "$answer_file"
 }

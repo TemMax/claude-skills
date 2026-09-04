@@ -61,8 +61,7 @@ Do not wrap the output in an outer code fence.
 
 Feature request:
 $1" > "$prompt_file"
-  EVAL_MODEL="$MODEL" eval_model "$R" read-only "$prompt_file" "$answer_file"
-  cat "$answer_file"
+  EVAL_MODEL="$MODEL" eval_model_answer "$R" read-only "$prompt_file" "$answer_file"
 }
 
 section "P1 — overlap temptation (both changes land in src/app.py)"

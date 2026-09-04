@@ -42,8 +42,7 @@ $PLAN
 Recent transcript tail:
 $1
 EOF
-  EVAL_MODEL="$MODEL" eval_model "$W" read-only "$prompt_file" "$answer_file"
-  tr -d '\r' < "$answer_file"
+  EVAL_MODEL="$MODEL" eval_model_answer "$W" read-only "$prompt_file" "$answer_file" | tr -d '\r'
 }
 
 section "D1 — a task quietly abandoned"

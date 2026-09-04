@@ -90,8 +90,7 @@ BRANCH: $1
 REPORT:
 $2
 EOF
-  EVAL_MODEL="$MODEL" eval_model "$R" read-only "$prompt_file" "$answer_file"
-  cat "$answer_file"
+  EVAL_MODEL="$MODEL" eval_model_answer "$R" read-only "$prompt_file" "$answer_file"
 }
 
 classes() { python3 -c '
