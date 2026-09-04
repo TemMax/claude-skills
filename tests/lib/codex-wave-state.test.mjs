@@ -101,21 +101,37 @@ function next(path) {
   return ok(['next', '--state', path])
 }
 
-function recordExecutor(path, payload) {
-  return ok(['record-executor', '--state', path, '--task', 'divide-guard'], payload)
+function recordExecutor(path, payload, id = 'divide-guard') {
+  return ok(['record-executor', '--state', path, '--task', id], payload)
 }
 
-function verify(path) {
-  return ok(['verify', '--state', path, '--task', 'divide-guard'])
+function verify(path, id = 'divide-guard') {
+  return ok(['verify', '--state', path, '--task', id])
 }
 
-function recordVerdict(path, payload) {
-  return ok(['record-verdict', '--state', path, '--task', 'divide-guard'], payload)
+function recordVerdict(path, payload, id = 'divide-guard') {
+  return ok(['record-verdict', '--state', path, '--task', id], payload)
 }
 
-function prepareAttempt(env, report = 'implemented guard') {
-  recordExecutor(env.statePath, { report })
-  verify(env.statePath)
+function prepareAttempt(env, report = 'implemented guard', id = 'divide-guard') {
+  recordExecutor(env.statePath, { report }, id)
+  verify(env.statePath, id)
+}
+
+function withSecondTask(text) {
+  const second = `,
+      { "id": "multiply-guard",
+        "branch": "wave/multiply-guard",
+        "executor": { "model": "gpt-5.6-luna", "effort": "medium" },
+        "ladder": ["gpt-5.6-sol"],
+        "contract": {
+          "files_allowed": ["src/multiply/**"],
+          "files_forbidden": ["tests/**"],
+          "must_run": [{ "cmd": "true", "evidence": "required" }],
+          "forbidden_moves": ["weakening tests"],
+          "report_must_answer": ["How is multiplication handled?"] } }`
+  return text.replace(' } }\n    ] }', ' } }' + second + '\n    ] }')
+    + '\n## Task multiply-guard\n\nAdd the second independent guard.\n'
 }
 
 function failed(rule = 'files_allowed: src/**', klass = 'files', extra = {}) {
@@ -194,6 +210,9 @@ test('C5 verifier records diff, paths, commits, and both non-zero command attemp
   assert.equal(facts.commitCount, 1)
   assert.match(facts.diff, /ZeroDivisionError/)
   assert.match(facts.diff, /diff --git a\/src\/divide.py b\/src\/divide.py/)
+  assert.equal(facts.currentBranch, 'wave/divide-guard')
+  assert.equal(facts.baseIsAncestor, true)
+  assert.equal(facts.worktreeStatus, '')
   const command = facts.mustRun[0]
   assert.match(command.cmd, /^if \[ -f \.retry-marker \]/)
   assert.deepEqual(command.attempts.map((a) => a.exit), [7, 3])
@@ -334,7 +353,45 @@ test('C12b absolute executor-attempt cap stops after six reports', () => {
   const action = next(env.statePath)
   assert.equal(action.action, 'stop')
   assert.equal(action.reason, 'failed')
-  assert.equal(state(env.statePath).tasks['divide-guard'].totalAttempts, 6)
+  const task = state(env.statePath).tasks['divide-guard']
+  assert.equal(task.totalAttempts, 6)
+  assert.equal(task.verdicts.at(-1).escalation, 'rung-exhausted')
+})
+
+test('C12c sixth repeated rule is classified before the absolute cap stops', () => {
+  const env = init({ planText: (text) => text.replace(
+    '"ladder": ["gpt-5.6-sol"]',
+    '"ladder": ["gpt-5.6-luna", "gpt-5.6-luna", "gpt-5.6-sol"]') })
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    prepareAttempt(env, 'report ' + attempt)
+    recordVerdict(env.statePath, failed('distinct rule ' + attempt))
+  }
+  for (let attempt = 5; attempt <= 6; attempt++) {
+    prepareAttempt(env, 'report ' + attempt)
+    recordVerdict(env.statePath, failed('cap repeated rule'))
+  }
+  assert.equal(next(env.statePath).action, 'stop')
+  assert.equal(state(env.statePath).tasks['divide-guard'].verdicts.at(-1).escalation,
+    'same-rule-repeat')
+})
+
+test('C12d sixth second paste strike is classified before the cap stops', () => {
+  const env = init({ planText: (text) => text.replace(
+    '"ladder": ["gpt-5.6-sol"]',
+    '"ladder": ["gpt-5.6-luna", "gpt-5.6-luna", "gpt-5.6-sol"]') })
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    prepareAttempt(env, 'report ' + attempt)
+    recordVerdict(env.statePath, failed('distinct rule ' + attempt))
+  }
+  prepareAttempt(env, 'report 5')
+  recordVerdict(env.statePath, failed('paste one', 'must_run',
+    { pasteReproduced: false, satisfiable: true }))
+  prepareAttempt(env, 'report 6')
+  recordVerdict(env.statePath, failed('paste two', 'must_run',
+    { pasteReproduced: false, satisfiable: true }))
+  assert.equal(next(env.statePath).action, 'stop')
+  assert.equal(state(env.statePath).tasks['divide-guard'].verdicts.at(-1).escalation,
+    'paste-two-strikes')
 })
 
 test('C13 executor errors are typed: retry once, then error without message', () => {
@@ -445,6 +502,158 @@ test('C17 supervisor collision in executor or ladder is exact schema error', () 
     assert.equal(existsSync(join(env.repo, '.worktrees')), false)
     assert.equal(git(env.repo, 'branch', '--list', 'wave/divide-guard'), '')
   }
+})
+
+test('C18 tampered schema-1 state cannot redirect verify cwd or run must_run', () => {
+  const env = init({ planText: (text) => text.replace(
+    'python3 -m unittest discover -s tests -t .', 'printf executed > must-run-executed') })
+  recordExecutor(env.statePath, { report: 'ready for verification' })
+  const redirected = join(env.root, 'redirected')
+  mkdirSync(redirected)
+  const tampered = state(env.statePath)
+  tampered.tasks['divide-guard'].worktree = redirected
+  writeFileSync(env.statePath, JSON.stringify(tampered, null, 2) + '\n')
+  const before = readFileSync(env.statePath)
+  const result = invoke(['verify', '--state', env.statePath, '--task', 'divide-guard'])
+  assert.notEqual(result.status, 0)
+  assert.equal(result.json.status, 'invalid')
+  assert.match(result.json.errors.join('; '), /state-schema.*worktree/)
+  assert.equal(existsSync(join(redirected, 'must-run-executed')), false)
+  assert.deepEqual(readFileSync(env.statePath), before)
+})
+
+test('C18b every safety-relevant stored field is validated before next', () => {
+  const env = init()
+  const original = state(env.statePath)
+  const cases = [
+    ['planPath', (s) => { s.planPath = '' }],
+    ['repoPath', (s) => { s.repoPath = '' }],
+    ['wave', (s) => { s.wave = 0 }],
+    ['base', (s) => { s.base = 'abc' }],
+    ['supervisor.model', (s) => { s.supervisor.model = 'sonnet' }],
+    ['supervisor.effort', (s) => { s.supervisor.effort = 'extreme' }],
+    ['tasks', (s) => { s.tasks = {} }],
+    ['task id', (s) => { s.tasks.Bad = s.tasks['divide-guard']; delete s.tasks['divide-guard'] }],
+    ['status', (s) => { s.tasks['divide-guard'].status = 'launch-anything' }],
+    ['branch', (s) => { s.tasks['divide-guard'].branch = 'main' }],
+    ['worktree', (s) => { s.tasks['divide-guard'].worktree = env.root }],
+    ['rungs', (s) => { s.tasks['divide-guard'].rungs = [] }],
+    ['supervisor collision', (s) => { s.tasks['divide-guard'].rungs = ['gpt-5.6-terra'] }],
+    ['rung', (s) => { s.tasks['divide-guard'].rung = 8 }],
+    ['attemptOnRung', (s) => { s.tasks['divide-guard'].attemptOnRung = -1 }],
+    ['totalAttempts', (s) => { s.tasks['divide-guard'].totalAttempts = 7 }],
+    ['pasteStrikes', (s) => { s.tasks['divide-guard'].pasteStrikes = -1 }],
+    ['reports', (s) => { s.tasks['divide-guard'].reports = {} }],
+    ['verifierFacts', (s) => { s.tasks['divide-guard'].verifierFacts = [{}] }],
+    ['verdicts', (s) => { s.tasks['divide-guard'].verdicts = [{}] }],
+    ['agentFailures', (s) => { s.tasks['divide-guard'].agentFailures = [{ message: 'redirect' }] }],
+  ]
+  for (const [name, mutate] of cases) {
+    const tampered = structuredClone(original)
+    mutate(tampered)
+    writeFileSync(env.statePath, JSON.stringify(tampered, null, 2) + '\n')
+    const before = readFileSync(env.statePath)
+    const result = invoke(['next', '--state', env.statePath])
+    assert.notEqual(result.status, 0, name + ' must be rejected')
+    assert.equal(result.json.status, 'invalid', name)
+    assert.match(result.json.errors.join('; '), /state-schema/, name)
+    assert.deepEqual(readFileSync(env.statePath), before, name)
+  }
+})
+
+test('C18c state identities and rungs remain tied to the selected plan wave', () => {
+  const env = init()
+  writeFileSync(env.plan, readFileSync(env.plan, 'utf8').replace(
+    '"ladder": ["gpt-5.6-sol"]', '"ladder": ["gpt-5.6-luna"]'))
+  const before = readFileSync(env.statePath)
+  const result = invoke(['next', '--state', env.statePath])
+  assert.notEqual(result.status, 0)
+  assert.match(result.json.errors.join('; '), /state-schema.*rungs/)
+  assert.deepEqual(readFileSync(env.statePath), before)
+})
+
+test('C18d malformed rungs in progressed history produce a named rejection', () => {
+  const env = init()
+  prepareAttempt(env)
+  recordVerdict(env.statePath, failed('first failure'))
+  const tampered = state(env.statePath)
+  tampered.tasks['divide-guard'].rungs = null
+  writeFileSync(env.statePath, JSON.stringify(tampered, null, 2) + '\n')
+  const before = readFileSync(env.statePath)
+  const result = invoke(['next', '--state', env.statePath])
+  assert.notEqual(result.status, 0)
+  assert.match(result.json.errors.join('; '), /state-schema.*rungs/)
+  assert.deepEqual(readFileSync(env.statePath), before)
+})
+
+test('C18e malformed selected plan wave produces a named state rejection', () => {
+  const env = init()
+  writeFileSync(env.plan, readFileSync(env.plan, 'utf8').replace(
+    '"supervisor": { "model": "gpt-5.6-terra", "effort": "high" }',
+    '"supervisor": null'))
+  const before = readFileSync(env.statePath)
+  const result = invoke(['next', '--state', env.statePath])
+  assert.notEqual(result.status, 0)
+  assert.match(result.json.errors.join('; '), /state-schema.*plan wave/)
+  assert.deepEqual(readFileSync(env.statePath), before)
+})
+
+test('C19 safety preflight blocks must_run on branch mismatch', () => {
+  const env = init({ planText: (text) => text.replace(
+    'python3 -m unittest discover -s tests -t .', 'printf executed > must-run-executed') })
+  git(env.worktree, 'switch', '-c', 'wrong-branch')
+  recordExecutor(env.statePath, { report: 'ready' })
+  verify(env.statePath)
+  const facts = state(env.statePath).tasks['divide-guard'].verifierFacts.at(-1)
+  assert.equal(facts.currentBranch, 'wrong-branch')
+  assert.ok(facts.violations.some((v) => /current branch/.test(v.rule)))
+  assert.equal(facts.mustRun[0].skipped, 'safety-preflight')
+  assert.deepEqual(facts.mustRun[0].attempts, [])
+  assert.equal(existsSync(join(env.worktree, 'must-run-executed')), false)
+})
+
+test('C19b safety preflight blocks must_run when base is not an ancestor', () => {
+  const env = init({ planText: (text) => text.replace(
+    'python3 -m unittest discover -s tests -t .', 'printf executed > must-run-executed') })
+  recordExecutor(env.statePath, { report: 'ready' })
+  const tree = git(env.worktree, 'rev-parse', 'HEAD^{tree}')
+  const orphan = git(env.worktree, 'commit-tree', tree, '-m', 'orphan')
+  git(env.worktree, 'reset', '--hard', orphan)
+  verify(env.statePath)
+  const facts = state(env.statePath).tasks['divide-guard'].verifierFacts.at(-1)
+  assert.equal(facts.currentBranch, 'wave/divide-guard')
+  assert.equal(facts.baseIsAncestor, false)
+  assert.ok(facts.violations.some((v) => /ancestor/.test(v.rule)))
+  assert.equal(facts.mustRun[0].skipped, 'safety-preflight')
+  assert.equal(existsSync(join(env.worktree, 'must-run-executed')), false)
+})
+
+test('C19c safety preflight records dirty artifacts and blocks must_run', () => {
+  const env = init({ planText: (text) => text.replace(
+    'python3 -m unittest discover -s tests -t .', 'printf executed > must-run-executed') })
+  writeFileSync(join(env.worktree, 'src', 'untracked.py'), 'dirty\n')
+  recordExecutor(env.statePath, { report: 'ready' })
+  verify(env.statePath)
+  const facts = state(env.statePath).tasks['divide-guard'].verifierFacts.at(-1)
+  assert.match(facts.worktreeStatus, /\?\? src\/untracked\.py/)
+  assert.ok(facts.violations.some((v) => v.class === 'worktree'))
+  assert.equal(facts.mustRun[0].skipped, 'safety-preflight')
+  assert.equal(existsSync(join(env.worktree, 'must-run-executed')), false)
+})
+
+test('C20 multi-task next skips ready-to-merge tasks until the wave is ready', () => {
+  const env = init({ planText: withSecondTask })
+  prepareAttempt(env, 'first task report', 'divide-guard')
+  recordVerdict(env.statePath, clean(), 'divide-guard')
+  let action = next(env.statePath)
+  assert.equal(action.action, 'spawn-executor')
+  assert.equal(action.task, 'multiply-guard')
+  prepareAttempt(env, 'second task report', 'multiply-guard')
+  recordVerdict(env.statePath, clean(), 'multiply-guard')
+  action = next(env.statePath)
+  assert.equal(action.action, 'merge-ready')
+  assert.deepEqual(action.tasks, ['divide-guard', 'multiply-guard'])
+  assert.equal(ok(['summary', '--state', env.statePath]).status, 'done')
 })
 
 let failedCount = 0
