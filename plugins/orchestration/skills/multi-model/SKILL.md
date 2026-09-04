@@ -34,6 +34,12 @@ effort is unknown and receives no effort-specific claim. State which profile was
 loaded before planning. That profile amends the numbered steps below; where it
 amends a step, the amendment wins.
 
+Profiles choose model and effort routes while authoring a wave plan or explicitly
+amending one. Once a lint-clean plan is explicitly user-approved, its exact
+provider, model, and effort fields are authoritative for adapter execution: do
+not re-route or reject that approved artifact against a seed profile. This never
+permits a mixed/unknown-provider wave or bypasses lint and user approval.
+
 ## Overview
 
 The orchestrator (this session's model) researches, plans, writes task specs, and
@@ -68,7 +74,9 @@ English does not mean English replies.
 5. **Write the wave plan file** (see Wave Plan Artifact) with `status: active`,
    and record the base SHA. You do this, not the user — the plan's lifecycle is
    yours to open and close, and nobody should have to hand-edit a field to make
-   supervision work.
+   supervision work. Once it is lint-clean and explicitly approved, preserve its
+   exact provider/model/effort fields through execution; profile routes are not
+   a second execution-time planner.
 6. **Launch.** Select the host adapter below; independent tasks remain isolated
    by the shared wave contract.
 7. **Review** (see the checklist below). Fixes — as one concrete list. Two misses
@@ -429,6 +437,11 @@ action. Never write a fresh runner, hand-edit state, or replace a
 missing model with a default or alias. The shared contract, verifier,
 supervisor schema, escalation ladder, and result review remain single-sourced
 in this skill; the adapter selects only the host invocation.
+
+For a lint-clean, explicitly user-approved plan, the approved plan is authoritative for adapter execution.
+The adapter uses its exact provider, model,
+and effort fields without re-routing or rejecting them against seed-profile
+recommendations; lint and the mixed/unknown-provider stop still apply.
 
 ### Claude-only wave — invoke the shipped runner
 

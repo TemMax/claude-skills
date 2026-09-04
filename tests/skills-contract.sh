@@ -79,6 +79,12 @@ check "Codex helper command supervisor-prompt is named" "grep -qF 'supervisor-pr
 check "Codex helper command record-verdict is named" "grep -qF 'record-verdict' $CP"
 check "Codex helper command summary is named"       "grep -qF 'summary' $CP"
 check "Codex supervisor uses a different exact model" "grep -qF 'different exact model' $CP"
+check "approved plan outranks profile during execution" \
+  "grep -qF 'approved plan is authoritative for adapter execution' $MM"
+check "Codex linter uses a sibling-skill path" \
+  "grep -qF '../super-plan/references/plan-lint.mjs' $CP"
+check "Codex helper path has a declared base" \
+  "grep -qF 'multi-model skill base directory' $CP"
 
 section "multi-model: research fan-out is routed, never inherited"
 check "the research routing table exists"      "grep -q 'Research Routing' $MM"

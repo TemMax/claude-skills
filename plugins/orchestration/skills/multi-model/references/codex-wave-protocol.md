@@ -6,6 +6,14 @@ escalation ladder, and result review in `SKILL.md`; it does not redefine any of
 them. Claude-only waves use `wave-runner.workflow.mjs` instead. A mixed or
 unknown-provider wave stops before any agent is spawned.
 
+All commands in this reference resolve from the multi-model skill base directory:
+the sibling plan linter is `../super-plan/references/plan-lint.mjs`, and the
+state helper is `references/codex-wave-state.mjs`. A lint-clean plan that the
+user explicitly approved is authoritative for adapter execution: use its exact
+provider, model, and effort fields; do not re-route or reject them against seed
+profile recommendations. This does not permit mixed/unknown providers or bypass
+lint and user approval.
+
 The state helper is the only state machine. Never hand-edit its state, bypass a
 helper action, write a fresh runner, force-remove a worktree, or substitute a
 missing model with a default or alias. It accepts only the exact GPT model IDs
@@ -23,7 +31,7 @@ init  next  record-executor  verify  supervisor-prompt  record-verdict  summary
    repair a plan by hand during a live wave.
 
    ```sh
-   node <super-plan skill>/references/plan-lint.mjs <plan-file> --repo <repo>
+   node ../super-plan/references/plan-lint.mjs <plan-file> --repo <repo>
    ```
 
 2. Resolve the exact fork point from the pushed default-branch tip and push it

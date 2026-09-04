@@ -90,5 +90,11 @@ check "Codex spawns name exact model and effort" \
   "grep -qF 'model and reasoning_effort' '$MM'"
 check "Codex protocol ships" \
   "[ -f '$CP' ]"
+check "approved plan controls adapter execution" \
+  "grep -qF 'approved plan is authoritative for adapter execution' '$MM'"
+check "Codex protocol resolves sibling plan linter" \
+  "grep -qF '../super-plan/references/plan-lint.mjs' '$CP'"
+check "Codex protocol resolves state helper from its skill base" \
+  "grep -qF 'multi-model skill base directory' '$CP'"
 
 summary
