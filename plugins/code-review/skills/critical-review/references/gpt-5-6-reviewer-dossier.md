@@ -62,11 +62,17 @@ review performance and do not choose a reviewer.
 ## Seed review candidates
 
 The following are pre-calibration blind-test candidates, not measured judge
-rankings: Terra at `high` for Luna or Sol output, and Sol at `high` for Terra
-output. Each review begins with mechanical checks and then re-derives findings
-from the diff, code, and tests. Findings need a concrete artifact-backed
-violation and failure scenario; suspicion is a remark to investigate, never a
-blocker.
+rankings:
+
+| Output under review | Independent reviewer | Effort | Status |
+|---|---|---|---|
+| Luna output | Terra | `high` | uncalibrated blind-test candidate |
+| Sol output | Terra | `high` | uncalibrated blind-test candidate |
+| Terra output | Sol | `high` | uncalibrated blind-test candidate |
+
+Each review begins with mechanical checks and then re-derives findings from the
+diff, code, and tests. Findings need a concrete artifact-backed violation and
+failure scenario; suspicion is a remark to investigate, never a blocker.
 
 ## Unmeasured properties
 
@@ -77,5 +83,6 @@ this plugin. Sol-only pp. 19–24 behavior cannot be generalized to Terra or
 Luna. Hidden chain-of-thought and model self-report are not verification
 evidence.
 
-Task 12 blind evaluation is the only authority for release routing. Until its
-dated blind results exist, the candidates above remain uncalibrated hypotheses.
+The dated blind evaluation matrix is the only authority for release routing.
+Until its dated blind results exist, the candidates above remain uncalibrated
+hypotheses.

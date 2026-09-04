@@ -28,8 +28,8 @@ do not replace it with a confident verdict.
 Terra at `high` is the uncalibrated initial independent reviewer for Sol output
 and Luna output. This selection is a blind-test seed, not a measured reviewer
 ranking or a claim of judge-bias advantage. Sol at `high` is the corresponding
-uncalibrated candidate for Terra output; Task 12 blind evaluation alone may
-establish release routing.
+uncalibrated candidate for Terra output; the dated blind evaluation matrix alone
+may establish release routing.
 
 Escalate security-sensitive, irreversible, destructive, credential-using, or
 scope-ambiguous judgment to the named stronger independent reviewer for the

@@ -31,10 +31,14 @@ check "no judge hierarchy warning retained" \
 check "dossier says CTF is not review proof" \
   "grep -qF 'CTF capability is not proof of review accuracy.' '$DOSSIER'"
 check "dossier keeps Sol pages Sol-only" "grep -qF 'Sol-only evidence (pp. 19–24)' '$DOSSIER'"
-check "dossier routes release policy to blind evaluation" \
-  "grep -qF 'Task 12 blind evaluation is the only authority for release routing.' '$DOSSIER'"
-check "Terra candidate for Sol review is uncalibrated" \
-  "grep -qi 'uncalibrated' '$TERRA' && grep -qF 'Sol' '$TERRA'"
+check "Terra high reviews Luna output" \
+  "grep -qF '| Luna output | Terra | \`high\` | uncalibrated blind-test candidate |' '$DOSSIER'"
+check "Terra high reviews Sol output" \
+  "grep -qF '| Sol output | Terra | \`high\` | uncalibrated blind-test candidate |' '$DOSSIER'"
+check "Sol high reviews Terra output" \
+  "grep -qF '| Terra output | Sol | \`high\` | uncalibrated blind-test candidate |' '$DOSSIER'"
+check "dossier routes release policy to dated blind matrix" \
+  "grep -qF 'The dated blind evaluation matrix is the only authority for release routing.' '$DOSSIER'"
 check "Luna requires stronger independent reviewer" \
   "grep -qF 'must not independently review security-sensitive or irreversible changes without a stronger independent reviewer' '$LUNA'"
 check "generic profile has no identity guess" "grep -qF 'Do not infer a model identity' '$GENERIC'"

@@ -28,7 +28,7 @@ summary or remembered intent: state checks run and checks unavailable.
 Sol at `high` is the uncalibrated initial independent candidate for Terra
 output. For Sol output, use Terra at `high` as the uncalibrated independent
 candidate instead. The initial pairs are blind-test seeds, not a measured judge
-hierarchy; Task 12 blind evaluation alone may establish release routing.
+hierarchy; the dated blind evaluation matrix alone may establish release routing.
 
 Escalate security-sensitive, irreversible, destructive, credential-using, or
 scope-ambiguous judgment to the named stronger independent reviewer for the

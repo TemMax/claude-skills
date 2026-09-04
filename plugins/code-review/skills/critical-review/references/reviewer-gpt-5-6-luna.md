@@ -28,8 +28,8 @@ Luna must not independently review security-sensitive or irreversible changes wi
 security-sensitive review, irreversible changes, destructive actions,
 credential use, and unresolved scope questions to Terra at `high` under the
 uncalibrated seed route. Preserve the mechanical evidence packet; do not claim
-that Terra is preferred by a measured judge hierarchy. Task 12 blind evaluation
-alone may establish release routing.
+that Terra is preferred by a measured judge hierarchy. The dated blind evaluation
+matrix alone may establish release routing.
 
 ## Autonomy and fix-phase guards
 
