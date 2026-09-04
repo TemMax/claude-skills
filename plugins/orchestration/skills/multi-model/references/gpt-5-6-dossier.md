@@ -108,6 +108,7 @@ probe show acceptable results. The same evidence gate applies before promoting
 ## Unmeasured properties
 
 - The System Card does not measure cross-model self-preference among Sol, Terra, and Luna.
+- The System Card publishes no measurement of judge bias or reviewer preference among Sol, Terra, and Luna.
 - It does not measure orchestration-seat quality, these executor/supervisor
   pairings, or a routing advantage at any effort level.
 - It does not establish that model role, price, or family position predicts

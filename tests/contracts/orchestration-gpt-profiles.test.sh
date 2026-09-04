@@ -45,6 +45,8 @@ check "dossier labels current docs facts" "grep -q '^## Current model-documentat
 check "dossier labels unmeasured properties" "grep -q '^## Unmeasured properties' '$DOSSIER'"
 check "dossier forbids cross-family self-preference claims" \
   "grep -qF 'does not measure cross-model self-preference among Sol, Terra, and Luna' '$DOSSIER'"
+check "dossier states judge bias is not measured" \
+  "grep -qF 'The System Card publishes no measurement of judge bias or reviewer preference among Sol, Terra, and Luna.' '$DOSSIER'"
 check "reasoning self-report is not evidence" \
   "grep -qF 'Hidden chain-of-thought and model self-report are not verification evidence.' '$DOSSIER'"
 
