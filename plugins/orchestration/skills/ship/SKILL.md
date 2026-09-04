@@ -69,7 +69,8 @@ skills' own gates do.
 
 Invoke **super-plan**. Its two gates (design, lint-clean plan) run inside it.
 The output is the plan file; its `status:` stays `draft` — transitions belong
-to execution.
+to execution. ship's canonical entry begins here: do not broaden it to resume
+from a pre-approved plan. After approval, consume the approved plan’s provider and preserve its exact model and effort ids verbatim; ship never re-routes or rewrites them.
 
 ## Stage 2 — Execute
 
@@ -79,7 +80,11 @@ to execution.
    recorded base expectations. A mismatch is fixed in the plan before any
    executor is spawned; the same run warms the build caches the wave's
    worktrees fork from cold.
-3. Invoke **multi-model** to run the plan: one runner invocation per wave —
+3. Invoke **multi-model** to run the plan. Only multi-model selects that adapter and owns all subagent execution: it uses the native Codex protocol for Codex plan waves and the Claude Workflow adapter for Claude plan waves.
+   ship never invokes provider CLIs, adapter workflows, or state helpers itself:
+   in particular, it never invokes `claude`, `codex`, Workflow, or
+   `codex-wave-state`; composition boundaries use capability names. multi-model
+   runs one runner invocation per wave —
    or parallel single-task invocations for a wave that would otherwise wait
    on a long pole, merging each `ok` branch as it lands. Either way,
    `defaultBranch` = the feature branch, `base` = the branch's pushed tip,
@@ -125,7 +130,7 @@ to execution.
 6. If the PR has review threads, run critical-review's post-review fix phase
    end-to-end. Its own single gate — the exact reply texts, then
    `push → replies → resolves` — is the only barrier before anything is
-   published.
+   published. Approved fixes are pushed before replies and resolution.
 
 ## Stage 4 — Handoff
 

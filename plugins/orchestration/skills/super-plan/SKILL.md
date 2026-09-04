@@ -37,6 +37,8 @@ normalized it to `gpt-5.6-sol`. An exact supplied effort may be used; otherwise
 effort is unknown and receives no effort-specific claim. Always reply to the
 user in the language the user writes in.
 
+While authoring or amending a plan, the active profile chooses executor, supervisor, ladder, and effort. Never substitute unnamed host defaults. The profile also selects the plan host: each resulting wave is entirely Claude or entirely Codex across its supervisor, executors, and ladders.
+
 ## Process
 
 1. **Research** to decomposition depth: files, dependencies, conventions,
@@ -59,9 +61,9 @@ user in the language the user writes in.
 4. **Tasks.** Write them by multi-model's rules: closed (no "decide what's
    best"), self-contained (the executor sees nothing but its prompt), full
    code included where the solution is known. Each task carries the
-   five-key contract; models and efforts come from multi-model's routing
-   and effort tables, the wave's supervisor from its supervisor table
-   (chosen for the strongest executor in the wave). Group into waves by
+   five-key contract; the active profile chooses every model, effort,
+   supervisor, and ladder field, with the wave's supervisor chosen for the
+   strongest executor in the wave. Group into waves by
    file-independence: same-wave tasks must not share files — merge
    colliding tasks or split them across consecutive waves. Dependent
    chains are consecutive waves, never one wave.
@@ -90,7 +92,7 @@ user in the language the user writes in.
    expectation; a mismatch is a contract defect caught before any executor
    is spawned.
 5. **Lint.** Run the shipped linter and fix every error yourself — the
-   user never edits the plan:
+   user never edits the plan. Lint runs before Gate 2. A mixed-provider wave is a planning defect to fix before Gate 2; never ask the linter or runner to guess a provider:
 
    ```
    node <this skill's base directory>/references/plan-lint.mjs <plan-file> --repo <repo>
@@ -145,10 +147,22 @@ One file in `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`, three layers:
    ] }
    ```
 
-   Short model names, or the one pinned full ID `claude-opus-4-8` (the
-   only full ID the runner and this linter accept). `branch` is always
-   `wave/<id>`. The supervisor sits on the wave because execution is one
-   runner invocation per wave.
+   The model fields use the active profile's plan host and this exact table:
+
+   | Plan host | Allowed model fields |
+   |---|---|
+   | Claude | `haiku`, `sonnet`, `opus`, `fable`, `claude-opus-4-8` |
+   | Codex | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` |
+
+   `gpt-5.6` is never a plan id. It is only an active-session alias after
+   runtime-context normalization, not a model field. Every supervisor,
+   executor, and ladder entry in one wave uses the same row. A mixed-provider
+   wave is a planning defect to fix before Gate 2, not a request for the
+   linter or runner to guess a provider. `branch` is always `wave/<id>`. The
+   supervisor sits on the wave because execution is one runner invocation per
+   wave.
+
+   The ladder lists model transitions only. For Codex, same-model raised-effort rework is state-machine behavior, so do not invent duplicate same-model ladder entries.
 
 3. **The prose half** — one `## Task <id>` section per task: the
    substantive description and context, with full code where the solution

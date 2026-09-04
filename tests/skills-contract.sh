@@ -156,6 +156,16 @@ check "status transitions stay with execution"  "grep -q 'status transitions bel
 check "headless mode records assumptions"       "grep -q 'Assumptions (would ask)' $SP"
 check "superpowers attribution survives"        "grep -q 'Jesse Vincent' $SP"
 check "the MIT notice ships"                    "[ -f plugins/orchestration/skills/super-plan/references/LICENSE-superpowers ]"
+check "plan model fields are provider-specific" \
+  "sed -n '/^## Plan Format$/,/^## Acceptance References$/p' $SP | grep -qF '| Codex | \`gpt-5.6-sol\`, \`gpt-5.6-terra\`, \`gpt-5.6-luna\` |'"
+check "bare GPT alias is excluded from plan fields" \
+  "sed -n '/^## Plan Format$/,/^## Acceptance References$/p' $SP | grep -qF '\`gpt-5.6\` is never a plan id'"
+check "profile rather than host defaults routes every plan role" \
+  "grep -qF 'active profile chooses executor, supervisor, ladder, and effort' $SP"
+check "planning rejects a mixed-provider wave before Gate 2" \
+  "grep -qF 'mixed-provider wave is a planning defect to fix before Gate 2' $SP"
+check "Codex rework stays outside the model-transition ladder" \
+  "grep -qF 'same-model raised-effort rework is state-machine behavior' $SP && grep -qF 'ladder lists model transitions only' $SP"
 
 section "ship: the conductor that adds no machinery"
 check "the skill exists"                        "[ -f $SH ]"
@@ -165,6 +175,12 @@ check "fixes route on behavior, not size"       "grep -q 'what the change can br
 check "the merge stays with the user"           "grep -q 'merge stays with the user' $SH"
 check "wave bases are copied, never typed"      "grep -q 'rev-parse' $SH"
 check "thread phase keeps critical-review's gate" "grep -q 'push → replies → resolves' $SH"
+check "ship preserves the plan provider and exact model effort ids" \
+  "grep -qF 'consume the approved plan’s provider and preserve its exact model and effort ids verbatim' $SH"
+check "ship routes provider protocol selection through multi-model" \
+  "grep -qF 'native Codex protocol for Codex plan waves and the Claude Workflow adapter for Claude plan waves' $SH"
+check "ship does not take over provider execution" \
+  "grep -qF 'Only multi-model selects that adapter and owns all subagent execution' $SH && grep -qF 'ship never invokes provider CLIs, adapter workflows, or state helpers itself' $SH"
 
 section "Fable 5.1: every skill routes the new model ID to its own profile"
 OF=plugins/orchestration/skills/multi-model/references/orchestrator-fable-5-1.md

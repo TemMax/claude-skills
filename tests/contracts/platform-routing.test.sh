@@ -78,6 +78,21 @@ check "super-plan keeps exact headless heading" \
 check "super-plan no longer pins a Claude-only question tool" \
   "! grep -q 'AskUserQuestion' '$SP'"
 
+section "super-plan emits provider-pure wave plans from the active profile"
+
+check "plan-format table retains Claude plan identifiers" \
+  "sed -n '/^## Plan Format$/,/^## Acceptance References$/p' '$SP' | grep -qF '| Claude | \`haiku\`, \`sonnet\`, \`opus\`, \`fable\`, \`claude-opus-4-8\` |'"
+check "plan-format table names every exact Codex plan identifier" \
+  "sed -n '/^## Plan Format$/,/^## Acceptance References$/p' '$SP' | grep -qF '| Codex | \`gpt-5.6-sol\`, \`gpt-5.6-terra\`, \`gpt-5.6-luna\` |'"
+check "the bare GPT alias is never a plan identifier" \
+  "sed -n '/^## Plan Format$/,/^## Acceptance References$/p' '$SP' | grep -qF '\`gpt-5.6\` is never a plan id'"
+check "the active profile owns all planning routes" \
+  "grep -qF 'active profile chooses executor, supervisor, ladder, and effort' '$SP'"
+check "mixed-provider waves are returned to planning" \
+  "grep -qF 'mixed-provider wave is a planning defect to fix before Gate 2' '$SP'"
+check "Codex effort rework is not duplicated in its model ladder" \
+  "grep -qF 'same-model raised-effort rework is state-machine behavior' '$SP' && grep -qF 'ladder lists model transitions only' '$SP'"
+
 CP=plugins/orchestration/skills/multi-model/references/codex-wave-protocol.md
 
 section "multi-model selects the native host adapter"
@@ -108,5 +123,16 @@ check "both Codex spawn examples name exact model" \
   "[ \$(grep -cF 'model: action.model' '$CP') -eq 2 ]"
 check "both Codex spawn examples name exact effort" \
   "[ \$(grep -cF 'reasoning_effort: action.effort' '$CP') -eq 2 ]"
+
+section "ship composes the approved provider adapter without owning it"
+
+check "ship preserves the approved plan provider and exact ids" \
+  "grep -qF 'consume the approved plan’s provider and preserve its exact model and effort ids verbatim' '$SH'"
+check "ship assigns both native adapters to multi-model" \
+  "grep -qF 'native Codex protocol for Codex plan waves and the Claude Workflow adapter for Claude plan waves' '$SH'"
+check "ship leaves adapter selection and subagent execution to multi-model" \
+  "grep -qF 'Only multi-model selects that adapter and owns all subagent execution' '$SH'"
+check "ship does not own provider invocation machinery" \
+  "grep -qF 'ship never invokes provider CLIs, adapter workflows, or state helpers itself' '$SH'"
 
 summary
