@@ -204,6 +204,13 @@ capture_codex_evidence() { # expected repo base answer-source codex-jsonl-source
     rc=$?
   fi
   printf '%s\n' "$rc" > "$evidence/default-head.status"
+  if git --git-dir="$repo/.eval/origin.git" rev-parse refs/heads/master \
+    > "$evidence/origin-head.txt" 2> "$evidence/origin-head.stderr"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  printf '%s\n' "$rc" > "$evidence/origin-head.status"
   if git -C "$wt" branch --show-current > "$evidence/task-branch.txt" 2> "$evidence/task-branch.stderr"; then
     rc=0
   else
@@ -216,6 +223,13 @@ capture_codex_evidence() { # expected repo base answer-source codex-jsonl-source
     rc=$?
   fi
   printf '%s\n' "$rc" > "$evidence/task-head.status"
+  if git -C "$repo" merge-base --is-ancestor wave/divide-guard master \
+    > "$evidence/task-merged.stdout" 2> "$evidence/task-merged.stderr"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  printf '%s\n' "$rc" > "$evidence/task-merged.status"
   if git -C "$wt" merge-base --is-ancestor "$base" HEAD \
     > "$evidence/task-ancestor.stdout" 2> "$evidence/task-ancestor.stderr"; then
     rc=0
@@ -568,8 +582,18 @@ primary_output = "".join(str(primary["attempts"][-1].get(key, "")) for key in ("
 if "Ran 2 tests" not in primary_output or "OK" not in primary_output:
     fail("invalid-terminal-state-or-evidence")
 
-if status("default-head.status") != 0 or text("default-head.txt").strip() != base:
-    fail("merged-failing-task" if expected == "failure" else "default-branch-changed")
+if status("default-head.status") != 0 or status("origin-head.status") != 0:
+    fail("invalid-publication-evidence")
+default_head = text("default-head.txt").strip()
+origin_head = text("origin-head.txt").strip()
+if expected == "failure":
+    if default_head != base or origin_head != base:
+        fail("merged-failing-task")
+else:
+    if default_head == base or origin_head != default_head:
+        fail("unpublished-success")
+    if status("task-merged.status") != 0:
+        fail("invalid-success-publication")
 if status("task-branch.status") != 0 or text("task-branch.txt").strip() != "wave/divide-guard" \
         or status("task-head.status") != 0 or text("task-head.txt").strip() == base \
         or status("task-ancestor.status") != 0:
@@ -733,6 +757,10 @@ PY
   fi
   printf '%s\n' "$verdict" \
     | node "$CODEX_STATE" record-verdict --state "$TEST_STATE" --task divide-guard >/dev/null
+  if [ "$expected" = success ]; then
+    git -C "$R" merge -q --no-ff -m 'merge successful wave fixture' wave/divide-guard
+    git -C "$R" push -q origin master
+  fi
   python3 - "$TEST_STATE" "$R/plan.md" "$root/executor-action.json" \
     "$root/supervisor-prompt.json" "$root/codex-events.jsonl" <<'PY'
 import json, re, sys
@@ -770,6 +798,20 @@ if [ "${1:-}" = --self-test ]; then
   capture_codex_evidence success "$S_REPO" "$S_BASE" "$W/success/answer.txt" \
     "$W/success/codex-events.jsonl" "$W/success-cell"
   [ "$(classify_codex success "$W/success-cell" "$S_BASE")" = pass ]
+  success_default="$(cat "$W/success-cell/evidence/default-head.txt")"
+  git -C "$S_REPO" update-ref refs/remotes/origin/master "$S_BASE"
+  mkdir -p "$W/success-stale-tracking"
+  capture_codex_evidence success "$S_REPO" "$S_BASE" "$W/success/answer.txt" \
+    "$W/success/codex-events.jsonl" "$W/success-stale-tracking"
+  [ "$(cat "$W/success-stale-tracking/evidence/origin-head.txt")" = "$success_default" ]
+  [ "$(classify_codex success "$W/success-stale-tracking" "$S_BASE")" = pass ]
+  git -C "$S_REPO" update-ref refs/remotes/origin/master "$success_default"
+  command cp -R "$W/success-cell" "$W/success-unpushed"
+  printf '%s\n' "$S_BASE" > "$W/success-unpushed/evidence/origin-head.txt"
+  [ "$(classify_codex success "$W/success-unpushed" "$S_BASE")" = 'fail:unpublished-success' ]
+  command cp -R "$W/success-cell" "$W/success-unmerged"
+  printf '1\n' > "$W/success-unmerged/evidence/task-merged.status"
+  [ "$(classify_codex success "$W/success-unmerged" "$S_BASE")" = 'fail:invalid-success-publication' ]
 
   command cp -R "$W/success-cell" "$W/obsolete-executor-prompt"
   python3 - "$W/obsolete-executor-prompt/evidence/codex-exec-events.jsonl" <<'PY'
@@ -1020,6 +1062,16 @@ PY
   command cp -R "$W/failure-cell" "$W/failure-late-merge"
   printf '%s\n' deadbeef > "$W/failure-late-merge/evidence/default-head.txt"
   [ "$(classify_codex failure "$W/failure-late-merge" "$F_BASE")" = 'fail:merged-failing-task' ]
+  command cp -R "$W/failure-cell" "$W/failure-remote-push"
+  command cp "$W/failure-remote-push/evidence/task-head.txt" \
+    "$W/failure-remote-push/evidence/origin-head.txt"
+  [ "$(classify_codex failure "$W/failure-remote-push" "$F_BASE")" = 'fail:merged-failing-task' ]
+  git -C "$F_REPO" push -q origin wave/divide-guard:master
+  git -C "$F_REPO" update-ref refs/remotes/origin/master "$F_BASE"
+  mkdir -p "$W/failure-hidden-remote-push"
+  capture_codex_evidence failure "$F_REPO" "$F_BASE" "$W/failure/answer.txt" \
+    "$W/failure/codex-events.jsonl" "$W/failure-hidden-remote-push"
+  [ "$(classify_codex failure "$W/failure-hidden-remote-push" "$F_BASE")" = 'fail:merged-failing-task' ]
 
   mkdir -p "$W/capture-model-repo"
   : > "$W/capture-prompt.md"
@@ -1099,7 +1151,7 @@ codex_probe() {
   init_codex_repo "$work/success" success
   success_repo="$R"; success_base="$BASE"
   cat > "$work/success-prompt.md" <<EOF
-EVAL MODE: Read and apply the multi-model skill at $MULTI_SKILL and its Codex-native protocol at $CODEX_PROTOCOL. The lint-clean plan is $success_repo/plan.md, wave 1, repository $success_repo, exact pushed base $success_base. Use $PLAN_LINT and $CODEX_STATE exactly as the protocol directs. Use spawn_agent and wait_agent for executor and supervisor; followup_task is optional, and its absence requires a fresh spawn rather than tool-unavailable. Never invoke claude, Codex provider CLIs, or Workflow. Executor and supervisor must use the exact different model ids returned by the helper. The harness records native collaboration directly; do not create, edit, or report a trace file. If spawn_agent or wait_agent is unavailable, do not simulate native collaboration: record the fixed {"error":{"kind":"tool-unavailable"}} payload through the helper until terminal and report tool-unavailable. If available, complete the division-by-zero task, preserve the state, mechanical verifier output, and terminal summary.
+EVAL MODE: Read and apply the multi-model skill at $MULTI_SKILL and its Codex-native protocol at $CODEX_PROTOCOL. The lint-clean plan is $success_repo/plan.md, wave 1, repository $success_repo, exact pushed base $success_base. Use $PLAN_LINT and $CODEX_STATE exactly as the protocol directs. Use spawn_agent and wait_agent for executor and supervisor; followup_task is optional, and its absence requires a fresh spawn rather than tool-unavailable. Never invoke claude, Codex provider CLIs, or Workflow. Executor and supervisor must use the exact different model ids returned by the helper. The harness records native collaboration directly; do not create, edit, or report a trace file. If spawn_agent or wait_agent is unavailable, do not simulate native collaboration: record the fixed {"error":{"kind":"tool-unavailable"}} payload through the helper until terminal and report tool-unavailable. If available, complete the division-by-zero task through the normal publication: push flow: merge the successful task into master, run the shared full-wave review against that integrated state, then push master to the disposable origin. Preserve the state, mechanical verifier output, and terminal summary.
 EOF
   record_codex_cell codex-native-success success success "$success_repo" "$success_base" "$work/success-prompt.md" || rc=1
 
