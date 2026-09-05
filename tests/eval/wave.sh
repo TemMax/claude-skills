@@ -312,8 +312,12 @@ if one_receiver(collab[3]) != supervisor or supervisor == executor:
 
 executor_prompt = collab[0].get("prompt")
 supervisor_prompt = collab[2].get("prompt")
+approval_context = (
+    "The user already approved this exact wave plan and task. Begin implementation immediately;\n"
+    "do not request another design or approval. The dead-end rules below still apply.\n\n")
 if not isinstance(executor_prompt, str) \
         or not executor_prompt.startswith("# Task: divide-guard\n") \
+        or executor_prompt.count(approval_context) != 1 \
         or not all(heading in executor_prompt for heading in (
             "## Context", "## Workspace (already prepared)", "## Boundaries",
             "## Dead-end protocol", "## Prohibitions",
@@ -493,9 +497,13 @@ required_headings = [
     "## Contract (a supervisor will check every line against your branch)",
 ]
 prompt_contract = json.dumps(plan_task.get("contract"), indent=2, ensure_ascii=False)
+approval_context = (
+    "The user already approved this exact wave plan and task. Begin implementation immediately;\n"
+    "do not request another design or approval. The dead-end rules below still apply.\n\n")
 if not isinstance(executor_prompt, str) \
         or not executor_prompt.startswith("# Task: divide-guard\n\n## Context\n") \
         or task_prose is None or "## Context\n" + task_prose + "\n" not in executor_prompt \
+        or executor_prompt.count(approval_context) != 1 \
         or any(executor_prompt.count(heading) != 1 for heading in required_headings) \
         or [executor_prompt.index(heading) for heading in required_headings] != sorted(
             executor_prompt.index(heading) for heading in required_headings) \
@@ -780,6 +788,37 @@ with open(path, "w", encoding="utf-8") as stream:
         print(json.dumps(event, separators=(",", ":")), file=stream)
 PY
   [ "$(classify_codex success "$W/obsolete-executor-prompt" "$S_BASE")" = 'fail:unverified-native-actions' ]
+
+  for approval_mutation in removed negated; do
+    command cp -R "$W/success-cell" "$W/executor-approval-$approval_mutation"
+    python3 - "$W/executor-approval-$approval_mutation/evidence/codex-exec-events.jsonl" \
+      "$approval_mutation" <<'PY'
+import json, sys
+
+path, mutation = sys.argv[1:]
+events = [json.loads(line) for line in open(path, encoding="utf-8") if line.strip()]
+spawn = next(event["item"] for event in events
+             if event.get("type") == "item.completed"
+             and event.get("item", {}).get("type") == "collab_tool_call"
+             and event["item"].get("tool") == "spawn_agent"
+             and str(event["item"].get("prompt", "")).startswith("# Task:"))
+approval = ("The user already approved this exact wave plan and task. Begin implementation immediately;\n"
+            "do not request another design or approval. The dead-end rules below still apply.\n\n")
+if approval not in spawn["prompt"]:
+    raise SystemExit("approval fixture block missing")
+spawn["prompt"] = (spawn["prompt"].replace(approval, "", 1) if mutation == "removed"
+                   else spawn["prompt"].replace("already approved", "has not approved", 1))
+with open(path, "w", encoding="utf-8") as stream:
+    for event in events:
+        print(json.dumps(event, separators=(",", ":")), file=stream)
+PY
+    approval_actual="$(classify_codex success "$W/executor-approval-$approval_mutation" "$S_BASE")"
+    if [ "$approval_actual" != 'fail:unverified-native-actions' ]; then
+      printf 'wave RED: %s executor approval context unexpectedly classified as %s\n' \
+        "$approval_mutation" "$approval_actual" >&2
+      exit 1
+    fi
+  done
 
   command cp -R "$W/success-cell" "$W/replaced-events-cell"
   authentic_events='{"type":"thread.started","thread_id":"authentic-invalid-wave"}'

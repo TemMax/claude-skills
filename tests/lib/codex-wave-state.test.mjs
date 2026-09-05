@@ -197,6 +197,9 @@ test('C3 next preserves approved task prose and all six mandatory prompt blocks'
   assert.equal(action.effort, 'medium')
   assert.equal(action.worktree, env.worktree)
   assert.match(action.prompt, /Add a guard for division by zero without modifying the tests\./)
+  assert.match(action.prompt, /user already approved/i)
+  assert.match(action.prompt, /begin implementation immediately/i)
+  assert.match(action.prompt, /do not request another (?:design or )?approval/i)
   for (const heading of ['## Context', '## Boundaries', '## Dead-end protocol',
     '## Prohibitions', '## Definition of done and report format', '## Contract']) {
     assert.match(action.prompt, new RegExp(heading))
