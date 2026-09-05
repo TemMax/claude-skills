@@ -313,8 +313,12 @@ if one_receiver(collab[3]) != supervisor or supervisor == executor:
 executor_prompt = collab[0].get("prompt")
 supervisor_prompt = collab[2].get("prompt")
 if not isinstance(executor_prompt, str) \
-        or not executor_prompt.startswith("Implement task divide-guard in the existing task worktree.") \
-        or "WORKTREE:" not in executor_prompt or "CONTRACT:" not in executor_prompt:
+        or not executor_prompt.startswith("# Task: divide-guard\n") \
+        or not all(heading in executor_prompt for heading in (
+            "## Context", "## Workspace (already prepared)", "## Boundaries",
+            "## Dead-end protocol", "## Prohibitions",
+            "## Definition of done and report format",
+            "## Contract (a supervisor will check every line against your branch)")):
     fail()
 if not isinstance(supervisor_prompt, str) \
         or not supervisor_prompt.startswith("# Supervisor Prompt") \
@@ -476,20 +480,29 @@ except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
     fail("invalid-captured-state")
 
 executor_prompt = collab[0].get("prompt") if len(collab) == 4 else None
-executor_prefix = "\n".join([
-    "Implement task divide-guard in the existing task worktree.",
-    "BASE: " + base,
-    "BRANCH: " + str(task.get("branch", "")),
-    "WORKTREE: " + str(task.get("worktree", "")),
-    "",
-    "CONTRACT:",
-]) + "\n"
-try:
-    prompt_contract = json.loads(executor_prompt.removeprefix(executor_prefix)) \
-        if isinstance(executor_prompt, str) and executor_prompt.startswith(executor_prefix) else None
-except json.JSONDecodeError:
-    prompt_contract = None
-if prompt_contract != plan_task.get("contract"):
+prose_match = re.search(
+    r"^## Task divide-guard\r?\n([\s\S]*?)(?=\r?\n## |\Z)", plan_text, re.M)
+task_prose = prose_match.group(1).strip() if prose_match else None
+required_headings = [
+    "## Context",
+    "## Workspace (already prepared)",
+    "## Boundaries",
+    "## Dead-end protocol",
+    "## Prohibitions",
+    "## Definition of done and report format",
+    "## Contract (a supervisor will check every line against your branch)",
+]
+prompt_contract = json.dumps(plan_task.get("contract"), indent=2, ensure_ascii=False)
+if not isinstance(executor_prompt, str) \
+        or not executor_prompt.startswith("# Task: divide-guard\n\n## Context\n") \
+        or task_prose is None or "## Context\n" + task_prose + "\n" not in executor_prompt \
+        or any(executor_prompt.count(heading) != 1 for heading in required_headings) \
+        or [executor_prompt.index(heading) for heading in required_headings] != sorted(
+            executor_prompt.index(heading) for heading in required_headings) \
+        or "BASE: " + base not in executor_prompt \
+        or "BRANCH: " + str(task.get("branch", "")) not in executor_prompt \
+        or "WORKTREE: " + str(task.get("worktree", "")) not in executor_prompt \
+        or not executor_prompt.endswith(prompt_contract):
     fail("unverified-native-actions")
 
 try:
@@ -691,6 +704,7 @@ evolve_test_wave() { # root success|failure
   TEST_REPO="$R"; TEST_BASE="$BASE"
   init_out="$(node "$CODEX_STATE" init --plan "$R/plan.md" --wave 1 --repo "$R" --base "$BASE")"
   TEST_STATE="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["state"])' <<<"$init_out")"
+  node "$CODEX_STATE" next --state "$TEST_STATE" > "$root/executor-action.json"
   worktree="$R/.worktrees/wave-divide-guard"
   python3 - "$worktree/src/calc.py" <<'PY'
 import sys
@@ -711,24 +725,17 @@ PY
   fi
   printf '%s\n' "$verdict" \
     | node "$CODEX_STATE" record-verdict --state "$TEST_STATE" --task divide-guard >/dev/null
-  python3 - "$TEST_STATE" "$R/plan.md" "$root/supervisor-prompt.json" "$root/codex-events.jsonl" <<'PY'
+  python3 - "$TEST_STATE" "$R/plan.md" "$root/executor-action.json" \
+    "$root/supervisor-prompt.json" "$root/codex-events.jsonl" <<'PY'
 import json, re, sys
 
-state_path, plan_path, supervisor_prompt_path, output = sys.argv[1:]
+state_path, plan_path, executor_action_path, supervisor_prompt_path, output = sys.argv[1:]
 state = json.load(open(state_path, encoding="utf-8"))
 plan_text = open(plan_path, encoding="utf-8").read()
 plan = json.loads(re.findall(r"```json wave-plan\r?\n([\s\S]*?)\r?\n```", plan_text)[0])
 task = state["tasks"]["divide-guard"]
 contract = plan["waves"][0]["tasks"][0]["contract"]
-executor_prompt = "\n".join([
-    "Implement task divide-guard in the existing task worktree.",
-    "BASE: " + state["base"],
-    "BRANCH: " + task["branch"],
-    "WORKTREE: " + task["worktree"],
-    "",
-    "CONTRACT:",
-    json.dumps(contract, indent=2),
-])
+executor_prompt = json.load(open(executor_action_path, encoding="utf-8"))["prompt"]
 supervisor_prompt = json.load(open(supervisor_prompt_path, encoding="utf-8"))["prompt"]
 events = [
     {"type": "item.started", "item": {"id": "spawn-executor", "type": "collab_tool_call", "tool": "spawn_agent", "sender_thread_id": "root-thread", "receiver_thread_ids": [], "prompt": executor_prompt, "agents_states": {}, "status": "in_progress"}},
@@ -755,6 +762,24 @@ if [ "${1:-}" = --self-test ]; then
   capture_codex_evidence success "$S_REPO" "$S_BASE" "$W/success/answer.txt" \
     "$W/success/codex-events.jsonl" "$W/success-cell"
   [ "$(classify_codex success "$W/success-cell" "$S_BASE")" = pass ]
+
+  command cp -R "$W/success-cell" "$W/obsolete-executor-prompt"
+  python3 - "$W/obsolete-executor-prompt/evidence/codex-exec-events.jsonl" <<'PY'
+import json, sys
+
+path = sys.argv[1]
+events = [json.loads(line) for line in open(path, encoding="utf-8") if line.strip()]
+spawn = next(event["item"] for event in events
+             if event.get("type") == "item.completed"
+             and event.get("item", {}).get("type") == "collab_tool_call"
+             and event["item"].get("tool") == "spawn_agent"
+             and str(event["item"].get("prompt", "")).startswith("# Task:"))
+spawn["prompt"] = "Implement task divide-guard in the existing task worktree.\nWORKTREE: /tmp/obsolete\nCONTRACT: {}"
+with open(path, "w", encoding="utf-8") as stream:
+    for event in events:
+        print(json.dumps(event, separators=(",", ":")), file=stream)
+PY
+  [ "$(classify_codex success "$W/obsolete-executor-prompt" "$S_BASE")" = 'fail:unverified-native-actions' ]
 
   command cp -R "$W/success-cell" "$W/replaced-events-cell"
   authentic_events='{"type":"thread.started","thread_id":"authentic-invalid-wave"}'
