@@ -3,7 +3,7 @@ name: ship
 description: 'Use when the user wants the complete delivery pipeline from planning through a reviewed pull request. Do not use for a single planning, implementation, or review stage, and never merge.'
 metadata:
   author: https://github.com/TemMax
-  version: 2.5.0
+  version: 2.6.0
 ---
 
 # Shipping a Feature (ship)

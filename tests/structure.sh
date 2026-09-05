@@ -56,6 +56,38 @@ for p in plugins/*/; do
   done
 done
 
+section "Release versions and dual-host documentation"
+for f in \
+  plugins/orchestration/.claude-plugin/plugin.json \
+  plugins/orchestration/.codex-plugin/plugin.json; do
+  v="$(python3 -c "import json;print(json.load(open('$f'))['version'])" 2>/dev/null)"
+  expect "orchestration release version: $f" "2.6.0" "$v"
+done
+for f in plugins/orchestration/skills/*/SKILL.md; do
+  v="$(sed -n 's/^  version: \(.*\)/\1/p' "$f" | head -1)"
+  expect "orchestration skill release version: $f" "2.6.0" "$v"
+done
+for f in \
+  plugins/code-review/.claude-plugin/plugin.json \
+  plugins/code-review/.codex-plugin/plugin.json; do
+  v="$(python3 -c "import json;print(json.load(open('$f'))['version'])" 2>/dev/null)"
+  expect "code-review release version: $f" "1.5.0" "$v"
+done
+for f in plugins/code-review/skills/*/SKILL.md; do
+  v="$(sed -n 's/^  version: \(.*\)/\1/p' "$f" | head -1)"
+  expect "code-review skill release version: $f" "1.5.0" "$v"
+done
+for marker in \
+  "Claude Code installation" \
+  "Codex installation" \
+  "gpt-5.6-sol" \
+  "gpt-5.6-terra" \
+  "gpt-5.6-luna" \
+  "ChatGPT surfaces do not run Codex lifecycle hooks" \
+  "merge stays with the user"; do
+  check "README release marker: $marker" "grep -Fq '$marker' README.md"
+done
+
 section "Executables are executable"
 for f in plugins/*/hooks/*; do
   case "$f" in *.json) continue;; esac

@@ -5,6 +5,8 @@
 ./tests/run.sh --live   the above plus the evaluation tiers — ~a dozen model
                         calls (supervisor, drift, wave boundary, planner —
                         the last on Sonnet), several minutes
+bash tests/eval/gpt-5-6-matrix.sh --self-test
+                        offline GPT-5.6 matrix-harness gate
 ```
 
 Enable the pre-push gate once per clone:
@@ -69,6 +71,14 @@ which the Markdown reports as 12/12 complete model/skill pairs. The base run
 also produces 63 separately labeled supporting rows from profile routing,
 safety, supervisor, drift, and critical-review's PR gate. Supporting rows never
 inflate the 12-pair count.
+
+`--critical` is a semantic calibration mode, not an offline default: it requires
+a fresh `--results` directory and invokes the configured provider. Its bare
+form exits before model calls when that directory is absent. Routine release
+checks must not provide a results directory, live flags, or provider
+credentials. A fresh live calibration is a separately authorized, potentially
+costly action: inspect the dated measured usage/cost record before authorizing
+it.
 
 `--critical` first records the base matrix, then exports `EVAL_REPEAT=5` for the
 configured clean-review, planted-defect, destructive-scope,
