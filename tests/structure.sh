@@ -28,6 +28,19 @@ for p in plugins/*/; do
   cv="$(python3 -c "import json;print(json.load(open('$c'))['version'])" 2>/dev/null)"
   av="$(python3 -c "import json;print(json.load(open('$p.claude-plugin/plugin.json'))['version'])" 2>/dev/null)"
   expect "Claude/Codex version: $(basename "$p")" "$av" "$cv"
+  cdsc="$(python3 -c "import json;print(json.load(open('$c'))['description'])" 2>/dev/null)"
+  adsc="$(python3 -c "import json;print(json.load(open('$p.claude-plugin/plugin.json'))['description'])" 2>/dev/null)"
+  expect "Claude/Codex description parity: $(basename "$p")" "$adsc" "$cdsc"
+  contains "dual-host manifest description: $(basename "$p")" "Claude Code and Codex" "$cdsc"
+  case "$(basename "$p")" in
+    orchestration) contains "orchestration capability description" "machine-checkable contracts" "$cdsc" ;;
+    code-review) contains "code-review capability description" "evidence-based code review" "$cdsc" ;;
+  esac
+  if printf '%s' "$cdsc" | grep -Eq 'for Claude Code:|Grounded in Anthropic system cards'; then
+    fail "provider-neutral manifest description: $(basename "$p")" "$cdsc"
+  else
+    pass "provider-neutral manifest description: $(basename "$p")"
+  fi
 done
 
 section "Skill frontmatter parses and is complete"
@@ -86,6 +99,18 @@ for marker in \
   "ChatGPT surfaces do not run Codex lifecycle hooks" \
   "merge stays with the user"; do
   check "README release marker: $marker" "grep -Fq '$marker' README.md"
+done
+for marker in \
+  "codex-wave-protocol.md" \
+  "codex-wave-state.mjs" \
+  "orchestrator-gpt-5-6-{sol,terra,luna}.md" \
+  "orchestrator-generic.md" \
+  "gpt-5-6-dossier.md" \
+  "reviewer-gpt-5-6-{sol,terra,luna}.md" \
+  "reviewer-generic.md" \
+  "gpt-5-6-reviewer-dossier.md" \
+  "code-review/hooks/"; do
+  check "README source/layout inventory: $marker" "grep -Fq '$marker' README.md"
 done
 
 section "Executables are executable"

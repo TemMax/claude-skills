@@ -88,7 +88,11 @@ if (plan) {
       if (!w.supervisor || !MODELS.includes(w.supervisor.model)) {
         err(at + '.supervisor.model: one of ' + MODELS.join('/') + ' (short names, or the pinned full ID claude-opus-4-8)')
       }
-      if (w.supervisor && w.supervisor.effort !== undefined && !EFFORTS.includes(w.supervisor.effort)) {
+      if (w.supervisor && providerForModel(w.supervisor.model) === 'codex'
+        && w.supervisor.effort === undefined) {
+        err(at + '.supervisor.effort: explicit Codex effort required; one of ' + EFFORTS.join('/'))
+      } else if (w.supervisor && w.supervisor.effort !== undefined
+        && !EFFORTS.includes(w.supervisor.effort)) {
         err(at + '.supervisor.effort: one of ' + EFFORTS.join('/'))
       }
       if (!Array.isArray(w.tasks) || w.tasks.length === 0) {
@@ -106,11 +110,21 @@ if (plan) {
         if (!t.executor || !MODELS.includes(t.executor.model)) {
           err(tat + '.executor.model: one of ' + MODELS.join('/') + ' (short names, or the pinned full ID claude-opus-4-8)')
         }
-        if (t.executor && t.executor.effort !== undefined && !EFFORTS.includes(t.executor.effort)) {
+        if (t.executor && providerForModel(t.executor.model) === 'codex'
+          && t.executor.effort === undefined) {
+          err(tat + '.executor.effort: explicit Codex effort required; one of ' + EFFORTS.join('/'))
+        } else if (t.executor && t.executor.effort !== undefined
+          && !EFFORTS.includes(t.executor.effort)) {
           err(tat + '.executor.effort: one of ' + EFFORTS.join('/'))
         }
         if (t.ladder !== undefined && (!Array.isArray(t.ladder) || t.ladder.some((m) => !MODELS.includes(m)))) {
           err(tat + '.ladder: array of ' + MODELS.join('/') + ' (short names, or the pinned full ID claude-opus-4-8)')
+        }
+        if (t.executor && MODELS.includes(t.executor.model) && Array.isArray(t.ladder)) {
+          const transitions = [t.executor.model, ...t.ladder]
+          if (new Set(transitions).size !== transitions.length) {
+            err(tat + '.ladder: ladder transitions must use distinct models across executor and ladder')
+          }
         }
         if (w.supervisor && t.executor
           && [t.executor.model, ...(Array.isArray(t.ladder) ? t.ladder : [])].includes(w.supervisor.model)) {

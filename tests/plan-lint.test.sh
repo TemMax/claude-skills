@@ -8,6 +8,7 @@ cd "$(dirname "$0")/.." || exit 1
 
 LINT=plugins/orchestration/skills/super-plan/references/plan-lint.mjs
 CLEAN=tests/fixtures/plans/clean.md
+CODEX_CLEAN=tests/fixtures/plans/codex-clean.md
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 
 if ! command -v node >/dev/null 2>&1; then
@@ -127,7 +128,7 @@ import sys
 p, executor, supervisor, rung = sys.argv[1:]
 s = open(p).read()
 s = s.replace('"model": "sonnet"', f'"model": "{executor}"')
-s = s.replace('"model": "haiku"', f'"model": "{executor}"')
+s = s.replace('"model": "haiku"', f'"model": "{executor}", "effort": "medium"')
 s = s.replace('"model": "fable"', f'"model": "{supervisor}"')
 s = s.replace('"ladder": ["opus"]', f'"ladder": ["{rung}"]')
 open(p, 'w').write(s)
@@ -139,6 +140,50 @@ gpt-5.6-sol gpt-5.6-terra gpt-5.6-luna
 gpt-5.6-terra gpt-5.6-sol gpt-5.6-luna
 gpt-5.6-luna gpt-5.6-terra gpt-5.6-sol
 CASES
+
+cp "$CODEX_CLEAN" "$W/m.md"
+python3 - "$W/m.md" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read().replace(', "effort": "high"', '', 1)
+open(p, 'w').write(s)
+PY
+out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+expect "Codex supervisor without effort exits 1" "1" "$rc"
+contains "Codex supervisor effort is required" "supervisor.effort: explicit" "$out"
+
+cp "$CODEX_CLEAN" "$W/m.md"
+python3 - "$W/m.md" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read().replace(', "effort": "medium"', '', 1)
+open(p, 'w').write(s)
+PY
+out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+expect "Codex executor without effort exits 1" "1" "$rc"
+contains "Codex executor effort is required" "executor.effort: explicit" "$out"
+
+cp "$CODEX_CLEAN" "$W/m.md"
+python3 - "$W/m.md" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read().replace('"ladder": ["gpt-5.6-sol"]', '"ladder": ["gpt-5.6-luna"]')
+open(p, 'w').write(s)
+PY
+out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+expect "Codex self-transition ladder exits 1" "1" "$rc"
+contains "Codex self-transition ladder is named" "ladder transitions must use distinct models" "$out"
+
+cp "$CODEX_CLEAN" "$W/m.md"
+python3 - "$W/m.md" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read().replace('"ladder": ["gpt-5.6-sol"]', '"ladder": ["gpt-5.6-sol", "gpt-5.6-sol"]')
+open(p, 'w').write(s)
+PY
+out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?
+expect "Codex repeated-transition ladder exits 1" "1" "$rc"
+contains "Codex repeated-transition ladder is named" "ladder transitions must use distinct models" "$out"
 
 mutate '"model": "sonnet"' '"model": "gpt-5.6"'
 out="$(node "$LINT" "$W/m.md" 2>&1)"; rc=$?

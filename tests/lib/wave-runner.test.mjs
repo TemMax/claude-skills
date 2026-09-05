@@ -215,6 +215,18 @@ test('S9d an unpinned short form is rejected while the pinned ID elsewhere is no
   assert.equal(calls.length, 0)
 })
 
+test('S9e repeated or self-transitioning ladder models fail closed with zero agent calls', async () => {
+  for (const ladder of [['sonnet'], ['opus', 'opus']]) {
+    const { result, calls } = await runWorkflow(SCRIPT, {
+      args: waveArgs({ tasks: [task({ ladder })] }),
+      agentStub: () => { throw new Error('no agent may be called') },
+    })
+    assert.equal(result.status, 'invalid-args')
+    assert.match(result.errors.join('; '), /ladder transitions must use distinct models/)
+    assert.equal(calls.length, 0)
+  }
+})
+
 // ---------- S1–S7: the ladder itself ----------
 
 test('S1 clean pass: one executor call, one supervisor call, no escalation', async () => {
@@ -324,9 +336,12 @@ test('S6 ladder exhausted → failed with the full attempt trace', async () => {
 })
 
 test('S6b absolute cap: six executor attempts, however long the ladder', async () => {
-  // 5 rungs × 2 would be 10; the queue holds exactly 6 verdicts, so a 7th
+  // 4 distinct rungs × 2 would be 8; the queue holds exactly 6 verdicts, so a 7th
   // supervisor call would throw and fail this test by itself.
-  const capArgs = waveArgs({ tasks: [task({ ladder: ['opus', 'opus', 'opus', 'opus'] })] })
+  const capArgs = waveArgs({ tasks: [task({
+    executor: { model: 'haiku', effort: 'medium' },
+    ladder: ['sonnet', 'opus', 'claude-opus-4-8'],
+  })] })
   const { result } = await runWorkflow(SCRIPT, {
     args: capArgs,
     agentStub: stub({ 't-one': [V.files(), V.report(), V.files(), V.report(), V.files(), V.report()] }),

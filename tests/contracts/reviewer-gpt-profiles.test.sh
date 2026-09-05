@@ -43,5 +43,8 @@ check "Luna requires stronger independent reviewer" \
   "grep -qF 'must not independently review security-sensitive or irreversible changes without a stronger independent reviewer' '$LUNA'"
 check "generic profile has no identity guess" "grep -qF 'Do not infer a model identity' '$GENERIC'"
 check "generic profile has no effort guess" "grep -qF 'Do not infer effort' '$GENERIC'"
+check "generic reviewer requires file or line evidence" "grep -qF 'file/line evidence' '$GENERIC'"
+check "generic reviewer requires a concrete failure scenario" "grep -qF 'concrete failure scenario' '$GENERIC'"
+check "generic reviewer keeps suspicion non-blocking" "grep -qF 'Suspicion is never a blocker' '$GENERIC'"
 
 summary

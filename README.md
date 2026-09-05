@@ -2,17 +2,18 @@
 
 A dual Claude Code and Codex plugin marketplace (`temmax-skills`) with two
 plugins covering the full development pipeline: plan → supervised execution →
-review. Every rule in these skills is derived from the models' official
-Anthropic system cards, and the load-bearing logic ships as tested code, not
-prose — a wave runner, a plan linter, and a four-tier test suite (see
-`tests/README.md`).
+review. Model-specific guidance is scoped to cited first-party Anthropic and
+OpenAI sources; shared safety rules stay provider-neutral. Load-bearing logic
+ships as tested code, not prose — a Claude wave runner, a Codex state/verifier
+helper, a plan linter, and the offline release suite (see `tests/README.md`).
 
 - **`orchestration`** — the full pipeline: `ship` conducts planning
   (`super-plan`) and execution (`multi-model`) into a reviewed PR. The
   orchestrator model researches, plans into contract-carrying waves, and
-  launches executor subagents (Haiku 4.5 / Sonnet 5 / Opus 5 / Opus 4.8 / Fable
-  5.1 as an explicit rung), each isolated in its own worktree and judged
-  against its contract by a different model.
+  launches executor subagents through the selected host adapter. Claude and
+  exact GPT-5.6 profiles plus a conservative generic fallback guide routing;
+  each executor is isolated in its own worktree and judged against its contract
+  by a different model.
 - **`code-review`** — critical, evidence-based review of uncommitted changes or
   a GitHub PR, performed by the session's own model.
 
@@ -290,7 +291,11 @@ plugins/
   orchestration/
     .claude-plugin/plugin.json
     .codex-plugin/plugin.json
-    hooks/                       # orchestrator-drift Stop hook + offline tests
+    hooks/                       # orchestration lifecycle context and Stop gate
+      hooks.json                 # runtime identity plus orchestrator-drift Stop registration
+      runtime-context            # plugin-scoped Claude/Codex model context
+      drift-check                # provider-aware advisory Stop judge adapter
+      drift-check.test.sh        # offline drift behavior contract
     skills/
       ship/
         SKILL.md               # the pipeline conductor (no references of its own)
@@ -303,18 +308,29 @@ plugins/
         SKILL.md
         references/
           wave-runner.workflow.mjs   # the escalation ladder as code
+          codex-wave-protocol.md     # native Codex action loop
+          codex-wave-state.mjs       # deterministic Codex state and verifier
           supervisor-prompt.md
           orchestrator-{fable-5-1,fable-5,opus-5,opus-4-8}.md
+          orchestrator-gpt-5-6-{sol,terra,luna}.md
+          orchestrator-generic.md
           model-dossiers.md
+          gpt-5-6-dossier.md
   code-review/
     .claude-plugin/plugin.json
     .codex-plugin/plugin.json
+    hooks/                       # code-review/hooks/ lifecycle context
+      hooks.json                 # independently installable runtime-context registration
+      runtime-context            # plugin-scoped Claude/Codex model context
     skills/
       critical-review/
         SKILL.md
         references/
           reviewer-{fable-5-1,fable-5,opus-5,opus-4-8}.md
+          reviewer-gpt-5-6-{sol,terra,luna}.md
+          reviewer-generic.md
           reviewer-dossier.md
+          gpt-5-6-reviewer-dossier.md
 tests/                           # structure / contracts / behaviour / live eval
   run.sh                         # ./tests/run.sh [--live]
 ```

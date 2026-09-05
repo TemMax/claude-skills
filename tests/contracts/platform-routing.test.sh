@@ -32,8 +32,10 @@ check "no universal Claude skill dir" \
   "! rg -q 'CLAUDE_SKILL_DIR' plugins/*/skills/*/SKILL.md"
 check "no universal Claude effort variable" \
   "! rg -q 'CLAUDE_EFFORT' plugins/*/skills/*/SKILL.md"
-check "runtime context contract named" \
-  "[ \$(rg -l 'PLUGIN_RUNTIME_CONTEXT_V1' plugins/*/skills/*/SKILL.md | wc -l | tr -d ' ') -eq 4 ]"
+for skill in "$MM" "$SP" "$SH" "$CR"; do
+  check "runtime context contract named by $skill" \
+    "grep -qF 'PLUGIN_RUNTIME_CONTEXT_V1' '$skill'"
+done
 check "one-profile rule is named by every skill" \
   "[ \$(rg -l 'Never load more than one active-seat profile' \"$MM\" \"$SP\" \"$SH\" \"$CR\" | wc -l | tr -d ' ') -eq 4 ]"
 check "config identity guessing is forbidden by every skill" \
@@ -95,6 +97,10 @@ check "mixed-provider waves are returned to planning" \
   "grep -qF 'mixed-provider wave is a planning defect to fix before Gate 2' '$SP'"
 check "Codex effort rework is not duplicated in its model ladder" \
   "grep -qF 'same-model raised-effort rework is state-machine behavior' '$SP' && grep -qF 'ladder lists model transitions only' '$SP'"
+check "Codex plans require explicit executor and supervisor efforts" \
+  "grep -qF 'Every Codex supervisor and executor names an explicit effort' '$SP'"
+check "plan ladders require distinct model transitions" \
+  "grep -qF 'executor and every ladder rung are distinct model transitions' '$SP'"
 
 CP=plugins/orchestration/skills/multi-model/references/codex-wave-protocol.md
 WR=plugins/orchestration/skills/multi-model/references/wave-runner.workflow.mjs
@@ -128,6 +134,10 @@ check "both Codex spawn examples name exact model" \
   "[ \$(grep -cF 'model: action.model' '$CP') -eq 2 ]"
 check "both Codex spawn examples name exact effort" \
   "[ \$(grep -cF 'reasoning_effort: action.effort' '$CP') -eq 2 ]"
+check "Codex state binds the approved plan except mutable status" \
+  "grep -qF 'initialized plan digest' '$CP' && grep -qF 'status transition' '$CP'"
+check "Codex mechanics remain authoritative over a clean model verdict" \
+  "grep -qF 'clean supervisor verdict cannot override blocking mechanical facts' '$CP'"
 
 section "multi-model holds reviewed fix waves locally only by explicit invocation"
 

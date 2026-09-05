@@ -5,6 +5,7 @@ import {
   existsSync, mkdirSync, readFileSync, renameSync, writeFileSync,
 } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -32,7 +33,7 @@ const TASK_STATUSES = ['ready', 'reported', 'verified', 'merge-ready',
   'contract-unsatisfiable', 'failed', 'error']
 const ESCALATIONS = [null, 'same-rule-repeat', 'rung-exhausted',
   'paste-two-strikes', 'raised-effort']
-const STATE_KEYS = ['schema', 'planPath', 'wave', 'repoPath', 'base',
+const STATE_KEYS = ['schema', 'planPath', 'planDigest', 'wave', 'repoPath', 'base',
   'supervisor', 'tasks']
 const TASK_KEYS = ['status', 'branch', 'worktree', 'rungs', 'rung',
   'attemptOnRung', 'totalAttempts', 'pasteStrikes', 'reports',
@@ -94,6 +95,36 @@ export function extractWavePlan(markdown) {
   return plan
 }
 
+function taskProse(markdown, id) {
+  const headings = [...markdown.matchAll(/^## Task ([a-z0-9-]+)[ \t]*\r?$/gm)]
+  const matches = headings.filter((match) => match[1] === id)
+  if (matches.length !== 1) {
+    throw new NamedError('plan-prose', 'expected exactly one "## Task ' + id
+      + '" section, found ' + matches.length)
+  }
+  const start = matches[0].index + matches[0][0].length
+  const remainder = markdown.slice(start).replace(/^\r?\n/, '')
+  const nextHeading = remainder.search(/^## /m)
+  const prose = (nextHeading === -1 ? remainder : remainder.slice(0, nextHeading))
+    .replace(/\r\n/g, '\n').trim()
+  if (prose === '') throw new NamedError('plan-prose', 'task "' + id + '" prose is empty')
+  return prose
+}
+
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]))
+}
+
+function selectedPlanDigest(markdown, wave) {
+  const content = {
+    wave: canonical(wave),
+    taskProse: wave.tasks.map((task) => ({ id: task.id, prose: taskProse(markdown, task.id) })),
+  }
+  return createHash('sha256').update(JSON.stringify(content)).digest('hex')
+}
+
 export function validateCodexWave(wave, index) {
   const at = 'waves[' + index + ']'
   const errors = []
@@ -107,8 +138,8 @@ export function validateCodexWave(wave, index) {
         ? 'host-mismatch: Claude model in Codex wave'
         : 'one of ' + CODEX_MODELS.join('/')))
     }
-    if (supervisor.effort !== undefined && !EFFORTS.includes(supervisor.effort)) {
-      errors.push(at + '.supervisor.effort: one of ' + EFFORTS.join('/'))
+    if (!EFFORTS.includes(supervisor.effort)) {
+      errors.push(at + '.supervisor.effort: explicit value required; one of ' + EFFORTS.join('/'))
     }
   }
   if (!Array.isArray(wave.tasks) || wave.tasks.length === 0) {
@@ -137,8 +168,8 @@ export function validateCodexWave(wave, index) {
           ? 'host-mismatch: Claude model in Codex wave'
           : 'one of ' + CODEX_MODELS.join('/')))
       }
-      if (executor.effort !== undefined && !EFFORTS.includes(executor.effort)) {
-        errors.push(tat + '.executor.effort: one of ' + EFFORTS.join('/'))
+      if (!EFFORTS.includes(executor.effort)) {
+        errors.push(tat + '.executor.effort: explicit value required; one of ' + EFFORTS.join('/'))
       }
     }
     if (task.ladder !== undefined && (!Array.isArray(task.ladder)
@@ -147,6 +178,12 @@ export function validateCodexWave(wave, index) {
         && task.ladder.some((model) => CLAUDE_MODELS.includes(model))
       errors.push(tat + '.ladder: ' + (hostMismatch ? 'host-mismatch: Claude model in Codex wave'
         : 'array of ' + CODEX_MODELS.join('/')))
+    }
+    if (executor && CODEX_MODELS.includes(executor.model) && Array.isArray(task.ladder)) {
+      const transitions = [executor.model, ...task.ladder]
+      if (new Set(transitions).size !== transitions.length) {
+        errors.push(tat + '.ladder: ladder transitions must use distinct models across executor and ladder')
+      }
     }
     if (supervisor && executor
       && [executor.model, ...(Array.isArray(task.ladder) ? task.ladder : [])]
@@ -176,7 +213,7 @@ export function validateCodexWave(wave, index) {
   return errors
 }
 
-export function makeState({ planPath, waveNumber, repoPath, base, wave }) {
+export function makeState({ planPath, planDigest, waveNumber, repoPath, base, wave }) {
   const tasks = {}
   for (const task of wave.tasks) {
     tasks[task.id] = {
@@ -197,12 +234,13 @@ export function makeState({ planPath, waveNumber, repoPath, base, wave }) {
   return {
     schema: 1,
     planPath,
+    planDigest,
     wave: waveNumber,
     repoPath,
     base,
     supervisor: {
       model: wave.supervisor.model,
-      effort: wave.supervisor.effort ?? 'high',
+      effort: wave.supervisor.effort,
     },
     tasks,
   }
@@ -216,14 +254,14 @@ function readPlanWave(state) {
   const plan = extractWavePlan(markdown)
   const wave = plan.waves[state.wave - 1]
   if (!wave) throw new NamedError('state-schema', 'selected wave no longer exists in plan')
-  return wave
+  return { markdown, wave }
 }
 
 function taskSpec(state, id) {
-  const wave = readPlanWave(state)
+  const { markdown, wave } = readPlanWave(state)
   const task = wave.tasks.find((candidate) => candidate && candidate.id === id)
   if (!task) throw new NamedError('state-schema', 'task "' + id + '" no longer exists in plan')
-  return task
+  return { ...task, prose: taskProse(markdown, id) }
 }
 
 const nonemptyString = (value) => typeof value === 'string' && value.length > 0
@@ -280,6 +318,43 @@ function validVerdictHistoryEntry(entry, task) {
     && validVerdict(entry.verdict) && ESCALATIONS.includes(entry.escalation)
 }
 
+function outputEvidencePresent(report, entry) {
+  if (entry.evidence !== 'required') return true
+  const finalAttempt = entry.attempts.at(-1)
+  if (!finalAttempt) return false
+  const lines = (finalAttempt.stdout + '\n' + finalAttempt.stderr)
+    .split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length >= 2)
+  return lines.length === 0 || lines.some((line) => report.includes(line))
+}
+
+function mergeReadyHasCleanHistories(task, spec) {
+  if (task.totalAttempts < 1 || task.reports.length !== task.totalAttempts
+    || task.verifierFacts.length !== task.reports.length
+    || task.verdicts.length !== task.reports.length) return false
+  const fact = task.verifierFacts.at(-1)
+  const verdict = task.verdicts.at(-1)
+  const report = task.reports.at(-1)
+  if (!fact || !verdict || verdict.verdict.ok !== true
+    || verdict.verdict.violations.length !== 0 || verdict.escalation !== null
+    || fact.violations.length !== 0 || fact.preflightPassed !== true
+    || fact.currentBranch !== task.branch || fact.baseIsAncestor !== true
+    || fact.worktreeStatus !== '' || !Number.isInteger(fact.commitCount)
+    || fact.commitCount < 1) return false
+  if (Object.values(fact.git).some((process) => process.exit !== 0 || process.error !== undefined)) {
+    return false
+  }
+  if (fact.changedPaths.some((path) => !matchesAny(path, spec.contract.files_allowed)
+    || matchesAny(path, spec.contract.files_forbidden))) return false
+  if (fact.mustRun.length !== spec.contract.must_run.length) return false
+  return spec.contract.must_run.every((expected, index) => {
+    const actual = fact.mustRun[index]
+    const finalAttempt = actual && actual.attempts.at(-1)
+    return actual && actual.cmd === expected.cmd && actual.evidence === expected.evidence
+      && actual.skipped === undefined && finalAttempt && finalAttempt.exit === 0
+      && finalAttempt.error === undefined && outputEvidencePresent(report, actual)
+  })
+}
+
 function validateStoredState(state, statePath) {
   const errors = []
   const err = (field, message) => errors.push(field + ': ' + message)
@@ -288,6 +363,9 @@ function validateStoredState(state, statePath) {
   }
   if (state.schema !== 1) err('schema', 'expected 1')
   if (!nonemptyString(state.planPath)) err('planPath', 'non-empty string required')
+  if (typeof state.planDigest !== 'string' || !/^[0-9a-f]{64}$/.test(state.planDigest)) {
+    err('planDigest', 'lowercase sha256 required')
+  }
   if (!nonemptyString(state.repoPath)) err('repoPath', 'non-empty string required')
   if (!Number.isInteger(state.wave) || state.wave < 1) err('wave', 'positive integer required')
   if (!SHA.test(state.base)) err('base', 'full lowercase 40-hex SHA required')
@@ -307,9 +385,11 @@ function validateStoredState(state, statePath) {
   if (resolve(statePath) !== resolve(expectedStatePath)) err('state path', 'does not match schema fields')
 
   let wave
+  let markdown
   let planWaveValid = false
   try {
-    const plan = extractWavePlan(readFileSync(state.planPath, 'utf8'))
+    markdown = readFileSync(state.planPath, 'utf8')
+    const plan = extractWavePlan(markdown)
     wave = plan.waves[state.wave - 1]
     if (!wave) err('wave', 'selected plan wave does not exist')
     else {
@@ -321,9 +401,16 @@ function validateStoredState(state, statePath) {
     err('planPath', error.message)
   }
   if (!wave || !planWaveValid) return errors
+  try {
+    if (state.planDigest !== selectedPlanDigest(markdown, wave)) {
+      err('plan digest', 'approved selected wave/task content changed; reinitialization required')
+    }
+  } catch (error) {
+    err('plan digest', error.message + '; reinitialization required')
+  }
   const expectedSupervisor = {
     model: wave.supervisor.model,
-    effort: wave.supervisor.effort ?? 'high',
+    effort: wave.supervisor.effort,
   }
   if (state.supervisor.model !== expectedSupervisor.model
     || state.supervisor.effort !== expectedSupervisor.effort) {
@@ -350,9 +437,10 @@ function validateStoredState(state, statePath) {
     if (task.worktree !== expectedWorktree) err('tasks.' + id + '.worktree', 'does not match repo/task')
     const rungsValid = Array.isArray(task.rungs) && task.rungs.length > 0
       && task.rungs.every((model) => CODEX_MODELS.includes(model))
+      && new Set(task.rungs).size === task.rungs.length
     if (!rungsValid
       || task.rungs.some((model) => !CODEX_MODELS.includes(model))) {
-      err('tasks.' + id + '.rungs', 'non-empty supported Codex models required')
+      err('tasks.' + id + '.rungs', 'non-empty distinct supported Codex models required')
     } else {
       if (task.rungs.includes(state.supervisor.model)) {
         err('tasks.' + id + '.rungs', 'supervisor model also appears as executor or ladder rung')
@@ -409,6 +497,11 @@ function validateStoredState(state, statePath) {
       && task.verdicts.length > task.verifierFacts.length) {
       err('tasks.' + id + '.verdicts', 'cannot outnumber verifier facts')
     }
+    if (task.status === 'merge-ready' && spec && Array.isArray(task.reports)
+      && Array.isArray(task.verifierFacts) && Array.isArray(task.verdicts)
+      && !mergeReadyHasCleanHistories(task, spec)) {
+      err('tasks.' + id + '.merge-ready', 'requires supporting clean histories')
+    }
   }
   return errors
 }
@@ -421,7 +514,7 @@ function requireTask(state, id) {
 
 function baseEffort(state, id, task) {
   const spec = taskSpec(state, id)
-  return task.rung === 0 ? (spec.executor.effort ?? 'medium') : 'high'
+  return task.rung === 0 ? spec.executor.effort : 'high'
 }
 
 function nextHigherEffort(effort) {
@@ -441,12 +534,44 @@ function currentEffort(state, id, task) {
 function executorPrompt(state, id, task, spec) {
   const prior = task.verdicts.at(-1)
   return [
-    'Implement task ' + id + ' in the existing task worktree.',
+    '# Task: ' + id,
+    '',
+    '## Context',
+    spec.prose,
+    '',
+    'You work in your own git worktree. You will not see any other task\'s',
+    'edits; a quiet tree is expected, not a sign something is wrong.',
+    '',
+    '## Workspace (already prepared)',
     'BASE: ' + state.base,
     'BRANCH: ' + task.branch,
     'WORKTREE: ' + task.worktree,
+    'Work and commit only inside the existing worktree above.',
     '',
-    'CONTRACT:',
+    '## Boundaries',
+    'You may change only paths matching: ' + JSON.stringify(spec.contract.files_allowed),
+    spec.contract.files_forbidden.length > 0
+      ? 'You must not touch: ' + JSON.stringify(spec.contract.files_forbidden) : null,
+    'Do not refactor adjacent code. Do not add unrequested features or files.',
+    '',
+    '## Dead-end protocol',
+    'If data or access is missing, a tool is broken, or the path is impossible —',
+    'stop and report what is blocking you. Do not invent values, do not work',
+    'around the restriction, and do not pick an interpretation on the user\'s behalf.',
+    '',
+    '## Prohibitions',
+    'Do not spawn subagents. No force-push, no reset --hard, and no rm outside',
+    'the task\'s files. Do not work around a failing check — report it.',
+    '',
+    '## Definition of done and report format',
+    'Report the changed files, the gist of the change, the verbatim output of',
+    'every must_run command actually executed, and an answer to every',
+    'report_must_answer question. Commit every change before reporting.',
+    'Also paste: git log --oneline ' + state.base + '..HEAD (non-empty) and',
+    'git status --porcelain (empty). A pass claim without required pasted output',
+    'is a contract violation.',
+    '',
+    '## Contract (a supervisor will check every line against your branch)',
     JSON.stringify(spec.contract, null, 2),
     prior ? '' : null,
     prior ? 'PRIOR VERDICT:' : null,
@@ -649,7 +774,13 @@ export function verifyTask(state, id) {
       evidence: 'exit ' + String(attempts.at(-1).exit) + '\n'
         + attempts.at(-1).stdout + attempts.at(-1).stderr,
     })
-    return { cmd: entry.cmd, evidence: entry.evidence, attempts }
+    const recorded = { cmd: entry.cmd, evidence: entry.evidence, attempts }
+    if (!outputEvidencePresent(task.reports.at(-1), recorded)) violations.push({
+      class: 'report',
+      rule: 'must_run: ' + entry.cmd + ' requires pasted evidence',
+      evidence: 'the executor report contains none of the verifier command output',
+    })
+    return recorded
   })
   const facts = {
     base: updated.base,
@@ -732,6 +863,16 @@ export function recordVerdict(state, id, result) {
   if (!validVerdict(result)) {
     throw new NamedError('supervisor-result', 'expected the fixed verdict schema or a fixed typed error')
   }
+  const mechanicalViolations = task.verifierFacts.at(-1)?.violations ?? [{
+    class: 'verification',
+    rule: 'mechanical verifier facts are required before a verdict',
+    evidence: 'no verifier history exists for this executor report',
+  }]
+  const effectiveResult = mechanicalViolations.length === 0 ? result : {
+    ok: false,
+    violations: [...clone(mechanicalViolations), ...clone(result.violations)],
+    remarks: clone(result.remarks),
+  }
   const model = task.rungs[task.rung]
   const effort = currentEffort(updated, id, task)
   const previousEntry = [...task.verdicts].reverse().find((entry) => entry.rung === task.rung)
@@ -740,28 +881,30 @@ export function recordVerdict(state, id, result) {
     attemptOnRung: task.attemptOnRung,
     model,
     effort,
-    verdict: clone(result),
+    verdict: clone(effectiveResult),
     escalation: null,
   }
   task.verdicts.push(entry)
-  if (result.ok === true) {
+  if (effectiveResult.ok === true) {
     task.status = 'merge-ready'
     return updated
   }
-  if (result.violations.some((violation) => violation.satisfiable === false)) {
+  if (effectiveResult.violations.some((violation) => violation.satisfiable === false)) {
     task.status = 'contract-unsatisfiable'
     return updated
   }
-  if (result.violations.some((violation) => violation.pasteReproduced === false)) {
+  if (effectiveResult.violations.some((violation) => violation.pasteReproduced === false)) {
     task.pasteStrikes++
   }
-  const terminalSol = model === 'gpt-5.6-sol' && task.rung === task.rungs.length - 1
+  const raisedEffortTerminal = task.rung === task.rungs.length - 1
+    && ((model === 'gpt-5.6-sol' && updated.supervisor.model === 'gpt-5.6-terra')
+      || (model === 'gpt-5.6-terra' && updated.supervisor.model === 'gpt-5.6-sol'))
   if (task.pasteStrikes >= 2) {
     entry.escalation = 'paste-two-strikes'
-  } else if (terminalSol && task.attemptOnRung === 1 && nextHigherEffort(effort)) {
+  } else if (raisedEffortTerminal && task.attemptOnRung === 1 && nextHigherEffort(effort)) {
     entry.escalation = 'raised-effort'
-  } else if (!terminalSol && task.attemptOnRung >= 2) {
-    entry.escalation = sameRuleRepeat(previousEntry && previousEntry.verdict, result)
+  } else if (!raisedEffortTerminal && task.attemptOnRung >= 2) {
+    entry.escalation = sameRuleRepeat(previousEntry && previousEntry.verdict, effectiveResult)
       ? 'same-rule-repeat'
       : 'rung-exhausted'
   }
@@ -779,7 +922,7 @@ export function recordVerdict(state, id, result) {
     }
     return updated
   }
-  if (terminalSol) {
+  if (raisedEffortTerminal) {
     if (entry.escalation === 'raised-effort') {
       task.status = 'ready'
     } else {
@@ -863,6 +1006,7 @@ function initCommand(options) {
   }
   const state = makeState({
     planPath: options.plan,
+    planDigest: selectedPlanDigest(markdown, wave),
     waveNumber,
     repoPath: options.repo,
     base: options.base,

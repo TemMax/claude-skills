@@ -19,6 +19,13 @@ helper action, write a fresh runner, force-remove a worktree, or substitute a
 missing model with a default or alias. It accepts only the exact GPT model IDs
 and effort values already linted in the plan.
 
+At `init`, the helper stores an initialized plan digest over the canonical
+selected wave and each matching task's approved prose. A later status transition
+is the only plan mutation excluded from that digest; changing prose, contracts,
+models, efforts, or ladder rungs requires a new initialization.
+
+Mechanical verification is authoritative. A clean supervisor verdict cannot override blocking mechanical facts such as a failed `must_run`, an out-of-scope path, missing required evidence, an unsafe worktree, or an invalid base. Only a final attempt with clean verifier facts and a clean verdict can become merge-ready.
+
 ## Commands and action loop
 
 The helper has exactly these seven commands:

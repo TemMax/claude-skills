@@ -155,14 +155,14 @@ One file in `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`, three layers:
    | Codex | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` |
 
    `gpt-5.6` is never a plan id. It is only an active-session alias after
-   runtime-context normalization, not a model field. Every supervisor,
+   runtime-context normalization, not a model field. Every Codex supervisor and executor names an explicit effort; the adapter never invents one. Every supervisor,
    executor, and ladder entry in one wave uses the same row. A mixed-provider
    wave is a planning defect to fix before Gate 2, not a request for the
    linter or runner to guess a provider. `branch` is always `wave/<id>`. The
    supervisor sits on the wave because execution is one runner invocation per
    wave.
 
-   The ladder lists model transitions only. For Codex, same-model raised-effort rework is state-machine behavior, so do not invent duplicate same-model ladder entries.
+   The ladder lists model transitions only. The executor and every ladder rung are distinct model transitions: never repeat the executor or a later rung. For Codex, same-model raised-effort rework is state-machine behavior, so do not invent duplicate same-model ladder entries.
 
 3. **The prose half** — one `## Task <id>` section per task: the
    substantive description and context, with full code where the solution
