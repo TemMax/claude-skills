@@ -128,6 +128,10 @@ check "Codex follow-up reuse pins the complete child tuple" \
   "grep -qF 'same role, exact model, and exact effort' '$CP'"
 check "Codex retry spawns fresh on model or effort change" \
   "grep -qF 'model or effort changes' '$CP'"
+check "Codex treats followup_task as an optional optimization" \
+  "grep -qF 'followup_task is optional' '$CP' && grep -qF 'unavailable, use a fresh spawn_agent' '$CP'"
+check "Codex native unavailability requires spawn or wait to be missing" \
+  "grep -qF 'tool-unavailable only when spawn_agent or wait_agent is unavailable' '$CP'"
 check "Codex spawn identity is valid and collision-free" \
   "grep -qF 'wave_<task_id>_<role>_<spawn_id>' '$CP'"
 check "both Codex spawn examples name exact model" \

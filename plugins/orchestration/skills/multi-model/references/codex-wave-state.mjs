@@ -2,7 +2,7 @@
 // Deterministic state and mechanical verification for Codex-native waves.
 // This helper never calls a model or the network. It prints one JSON object.
 import {
-  existsSync, mkdirSync, readFileSync, renameSync, writeFileSync,
+  existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync,
 } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -382,7 +382,13 @@ function validateStoredState(state, statePath) {
   const planName = basename(state.planPath).replace(/\.[^.]+$/, '')
   const expectedStatePath = join(state.repoPath, '.worktrees', 'codex-wave',
     planName + '-w' + state.wave + '-' + state.base.slice(0, 12) + '.json')
-  if (resolve(statePath) !== resolve(expectedStatePath)) err('state path', 'does not match schema fields')
+  try {
+    if (realpathSync(statePath) !== realpathSync(expectedStatePath)) {
+      err('state path', 'does not match schema fields')
+    }
+  } catch {
+    err('state path', 'does not match schema fields')
+  }
 
   let wave
   let markdown
@@ -964,13 +970,17 @@ export function summarize(state) {
 }
 
 function readState(path) {
+  let canonicalPath
   let parsed
-  try { parsed = JSON.parse(readFileSync(path, 'utf8')) } catch (error) {
+  try {
+    canonicalPath = realpathSync(path)
+    parsed = JSON.parse(readFileSync(canonicalPath, 'utf8'))
+  } catch (error) {
     throw new NamedError('state-read', error.message)
   }
-  const errors = validateStoredState(parsed, path)
+  const errors = validateStoredState(parsed, canonicalPath)
   if (errors.length) throw new NamedError('state-schema', errors.join('; '))
-  return parsed
+  return { state: parsed, canonicalPath }
 }
 
 function parseStdin() {
@@ -1042,17 +1052,17 @@ function initCommand(options) {
 function runCli(argv) {
   const { command, options } = parseCli(argv)
   if (command === 'init') return initCommand(options)
-  const state = readState(options.state)
+  const { state, canonicalPath } = readState(options.state)
   if (command === 'next') return nextAction(state)
   if (command === 'summary') return summarize(state)
   if (command === 'record-executor') {
     const updated = recordExecutor(state, options.task, parseStdin())
-    atomicWrite(options.state, updated)
+    atomicWrite(canonicalPath, updated)
     return { status: 'ok', task: options.task, next: nextAction(updated) }
   }
   if (command === 'verify') {
     const updated = verifyTask(state, options.task)
-    atomicWrite(options.state, updated)
+    atomicWrite(canonicalPath, updated)
     return {
       status: 'ok', task: options.task,
       facts: updated.tasks[options.task].verifierFacts.at(-1),
@@ -1067,7 +1077,7 @@ function runCli(argv) {
   }
   if (command === 'record-verdict') {
     const updated = recordVerdict(state, options.task, parseStdin())
-    atomicWrite(options.state, updated)
+    atomicWrite(canonicalPath, updated)
     return { status: 'ok', task: options.task, next: nextAction(updated) }
   }
   throw new NamedError('usage', 'unknown command')

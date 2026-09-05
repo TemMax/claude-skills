@@ -3,8 +3,8 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import {
-  cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync,
-  rmSync, writeFileSync,
+  cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync,
+  rmSync, symlinkSync, writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -176,6 +176,36 @@ test('C1 init creates one schema-1 state and exact-base worktree branch', () => 
   assert.equal(git(env.worktree, 'rev-parse', 'HEAD'), env.base)
   assert.equal(git(env.worktree, 'branch', '--show-current'), 'wave/divide-guard')
   assert.equal(git(env.repo, 'worktree', 'list', '--porcelain').match(/^worktree /gm).length, 2)
+})
+
+test('C1b a state file reached through an equivalent directory alias is accepted', () => {
+  const env = init()
+  const alias = join(env.root, 'repo-alias')
+  symlinkSync(env.repo, alias, 'dir')
+  const aliasedState = join(alias, '.worktrees', 'codex-wave', basename(env.statePath))
+  const action = next(aliasedState)
+  assert.equal(action.action, 'spawn-executor')
+  assert.equal(action.worktree, env.worktree)
+})
+
+test('C1c a mutating command reached through a state symlink updates the canonical file', () => {
+  const env = init()
+  const alias = join(env.root, 'state-alias.json')
+  symlinkSync(env.statePath, alias)
+  recordExecutor(alias, { report: 'implemented guard\n\nmust_run output:\nOK\n' })
+  assert.equal(state(env.statePath).tasks['divide-guard'].status, 'reported')
+  assert.equal(lstatSync(alias).isSymbolicLink(), true)
+})
+
+test('C1d a state symlink to an alternate file is rejected', () => {
+  const env = init()
+  const alternate = join(env.root, 'alternate-state.json')
+  const alias = join(env.root, 'state-alias.json')
+  writeFileSync(alternate, readFileSync(env.statePath))
+  symlinkSync(alternate, alias)
+  const result = invoke(['next', '--state', alias])
+  assert.notEqual(result.status, 0)
+  assert.match(result.json.errors.join('; '), /state path: does not match schema fields/)
 })
 
 test('C2 selected Claude wave is host-mismatch and creates nothing', () => {

@@ -86,6 +86,10 @@ check "child reuse requires matching role model effort" \
   "grep -qF 'same role, exact model, and exact effort' $CP"
 check "changed retry tuple uses fresh spawn" \
   "grep -qF 'model or effort changes' $CP"
+check "missing followup_task falls back to a fresh spawn" \
+  "grep -qF 'followup_task is optional' $CP && grep -qF 'unavailable, use a fresh spawn_agent' $CP"
+check "native tool-unavailable requires a missing essential tool" \
+  "grep -qF 'tool-unavailable only when spawn_agent or wait_agent is unavailable' $CP"
 check "spawn identities are valid and collision-free" \
   "grep -qF 'wave_<task_id>_<role>_<spawn_id>' $CP"
 check "executor and supervisor examples name model" \

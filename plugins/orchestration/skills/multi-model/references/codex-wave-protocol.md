@@ -65,6 +65,12 @@ init  next  record-executor  verify  supervisor-prompt  record-verdict  summary
    exists, or the model or effort changes, use a fresh `spawn_agent`. Never
    follow up an old child under a changed tuple.
 
+   followup_task is optional, not an essential native capability. If
+   followup_task is unavailable, use a fresh spawn_agent for the
+   helper-returned action even when the tuple is unchanged. Report
+   tool-unavailable only when spawn_agent or wait_agent is unavailable;
+   missing followup_task never stops a wave.
+
    Every fresh spawn gets a collision-free `task_name` matching `[a-z0-9_]+`.
    Replace every hyphen in the helper's kebab-case task id with `_`, retain a
    monotonically increasing `spawn_id`, and form the name as
