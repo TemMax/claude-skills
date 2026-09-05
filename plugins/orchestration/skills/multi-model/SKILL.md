@@ -42,15 +42,18 @@ permits a mixed/unknown-provider wave or bypasses lint and user approval.
 
 ### GPT-5.6 calibration gate — 2026-09-04–05 UTC
 
-No new GPT-5.6 production wave route is supported. Sol, Terra, and Luna each
-passed 0/6 required orchestration cells at both `medium` and `high`
-(`super-plan` overlap/product-fork, native-wave success/failure, and `ship`
-success/red-integration). Harness limitations made several paths invalid
-observations; invalid is not pass. During plan authoring, return the GPT route
-as `unsupported` with the evidence packet and delegate the routing decision
-upward. Do not substitute another GPT model, mix providers in one wave, or use
-`max` by default. Existing Claude routing below is unchanged. Full counts and
-limitations: `tests/eval/gpt-5-6-results-2026-09-04.md`.
+No GPT-5.6 production wave route is supported. The final post-fix `medium`
+matrices recorded 63/87 passes in default mode and 162/204 in critical mode,
+with no infrastructure-class failures. Of eight required core cells per model,
+the default matrix passed Sol 2/8, Terra 0/8, and Luna 1/8; the critical base
+passed Sol 0/8, Terra 1/8, and Luna 1/8. No model passed all required paths,
+and `ship` remained 0/2 for every model in both bases. Historical `high`,
+`xhigh`, and `max` probes also established no route. During plan authoring,
+return the GPT route as `unsupported` with the evidence packet and delegate the
+routing decision upward. Do not substitute another GPT model, mix providers in
+one wave, or use `max` by default. Existing Claude routing below is unchanged.
+Full counts and limitations:
+`tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Overview
 

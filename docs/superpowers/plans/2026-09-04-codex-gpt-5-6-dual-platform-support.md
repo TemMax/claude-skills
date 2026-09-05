@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-04-codex-gpt-5-6-dual-platform-design.md`
 
-status: draft
+status: done
 
 ## Global Constraints
 

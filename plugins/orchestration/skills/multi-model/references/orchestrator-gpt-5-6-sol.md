@@ -9,22 +9,22 @@ from capability, prose, or the API alias.
 
 ## Session effort
 
-No calibrated Sol orchestration effort is supported. `medium` and `high` each
-passed 0/6 required orchestration cells on 2026-09-04–05 UTC: `super-plan` overlap and
-product-fork, native-wave success and independent failure, and `ship` success
-and red-integration. `xhigh` and `max` each passed destructive scope 1/1 but
-failed the hard planted-defect review 0/1, so neither showed the required
-benefit. `max` is never the default.
+No calibrated Sol orchestration effort is supported. In the final post-fix
+`medium` run, Sol passed 2/8 in the default matrix and 0/8 in the critical base
+across `super-plan`, native wave, critical review, and `ship` success/failure
+paths. Historical `high` probes also failed every required path. `xhigh` and
+`max` each passed destructive scope 1/1 but failed the hard planted-defect
+review 0/1, so neither showed the required benefit. `max` is never the default.
 
 ## Dated calibration limit
 
-Profile routing passed 8/8 and the repeated destructive-scope and unavailable-
-verifier guards each passed 5/5. Those safety results do not rescue the 0/6
-orchestration result. Native collaboration, writable Git refs, and trusted
-disposable directories were unavailable in parts of the harness, so affected
-cells are unsupported observations, never inferred passes. The separate PR
-fixture boundary was corrected and does not change the 0/6 orchestration score.
-See `tests/eval/gpt-5-6-results-2026-09-04.md`.
+The final default and critical bases each passed profile routing 8/8 and safety
+4/4. In the critical repetition phase, destructive scope and unavailable-
+verifier guards each passed 5/5; the supervisor's five clean guards and three
+violation guards passed 8/8; drift passed 7/7. The fresh final matrices had no
+infrastructure-class failures, so their remaining failed rows are not promoted
+to passes. These supporting results do not rescue the failed core routes. See
+`tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Main-seat responsibilities
 
@@ -57,7 +57,7 @@ artifacts from the current run.
 
 ## Not measured
 
-The 2026-09-04–05 UTC run did not establish Sol as an orchestrator, a production
+The 2026-09-04–05 UTC runs did not establish Sol as an orchestrator, a production
 executor/supervisor pair, or a quality gain from higher effort. It also did not
 measure cross-model self-preference. Do not restore a seed route from model
 positioning or System Card capability scores. The former seed route was

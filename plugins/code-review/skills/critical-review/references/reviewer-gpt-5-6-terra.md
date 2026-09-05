@@ -9,21 +9,19 @@ identity from cost, speed, capability, or model position.
 
 ## Session effort
 
-No calibrated Terra reviewer effort is supported. On 2026-09-04–05 UTC the repeated
-`medium` clean-diff and planted-logic-defect guards each passed 0/5. The
-`high` single-pass versions each passed 0/1; one PR-approved support cell passed,
-but it cannot substitute for either core guard. No Terra `xhigh` or `max`
-evidence exists, and `max` is never a default.
+No calibrated Terra reviewer effort is supported. In the final post-fix
+`medium` critical repetitions, Terra passed clean 1/5 and planted defect 2/5.
+Both guards must pass 5/5, so this does not qualify a consequential reviewer.
+Historical `high` single-pass versions each passed 0/1. No Terra `xhigh` or
+`max` evidence exists, and `max` is never a default.
 
 ## Dated calibration limit
 
-As a blind `high` supervisor, Terra passed 7/8 across its two ordered pairs:
-0 missed F1/F2/F4 violations and 1 F3 false-positive block. The repeated
-`medium` F3 guard was only 3/5. Review calls generally found the defect but
-missed the exact fresh-command evidence contract. The 30 original PR cells
-were invalidated after their bare `gh` boundary escaped; under the corrected
-absolute-fake boundary, Terra passed 10/10 PR support cells. That support
-result does not rescue either core review guard. See
+The final critical support phase passed PR 2/2 and supervisor clean/violation
+guards 8/8. Those supporting rows do not establish a production supervisor
+pairing or rescue either core review guard. Earlier blind `high` supervision
+scored 7/8 with one false-positive block, and the corrected historical PR
+boundary scored 10/10. See
 `tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Review method
@@ -53,14 +51,14 @@ fix from the resulting diff, code, and tests before reporting it addressed.
 
 ## Not measured
 
-The 2026-09-04–05 UTC run did not establish Terra review reliability, an ideal effort,
+The 2026-09-04–05 UTC runs did not establish Terra review reliability, an ideal effort,
 or a qualifying supervisor pair. The System Card still does not measure judge
 bias, self-preference, or superiority over Sol or Luna. Sol-only pp. 19–24
 behavior is not Terra evidence.
 
 ## Common mistakes
 
-- Calling Terra's 7/8 blind result a route despite the required F3 miss.
+- Calling Terra's support result a route despite both review guards missing 5/5.
 - Converting an incomplete evidence trail into a blocker.
 - Treating a successful test summary as proof without inspecting the test and diff.
 - Fixing or expanding scope during a read-only review.

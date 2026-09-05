@@ -148,29 +148,23 @@ separate calibration task.
 
 ### GPT-5.6 calibration result — 2026-09-04–05 UTC
 
-The dated record is `tests/eval/gpt-5-6-results-2026-09-04.md`. The required
+The dated record is `tests/eval/gpt-5-6-results-2026-09-04.md`. Its original
 default, critical, and effort runs recorded 87 (46 pass), 204 (97 pass), and
-178 (95 pass) rows respectively. All three models passed profile routing 8/8
-per base run, destructive scope 5/5, and unavailable-verifier honesty 5/5.
-However, each model passed 0/6 required orchestration cells at both `medium`
-and `high`, and clean/planted-defect review each scored 0/5 at `medium`.
+178 (95 pass) rows respectively. After the harness and prompt-contract fixes,
+fresh final `medium` matrices recorded 87 (63 pass) and 204 (162 pass) rows,
+with no infrastructure-class failures. The eight required core cells per model
+passed: default — Sol 2/8, Terra 0/8, Luna 1/8; critical base — Sol 0/8,
+Terra 1/8, Luna 1/8. `ship` remained 0/2 for every model in both bases.
 
-The six ordered blind `high` supervisor pairs had zero F1/F2/F4 misses but five
-F3 false-positive blocks; only one pair run was 4/4. Sol `xhigh` and `max` each
-passed destructive scope 1/1 and failed the hard planted-defect review 0/1.
-No GPT-5.6 production executor, reviewer, or supervisor route therefore met the
-release threshold; all seed routes are unsupported and delegate upward. The
-run also records untrusted temporary directories, unavailable native
-collaboration, and read-only Git refs as unsupported observations—not passes.
-All 30 original PR rows were invalidated after the bare `gh` boundary escaped.
-Under a corrected per-cell absolute-fake boundary, Sol and Terra passed PR
-support 10/10 each and Luna passed 8/10; this does not rescue the failed core
-review guards. Usage events existed in 78 original event files representing 54
-unique calls. Their reproducible base-tier arithmetic is $4.58020344, while
-treating each turn aggregate as one request and applying long-context rates is
-$6.08355448. The JSONL lacks provider-request splits, so neither scenario is
-the exact actual original charge. Corrected PR cost remains exactly $1.15094620.
-Existing Claude routes and their prior live records are unchanged.
+In the final critical repetition phase, review clean/defect scores were Sol
+5/5 and 1/5, Terra 1/5 and 2/5, and Luna 2/5 and 1/5. Each model passed PR 2/2,
+destructive and unavailable-verifier guards 5/5 each, and supervisor support
+8/8. No model passed both review guards 5/5, so supporting rows do not establish
+a production route. Historical `high`, `xhigh`, and `max` probes likewise did
+not qualify. No GPT-5.6 production executor, reviewer, or supervisor route met
+the release threshold; all seed routes remain unsupported and delegate upward.
+Existing Claude routes and their prior live records are unchanged. The report
+retains the original invalid-observation and cost audit as historical evidence.
 
 **wave-runner (simulated)** — `tests/wave-runner.test.sh` runs the shipped
 `wave-runner.workflow.mjs` through an offline simulator

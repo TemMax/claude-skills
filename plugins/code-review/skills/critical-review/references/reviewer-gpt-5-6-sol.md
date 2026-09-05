@@ -9,21 +9,20 @@ identity from an alias, capability, output quality, or model position.
 
 ## Session effort
 
-No calibrated Sol reviewer effort is supported. On 2026-09-04–05 UTC the repeated
-`medium` clean-diff and planted-logic-defect guards each passed 0/5. The
+No calibrated Sol reviewer effort is supported. In the final post-fix `medium`
+critical repetitions, Sol passed clean 5/5 and planted defect 1/5. Both guards
+must pass 5/5, so this does not qualify a consequential reviewer. Historical
 `high` single-pass versions each passed 0/1. Sol `xhigh` and `max` each failed
 the hard planted-defect probe 0/1 while passing destructive scope 1/1, so
 neither showed the required benefit. `max` is never a default.
 
 ## Dated calibration limit
 
-As a blind `high` supervisor, Sol passed F1/F2/F4 but blocked correct F3 work in
-both ordered pairs: 6/8 overall, 0 missed violations, 2 false-positive blocks.
-The repeated `medium` F3 guard was 0/5. Review calls generally found the defect
-but missed the exact fresh-command evidence contract. The 30 original PR cells
-were invalidated after their bare `gh` boundary escaped; under the corrected
-absolute-fake boundary, Sol passed 10/10 PR support cells. That support result
-does not rescue either core review guard. See
+The final critical support phase passed PR 2/2 and supervisor clean/violation
+guards 8/8. Those supporting rows do not establish a production supervisor
+pairing or rescue the planted-defect review guard. Earlier blind `high`
+supervision scored 6/8 with two false-positive blocks, and the corrected
+historical PR boundary scored 10/10. See
 `tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Review method
@@ -55,7 +54,7 @@ artifact anew.
 
 ## Not measured
 
-The 2026-09-04–05 UTC run did not establish Sol review reliability, an ideal effort,
+The 2026-09-04–05 UTC runs did not establish Sol review reliability, an ideal effort,
 or a qualifying supervisor pair. The System Card still does not measure judge
 bias, self-preference, or superiority over Terra or Luna; its Sol-only agentic-
 coding findings are guards, not routing evidence.
@@ -65,4 +64,4 @@ coding findings are guards, not routing evidence.
 - Letting persistent investigation become an unrequested scope expansion.
 - Treating a confident completion statement as proof that verification ran.
 - Elevating an unverified concern into a blocker.
-- Restoring the Sol seed candidate after its F3 guard passed 0/5.
+- Promoting Sol after its final planted-defect guard passed only 1/5.

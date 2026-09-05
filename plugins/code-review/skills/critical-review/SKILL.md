@@ -35,15 +35,17 @@ effort is unknown and receives no effort-specific claim.
 ### GPT-5.6 calibration gate — 2026-09-04–05 UTC
 
 No GPT-5.6 production consequential-review or supervisor route is supported.
-At `medium`, Sol, Terra, and Luna each passed clean-diff 0/5 and planted-logic-
-defect 0/5. Blind `high` supervision had zero F1/F2/F4 misses but five F3
-false-positive blocks across six ordered pairs; repeated `medium` F3 was Sol
-0/5, Terra 3/5, and Luna 3/5. Return a model-selection request as `unsupported`
-with the mechanical evidence packet and delegate final judgment upward. Never
-silently substitute another GPT model, mix providers, or make `max` a default.
-An explicitly requested review may still report bounded evidence, but it must
-state that its GPT route is uncalibrated. Existing Claude review guidance is
-unchanged. Full counts and harness limitations:
+In the final post-fix `medium` critical repetitions, Sol passed clean 5/5 and
+planted defect 1/5, Terra passed 1/5 and 2/5, and Luna passed 2/5 and 1/5.
+Each model passed PR support 2/2 and supervisor support 8/8, but no model passed
+both required review guards 5/5; supporting rows do not establish a production
+reviewer or supervisor pairing. Historical `high` supervision and higher-effort
+probes also established no route. Return a model-selection request as
+`unsupported` with the mechanical evidence packet and delegate final judgment
+upward. Never silently substitute another GPT model, mix providers, or make
+`max` a default. An explicitly requested review may still report bounded
+evidence, but it must state that its GPT route is uncalibrated. Existing Claude
+review guidance is unchanged. Full counts and limitations:
 `tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Overview
