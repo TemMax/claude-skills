@@ -22,6 +22,7 @@ cat > "$BIN/codex" <<'SH'
 set -euo pipefail
 printf 'codex\n' >> "$EVAL_STUB_LOG/calls"
 printf '%s\n' "$@" > "$EVAL_STUB_LOG/codex.argv"
+pwd > "$EVAL_STUB_LOG/codex.pwd"
 cat > "$EVAL_STUB_LOG/codex.stdin"
 answer_file=""
 while [ "$#" -gt 0 ]; do
@@ -67,7 +68,8 @@ out="$(run_model codex gpt-5.6-sol high read-only "$CODEX_ANSWER")"
 expect "Codex writes its final answer" "codex final answer" "$(cat "$CODEX_ANSWER")"
 expect "Codex stdout is suppressed" "" "$out"
 expect "Codex reads the prompt from stdin" "$(cat "$PROMPT")" "$(cat "$LOG/codex.stdin")"
-expect "Codex argv is exact" "$(printf '%s\n' exec --ephemeral --ignore-user-config --ignore-rules --sandbox read-only --model gpt-5.6-sol -c 'model_reasoning_effort="high"' --output-last-message "$CODEX_ANSWER" -)" "$(cat "$LOG/codex.argv")"
+expect "Codex argv is exact" "$(printf '%s\n' exec --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check --sandbox read-only --model gpt-5.6-sol -c 'model_reasoning_effort="high"' --output-last-message "$CODEX_ANSWER" -)" "$(cat "$LOG/codex.argv")"
+expect "Codex read-only runs in the requested repository" "$REPO" "$(cat "$LOG/codex.pwd")"
 check "Codex receives no unsafe bypass flag" "! rg -q -- 'bypassPermissions|dangerously-bypass' '$LOG/codex.argv'"
 
 section "Codex workspace-write uses the same isolated output contract"
@@ -76,7 +78,8 @@ out="$(run_model codex gpt-5.6-terra medium workspace-write "$CODEX_WRITE")"
 expect "Codex workspace-write writes its final answer" "codex final answer" "$(cat "$CODEX_WRITE")"
 expect "Codex workspace-write stdout is suppressed" "" "$out"
 expect "Codex workspace-write reads the prompt from stdin" "$(cat "$PROMPT")" "$(cat "$LOG/codex.stdin")"
-expect "Codex workspace-write argv is exact" "$(printf '%s\n' exec --ephemeral --ignore-user-config --ignore-rules --sandbox workspace-write --model gpt-5.6-terra -c 'model_reasoning_effort="medium"' --output-last-message "$CODEX_WRITE" -)" "$(cat "$LOG/codex.argv")"
+expect "Codex workspace-write argv is exact" "$(printf '%s\n' exec --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check --sandbox workspace-write --model gpt-5.6-terra -c 'model_reasoning_effort="medium"' --output-last-message "$CODEX_WRITE" -)" "$(cat "$LOG/codex.argv")"
+expect "Codex workspace-write runs from the disposable repository parent" "$W" "$(cat "$LOG/codex.pwd")"
 check "Codex workspace-write receives no unsafe bypass flag" "! rg -q -- 'bypassPermissions|dangerously-bypass' '$LOG/codex.argv'"
 
 section "Failed model output is never consumed"

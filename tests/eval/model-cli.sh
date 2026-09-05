@@ -36,8 +36,13 @@ eval_model() {
       esac
       ;;
     codex)
-      (cd "$cwd" && timeout "$limit" codex exec --ephemeral --ignore-user-config --ignore-rules \
-        --sandbox "$sandbox" --model "$model" -c "model_reasoning_effort=\"$effort\"" \
+      local launch_cwd="$cwd"
+      if [ "$sandbox" = workspace-write ]; then
+        launch_cwd="$(dirname "$cwd")"
+      fi
+      (cd "$launch_cwd" && timeout "$limit" codex exec --ephemeral --ignore-user-config --ignore-rules \
+        --skip-git-repo-check --sandbox "$sandbox" --model "$model" \
+        -c "model_reasoning_effort=\"$effort\"" \
         --output-last-message "$answer_file" - < "$prompt_file" >/dev/null)
       ;;
   esac

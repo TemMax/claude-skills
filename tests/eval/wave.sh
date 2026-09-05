@@ -341,12 +341,14 @@ PY
 eval_codex_json() { # real-codex repo sandbox prompt answer output-variable
   local real_codex="$1" repo="$2" sandbox="$3" prompt="$4" answer="$5" output_name="$6"
   local model="${EVAL_MODEL:-gpt-5.6-sol}" effort="${EVAL_EFFORT:-medium}"
-  local limit="${EVAL_TIMEOUT:-600}" captured='' real_rc
+  local limit="${EVAL_TIMEOUT:-600}" captured='' real_rc launch_cwd="$repo"
   [ -x "$real_codex" ] || return 69
   case "$sandbox" in read-only|workspace-write) ;; *) return 2 ;; esac
+  if [ "$sandbox" = workspace-write ]; then launch_cwd="$(dirname "$repo")"; fi
   : > "$answer" || return
-  if captured="$(cd "$repo" && timeout "$limit" "$real_codex" exec --json \
-    --ephemeral --ignore-user-config --ignore-rules --sandbox "$sandbox" --model "$model" \
+  if captured="$(cd "$launch_cwd" && timeout "$limit" "$real_codex" exec --json \
+    --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check \
+    --sandbox "$sandbox" --model "$model" \
     -c "model_reasoning_effort=\"$effort\"" --output-last-message "$answer" - < "$prompt")"; then
     real_rc=0
   else
@@ -697,7 +699,7 @@ with open(sys.argv[1], "w", encoding="utf-8") as stream:
 PY
   git -C "$worktree" add src/calc.py
   git -C "$worktree" commit -q -m 'guard division by zero'
-  printf '{"report":"Implemented and tested the division-by-zero guard."}\n' \
+  printf '{"report":"Implemented and tested the division-by-zero guard. Verifier output: OK"}\n' \
     | node "$CODEX_STATE" record-executor --state "$TEST_STATE" --task divide-guard >/dev/null
   node "$CODEX_STATE" verify --state "$TEST_STATE" --task divide-guard >/dev/null
   node "$CODEX_STATE" supervisor-prompt --state "$TEST_STATE" --task divide-guard \
@@ -961,6 +963,7 @@ PY
 #!/usr/bin/env bash
 set -eu
 printf '%s\n' "$*" > "$CAPTURE_TEST_ARGS"
+pwd > "$CAPTURE_TEST_PWD"
 [ -z "${CODEX_EVAL_REAL_CODEX:-}" ]
 [ -z "${CODEX_EVAL_EVENT_SINK:-}" ]
 [ -z "${CODEX_EVAL_WRAPPER_DIR:-}" ]
@@ -975,27 +978,29 @@ exit "${CAPTURE_TEST_EXIT:-0}"
 SH
   chmod +x "$W/real-codex-stub"
   capture_events=''
-  CAPTURE_TEST_ARGS="$W/capture-args" EVAL_TIMEOUT=5 EVAL_MODEL=gpt-5.6-sol EVAL_EFFORT=medium \
+  CAPTURE_TEST_ARGS="$W/capture-args" CAPTURE_TEST_PWD="$W/capture-pwd" EVAL_TIMEOUT=5 EVAL_MODEL=gpt-5.6-sol EVAL_EFFORT=medium \
     eval_codex_json "$W/real-codex-stub" "$W/capture-model-repo" workspace-write \
     "$W/capture-prompt.md" "$W/capture-answer.txt" capture_events
   [ "$capture_events" = '{"type":"thread.started","thread_id":"offline-wrapper-test"}' ]
-  expected_capture_args="exec --json --ephemeral --ignore-user-config --ignore-rules --sandbox workspace-write --model gpt-5.6-sol -c model_reasoning_effort=\"medium\" --output-last-message $W/capture-answer.txt -"
+  expected_capture_args="exec --json --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check --sandbox workspace-write --model gpt-5.6-sol -c model_reasoning_effort=\"medium\" --output-last-message $W/capture-answer.txt -"
   [ "$(cat "$W/capture-args")" = "$expected_capture_args" ]
+  [ "$(cat "$W/capture-pwd")" = "$W" ]
 
   failure_events=''
   set +e
-  CAPTURE_TEST_ARGS="$W/capture-failure-args" CAPTURE_TEST_EXIT=19 EVAL_TIMEOUT=5 \
+  CAPTURE_TEST_ARGS="$W/capture-failure-args" CAPTURE_TEST_PWD="$W/capture-failure-pwd" CAPTURE_TEST_EXIT=19 EVAL_TIMEOUT=5 \
     eval_codex_json "$W/real-codex-stub" "$W/capture-model-repo" read-only \
     "$W/capture-prompt.md" "$W/capture-failure-answer.txt" failure_events
   capture_rc=$?
   set -e
   [ "$capture_rc" -eq 19 ]
   [ "$failure_events" = '{"type":"thread.started","thread_id":"offline-wrapper-test"}' ]
+  [ "$(cat "$W/capture-failure-pwd")" = "$W/capture-model-repo" ]
 
   for bad_output in empty malformed; do
     bad_events='stale'
     set +e
-    CAPTURE_TEST_ARGS="$W/capture-$bad_output-args" CAPTURE_TEST_OUTPUT="$bad_output" EVAL_TIMEOUT=5 \
+    CAPTURE_TEST_ARGS="$W/capture-$bad_output-args" CAPTURE_TEST_PWD="$W/capture-$bad_output-pwd" CAPTURE_TEST_OUTPUT="$bad_output" EVAL_TIMEOUT=5 \
       eval_codex_json "$W/real-codex-stub" "$W/capture-model-repo" read-only \
       "$W/capture-prompt.md" "$W/capture-$bad_output-answer.txt" bad_events
     capture_rc=$?
