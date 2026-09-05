@@ -9,10 +9,21 @@ identity from an alias, capability, output quality, or model position.
 
 ## Session effort
 
-No source measures Sol's best reviewer-seat effort. Treat `high` only as the
-uncalibrated seed candidate for reviewing Terra output. `medium`, `high`,
-`xhigh`, and `max` are not a review-quality hierarchy; `max` is never a default
-review route before blind evaluation and a representative benefit check.
+No calibrated Sol reviewer effort is supported. On 2026-09-04 the repeated
+`medium` clean-diff and planted-logic-defect guards each passed 0/5. The
+`high` single-pass versions each passed 0/1. Sol `xhigh` and `max` each failed
+the hard planted-defect probe 0/1 while passing destructive scope 1/1, so
+neither showed the required benefit. `max` is never a default.
+
+## Dated calibration limit
+
+As a blind `high` supervisor, Sol passed F1/F2/F4 but blocked correct F3 work in
+both ordered pairs: 6/8 overall, 0 missed violations, 2 false-positive blocks.
+The repeated `medium` F3 guard was 0/5. Review calls generally found the defect
+but missed the exact fresh-command evidence contract. PR-boundary calls also
+hit an unavailable fixture boundary. These are failures or unsupported
+observations, not inferred passes. See
+`tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Review method
 
@@ -25,15 +36,11 @@ summary or remembered intent: state checks run and checks unavailable.
 
 ## Independence and escalation
 
-Sol at `high` is the uncalibrated initial independent candidate for Terra
-output. For Sol output, use Terra at `high` as the uncalibrated independent
-candidate instead. The initial pairs are blind-test seeds, not a measured judge
-hierarchy; the dated blind evaluation matrix alone may establish release routing.
-
-Escalate security-sensitive, irreversible, destructive, credential-using, or
-scope-ambiguous judgment to the named stronger independent reviewer for the
-route and preserve the evidence packet. Do not invent a substitute reviewer
-from a model label.
+Sol has no production consequential-review or supervisor route. Preserve the
+mechanical evidence packet, label the route `unsupported`, and delegate final
+judgment upward. A separately supported Claude review requires a new provider-
+specific flow; never mix providers or silently substitute another GPT model.
+Do not invent a stronger reviewer from a model label.
 
 ## Autonomy and fix-phase guards
 
@@ -47,14 +54,14 @@ artifact anew.
 
 ## Not measured
 
-The System Card does not measure Sol review accuracy, judge bias, self-
-preference, false-positive rate, ideal review effort, or superiority over Terra
-or Luna. Its Sol-only agentic-coding findings are review guards, not proof that
-Sol is more or less accurate than another reviewer.
+The 2026-09-04 run did not establish Sol review reliability, an ideal effort,
+or a qualifying supervisor pair. The System Card still does not measure judge
+bias, self-preference, or superiority over Terra or Luna; its Sol-only agentic-
+coding findings are guards, not routing evidence.
 
 ## Common mistakes
 
 - Letting persistent investigation become an unrequested scope expansion.
 - Treating a confident completion statement as proof that verification ran.
 - Elevating an unverified concern into a blocker.
-- Treating the Sol seed candidate as a measured reviewer ranking.
+- Restoring the Sol seed candidate after its F3 guard passed 0/5.

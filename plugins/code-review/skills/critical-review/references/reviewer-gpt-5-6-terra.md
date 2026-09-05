@@ -9,10 +9,21 @@ identity from cost, speed, capability, or model position.
 
 ## Session effort
 
-No source measures Terra's best reviewer-seat effort. Terra at `high` is only
-the uncalibrated seed candidate for Luna and Sol output. `medium`, `high`,
-`xhigh`, and `max` are not a review-quality hierarchy, and `max` is never a
-default review route before blind evaluation and a representative benefit check.
+No calibrated Terra reviewer effort is supported. On 2026-09-04 the repeated
+`medium` clean-diff and planted-logic-defect guards each passed 0/5. The
+`high` single-pass versions each passed 0/1; one PR-approved support cell passed,
+but it cannot substitute for either core guard. No Terra `xhigh` or `max`
+evidence exists, and `max` is never a default.
+
+## Dated calibration limit
+
+As a blind `high` supervisor, Terra passed 7/8 across its two ordered pairs:
+0 missed F1/F2/F4 violations and 1 F3 false-positive block. The repeated
+`medium` F3 guard was only 3/5. Review calls generally found the defect but
+missed the exact fresh-command evidence contract; other PR-boundary calls hit
+an unavailable fixture boundary. These are failures or unsupported
+observations, not inferred passes. See
+`tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Review method
 
@@ -25,16 +36,11 @@ do not replace it with a confident verdict.
 
 ## Independence and escalation
 
-Terra at `high` is the uncalibrated initial independent reviewer for Sol output
-and Luna output. This selection is a blind-test seed, not a measured reviewer
-ranking or a claim of judge-bias advantage. Sol at `high` is the corresponding
-uncalibrated candidate for Terra output; the dated blind evaluation matrix alone
-may establish release routing.
-
-Escalate security-sensitive, irreversible, destructive, credential-using, or
-scope-ambiguous judgment to the named stronger independent reviewer for the
-route with the evidence packet. Never promote a model's capability, cost, or
-marketing role into a consequential review judgment.
+Terra has no production consequential-review or supervisor route. Preserve the
+mechanical evidence packet, label the route `unsupported`, and delegate final
+judgment upward. A separately supported Claude review requires a new provider-
+specific flow; never mix providers or silently substitute another GPT model.
+Never promote capability, cost, or marketing role into a consequential verdict.
 
 ## Autonomy and fix-phase guards
 
@@ -46,13 +52,14 @@ fix from the resulting diff, code, and tests before reporting it addressed.
 
 ## Not measured
 
-The System Card does not measure Terra review accuracy, judge bias, self-
-preference, false-positive rate, ideal review effort, or superiority over Sol
-or Luna. Sol-only pp. 19–24 behavior is not Terra evidence.
+The 2026-09-04 run did not establish Terra review reliability, an ideal effort,
+or a qualifying supervisor pair. The System Card still does not measure judge
+bias, self-preference, or superiority over Sol or Luna. Sol-only pp. 19–24
+behavior is not Terra evidence.
 
 ## Common mistakes
 
-- Calling Terra's seed role a measured reviewer preference.
+- Calling Terra's 7/8 blind result a route despite the required F3 miss.
 - Converting an incomplete evidence trail into a blocker.
 - Treating a successful test summary as proof without inspecting the test and diff.
 - Fixing or expanding scope during a read-only review.

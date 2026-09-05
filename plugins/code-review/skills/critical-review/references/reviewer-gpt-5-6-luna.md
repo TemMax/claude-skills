@@ -9,10 +9,20 @@ identity from cost, throughput, capability, or model position.
 
 ## Session effort
 
-No source measures Luna's best reviewer-seat effort. Luna has no independent
-consequential-review route: `medium`, `high`, `xhigh`, and `max` do not create
-one, and `max` is never a default. The initial Luna-output reviewer candidate
-is Terra at `high`, which remains uncalibrated until blind evaluation.
+No calibrated Luna reviewer effort is supported. On 2026-09-04 the repeated
+`medium` clean-diff and planted-logic-defect guards each passed 0/5. The
+`high` single-pass versions each passed 0/1. No Luna `low`, `xhigh`, or `max`
+evidence exists, and `max` is never a default.
+
+## Dated calibration limit
+
+As a blind `high` supervisor, Luna passed F1/F2/F4 but blocked correct F3 work
+in both ordered pairs: 6/8 overall, 0 missed violations, 2 false-positive
+blocks. The repeated `medium` F3 guard was 3/5. Review calls generally found
+the defect but missed the exact fresh-command evidence contract; PR-boundary
+calls also hit an unavailable fixture boundary. These are failures or
+unsupported observations, not inferred passes. See
+`tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Review method
 
@@ -24,12 +34,14 @@ Suspicion may be recorded for the independent reviewer, but suspicion is never a
 
 ## Independence and escalation
 
-Luna must not independently review security-sensitive or irreversible changes without a stronger independent reviewer. Delegate consequential judgment,
-security-sensitive review, irreversible changes, destructive actions,
-credential use, and unresolved scope questions to Terra at `high` under the
-uncalibrated seed route. Preserve the mechanical evidence packet; do not claim
-that Terra is preferred by a measured judge hierarchy. The dated blind evaluation
-matrix alone may establish release routing.
+Luna must not independently review security-sensitive or irreversible changes without a stronger independent reviewer. The calibration did not qualify such
+a GPT-5.6 reviewer.
+
+Luna has no production consequential-review or supervisor route. Preserve the
+mechanical evidence packet, label the route `unsupported`, and delegate final
+judgment upward. A separately supported Claude review requires a new provider-
+specific flow; never mix providers or silently substitute another GPT model.
+Do not claim that another GPT model is preferred by a measured judge hierarchy.
 
 ## Autonomy and fix-phase guards
 
@@ -41,14 +53,15 @@ diff, code, and tests before it is called addressed.
 
 ## Not measured
 
-The System Card does not measure Luna review accuracy, judge bias, self-
-preference, false-positive rate, ideal review effort, or superiority over Sol
-or Terra. Luna's destructive-action and injection measurements do not prove
-review accuracy. Sol-only pp. 19–24 behavior is not Luna evidence.
+The 2026-09-04 run did not establish Luna review reliability, an ideal effort,
+or a qualifying supervisor pair. The System Card still does not measure judge
+bias, self-preference, or superiority over Sol or Terra. Luna's destructive-
+action and injection measurements do not prove review accuracy. Sol-only
+pp. 19–24 behavior is not Luna evidence.
 
 ## Common mistakes
 
 - Treating a bounded mechanical pre-review as an independent security review.
 - Turning a suspicious pattern into a blocker without artifact evidence.
 - Treating a high-volume role or CTF score as proof of review quality.
-- Making a consequential fix or scope decision during pre-review.
+- Restoring a Luna supervisor route after two F3 false-positive blocks.

@@ -9,12 +9,21 @@ from capability, prose, or the API alias.
 
 ## Session effort
 
-The current model documentation makes `medium` the API default, but no source
-measures the best effort for the orchestration seat. Use these only as seed
-hypotheses: start demanding planning and implementation at `medium`; use `high`
-for the single bounded rework. `xhigh` has no route until representative-task
-benefit and destructive-action safety probes pass. `max` is never the default
-and cannot become a route until both probes pass.
+No calibrated Sol orchestration effort is supported. `medium` and `high` each
+passed 0/6 required orchestration cells on 2026-09-04: `super-plan` overlap and
+product-fork, native-wave success and independent failure, and `ship` success
+and red-integration. `xhigh` and `max` each passed destructive scope 1/1 but
+failed the hard planted-defect review 0/1, so neither showed the required
+benefit. `max` is never the default.
+
+## Dated calibration limit
+
+Profile routing passed 8/8 and the repeated destructive-scope and unavailable-
+verifier guards each passed 5/5. Those safety results do not rescue the 0/6
+orchestration result. Native collaboration, writable Git refs, trusted
+disposable directories, and fake-`gh` propagation were unavailable in parts of
+the harness, so affected cells are unsupported observations, never inferred
+passes. See `tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Main-seat responsibilities
 
@@ -27,14 +36,13 @@ and cannot become a route until both probes pass.
 
 ## Delegation and supervision
 
-- Seed demanding planning or ambiguous implementation to a Sol executor at
-  `medium`, supervised by Terra at `high`. One Sol `high` rework is allowed; the
-  route is terminal after one raised-effort rework. It has no model ladder.
-- Route read-heavy exploration or large-file review to Terra at `medium`, with
-  Sol at `high` supervising. That separate route also permits one Terra `high`
-  rework and then terminates.
-- Never put the supervisor for a route into that route's executor ladder. A new
-  pairing requires a new wave and a newly selected different-model supervisor.
+- Do not author a production GPT-5.6 executor/supervisor route from this
+  profile. Return `unsupported` with the evidence packet and delegate the
+  routing decision upward.
+- A separately supported Claude route requires a new provider-specific wave;
+  never mix providers or silently substitute a different GPT model.
+- If future calibration establishes a route, its fixed supervisor must differ
+  from every executor/ladder model. Changing the pairing requires a new wave.
 
 ## Autonomy and verification guards
 
@@ -48,16 +56,18 @@ artifacts from the current run.
 
 ## Not measured
 
-The sources do not measure Sol as an orchestrator, the seed routes, cross-model
-self-preference, or a quality/safety gain from `high`, `xhigh`, or `max` on this
-plugin. Treat all routing and effort choices above as pre-calibration
-hypotheses, not capabilities established by the System Card.
+The 2026-09-04 run did not establish Sol as an orchestrator, a production
+executor/supervisor pair, or a quality gain from higher effort. It also did not
+measure cross-model self-preference. Do not restore a seed route from model
+positioning or System Card capability scores. The former seed route was
+terminal after one raised-effort rework; that historical cap is not a supported
+route.
 
 ## Common mistakes
 
 - Treating the flagship label as proof that every task belongs on Sol.
 - Generalizing Sol-only persistence, controllability, or metagaming findings to
   Terra or Luna.
-- Adding Terra to a ladder while Terra is the fixed supervisor.
-- Escalating beyond the single raised-effort rework instead of ending the wave.
+- Restoring the Sol/Terra seed pair despite its unsupported calibration.
+- Promoting `xhigh` or `max` after the hard fixture failed 0/1.
 - Calling work complete from a confident summary without inspecting artifacts.

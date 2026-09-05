@@ -32,6 +32,20 @@ The alias `gpt-5.6` selects Sol only after the runtime-context handler has
 normalized it to `gpt-5.6-sol`. An exact supplied effort may be used; otherwise
 effort is unknown and receives no effort-specific claim.
 
+### GPT-5.6 calibration gate — 2026-09-04
+
+No GPT-5.6 production consequential-review or supervisor route is supported.
+At `medium`, Sol, Terra, and Luna each passed clean-diff 0/5 and planted-logic-
+defect 0/5. Blind `high` supervision had zero F1/F2/F4 misses but five F3
+false-positive blocks across six ordered pairs; repeated `medium` F3 was Sol
+0/5, Terra 3/5, and Luna 3/5. Return a model-selection request as `unsupported`
+with the mechanical evidence packet and delegate final judgment upward. Never
+silently substitute another GPT model, mix providers, or make `max` a default.
+An explicitly requested review may still report bounded evidence, but it must
+state that its GPT route is uncalibrated. Existing Claude review guidance is
+unchanged. Full counts and harness limitations:
+`tests/eval/gpt-5-6-results-2026-09-04.md`.
+
 ## Overview
 
 This skill drives a critical, evidence-based review of either uncommitted

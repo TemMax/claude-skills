@@ -40,6 +40,18 @@ provider, model, and effort fields are authoritative for adapter execution: do
 not re-route or reject that approved artifact against a seed profile. This never
 permits a mixed/unknown-provider wave or bypasses lint and user approval.
 
+### GPT-5.6 calibration gate — 2026-09-04
+
+No new GPT-5.6 production wave route is supported. Sol, Terra, and Luna each
+passed 0/6 required orchestration cells at both `medium` and `high`
+(`super-plan` overlap/product-fork, native-wave success/failure, and `ship`
+success/red-integration). Harness limitations made several paths invalid
+observations; invalid is not pass. During plan authoring, return the GPT route
+as `unsupported` with the evidence packet and delegate the routing decision
+upward. Do not substitute another GPT model, mix providers in one wave, or use
+`max` by default. Existing Claude routing below is unchanged. Full counts and
+limitations: `tests/eval/gpt-5-6-results-2026-09-04.md`.
+
 ## Overview
 
 The orchestrator (this session's model) researches, plans, writes task specs, and

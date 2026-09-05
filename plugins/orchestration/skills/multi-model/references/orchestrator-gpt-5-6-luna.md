@@ -9,11 +9,20 @@ identity from speed, cost, or task volume.
 
 ## Session effort
 
-The current model documentation makes `medium` the API default, but no source
-measures Luna's best orchestration effort. Use `low` or `medium` only for narrow,
-repeatable work. A bounded Luna rework may raise effort to `medium`. `high`,
-`xhigh`, and `max` have no Luna route before representative-task benefit and
-destructive-action safety probes pass; `max` is not a default.
+No calibrated Luna orchestration effort is supported. `medium` and `high`
+each passed 0/6 required orchestration cells on 2026-09-04: `super-plan`
+overlap and product-fork, native-wave success and independent failure, and
+`ship` success and red-integration. No Luna `low`, `xhigh`, or `max` evidence
+exists; `max` is never a default.
+
+## Dated calibration limit
+
+Profile routing passed 8/8 and the repeated destructive-scope and unavailable-
+verifier guards each passed 5/5. Those safety results do not rescue the 0/6
+orchestration result. Native collaboration, writable Git refs, trusted
+disposable directories, and fake-`gh` propagation were unavailable in parts of
+the harness, so affected cells are unsupported observations, never inferred
+passes. See `tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Main-seat responsibilities
 
@@ -26,13 +35,13 @@ destructive-action safety probes pass; `max` is not a default.
 
 ## Delegation and supervision
 
-- Run narrow Luna work at `low` or `medium` under a Terra-`high` supervisor,
-  with mechanical checks first.
-- After a bounded Luna rework, the model ladder may escalate only to Sol under
-  the same Terra-`high` supervisor. Terra never enters the executor ladder.
-- Sol performs the demanding executor work; Terra retains final review. If the
-  Sol attempt fails, the route is terminal. Changing the pairing requires a new
-  wave with a newly selected different-model supervisor.
+- Do not author a production GPT-5.6 executor/supervisor route from this
+  profile. Return `unsupported` with the evidence packet and delegate the
+  routing decision upward.
+- A separately supported Claude route requires a new provider-specific wave;
+  never mix providers or silently substitute a different GPT model.
+- If future calibration establishes a route, its fixed supervisor must differ
+  from every executor/ladder model. Changing the pairing requires a new wave.
 
 ## Autonomy and verification guards
 
@@ -45,16 +54,17 @@ evidence; completion requires fresh, externally inspectable artifacts.
 
 ## Not measured
 
-The sources do not measure Luna as an orchestrator, the Luna-to-Sol ladder,
-cross-model self-preference, or an orchestration benefit at any effort. The
-System Card's Sol-only persistence, false-verification, credential-misuse,
-controllability, and metagaming observations are not Luna findings.
+The 2026-09-04 run did not establish Luna as an orchestrator, a production
+executor/supervisor pair, or a quality gain from higher effort. It also did not
+measure cross-model self-preference. The System Card's Sol-only persistence,
+false-verification, credential-misuse, controllability, and metagaming
+observations are not Luna findings. The former seed ladder escalated only to Sol;
+that historical constraint is not a supported route.
 
 ## Common mistakes
 
 - Giving Luna open-ended planning, security judgment, or final review.
-- Escalating to Terra even though Terra is the fixed supervisor; Luna may
-  escalate only to Sol.
+- Restoring the Luna/Terra/Sol seed ladder despite unsupported calibration.
+- Substituting another GPT model instead of returning the unsupported route.
 - Treating high-volume positioning as proof of reliability on ambiguous work.
-- Continuing after Sol fails instead of ending the route.
 - Trusting narration instead of artifacts and mechanical checks.

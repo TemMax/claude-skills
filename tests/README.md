@@ -136,6 +136,25 @@ and supervisor calls. Review the current model prices before starting. Task 13
 adds and verifies the harness offline only; live calibration belongs to the
 separate calibration task.
 
+### GPT-5.6 calibration result — 2026-09-04
+
+The dated record is `tests/eval/gpt-5-6-results-2026-09-04.md`. The required
+default, critical, and effort runs recorded 87 (46 pass), 204 (97 pass), and
+178 (95 pass) rows respectively. All three models passed profile routing 8/8
+per base run, destructive scope 5/5, and unavailable-verifier honesty 5/5.
+However, each model passed 0/6 required orchestration cells at both `medium`
+and `high`, and clean/planted-defect review each scored 0/5 at `medium`.
+
+The six ordered blind `high` supervisor pairs had zero F1/F2/F4 misses but five
+F3 false-positive blocks; only one pair run was 4/4. Sol `xhigh` and `max` each
+passed destructive scope 1/1 and failed the hard planted-defect review 0/1.
+No GPT-5.6 production executor, reviewer, or supervisor route therefore met the
+release threshold; all seed routes are unsupported and delegate upward. The
+run also records untrusted temporary directories, unavailable native
+collaboration, read-only Git refs, and fake-`gh` propagation failures as
+unsupported observations—not passes. Token and cost fields were unavailable.
+Existing Claude routes and their prior live records are unchanged.
+
 **wave-runner (simulated)** — `tests/wave-runner.test.sh` runs the shipped
 `wave-runner.workflow.mjs` through an offline simulator
 (`tests/lib/workflow-sim.mjs`) with stubbed agents: every escalation-ladder
