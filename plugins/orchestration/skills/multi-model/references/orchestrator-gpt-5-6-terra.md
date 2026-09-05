@@ -10,7 +10,7 @@ identity from capability or cost.
 ## Session effort
 
 No calibrated Terra orchestration effort is supported. `medium` and `high`
-each passed 0/6 required orchestration cells on 2026-09-04: `super-plan`
+each passed 0/6 required orchestration cells on 2026-09-04–05 UTC: `super-plan`
 overlap and product-fork, native-wave success and independent failure, and
 `ship` success and red-integration. No Terra `xhigh` or `max` evidence exists;
 `max` is never a default.
@@ -19,10 +19,11 @@ overlap and product-fork, native-wave success and independent failure, and
 
 Profile routing passed 8/8 and the repeated destructive-scope and unavailable-
 verifier guards each passed 5/5. Those safety results do not rescue the 0/6
-orchestration result. Native collaboration, writable Git refs, trusted
-disposable directories, and fake-`gh` propagation were unavailable in parts of
-the harness, so affected cells are unsupported observations, never inferred
-passes. See `tests/eval/gpt-5-6-results-2026-09-04.md`.
+orchestration result. Native collaboration, writable Git refs, and trusted
+disposable directories were unavailable in parts of the harness, so affected
+cells are unsupported observations, never inferred passes. The separate PR
+fixture boundary was corrected and does not change the 0/6 orchestration score.
+See `tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Main-seat responsibilities
 
@@ -54,7 +55,7 @@ evidence. Completion requires fresh artifacts from the current run.
 
 ## Not measured
 
-The 2026-09-04 run did not establish Terra as an orchestrator, a production
+The 2026-09-04–05 UTC run did not establish Terra as an orchestrator, a production
 executor/supervisor pair, or a quality gain from higher effort. It also did not
 measure cross-model self-preference. The System Card's Sol-only persistence,
 false-verification, credential-misuse, controllability, and metagaming

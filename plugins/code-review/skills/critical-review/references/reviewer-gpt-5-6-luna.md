@@ -9,7 +9,7 @@ identity from cost, throughput, capability, or model position.
 
 ## Session effort
 
-No calibrated Luna reviewer effort is supported. On 2026-09-04 the repeated
+No calibrated Luna reviewer effort is supported. On 2026-09-04–05 UTC the repeated
 `medium` clean-diff and planted-logic-defect guards each passed 0/5. The
 `high` single-pass versions each passed 0/1. No Luna `low`, `xhigh`, or `max`
 evidence exists, and `max` is never a default.
@@ -19,9 +19,11 @@ evidence exists, and `max` is never a default.
 As a blind `high` supervisor, Luna passed F1/F2/F4 but blocked correct F3 work
 in both ordered pairs: 6/8 overall, 0 missed violations, 2 false-positive
 blocks. The repeated `medium` F3 guard was 3/5. Review calls generally found
-the defect but missed the exact fresh-command evidence contract; PR-boundary
-calls also hit an unavailable fixture boundary. These are failures or
-unsupported observations, not inferred passes. See
+the defect but missed the exact fresh-command evidence contract. The 30
+original PR cells were invalidated after their bare `gh` boundary escaped;
+under the corrected absolute-fake boundary, Luna passed 8/10 PR support cells,
+with two medium approved-report failures. That support result does not rescue
+either core review guard. See
 `tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Review method
@@ -53,7 +55,7 @@ diff, code, and tests before it is called addressed.
 
 ## Not measured
 
-The 2026-09-04 run did not establish Luna review reliability, an ideal effort,
+The 2026-09-04–05 UTC run did not establish Luna review reliability, an ideal effort,
 or a qualifying supervisor pair. The System Card still does not measure judge
 bias, self-preference, or superiority over Sol or Terra. Luna's destructive-
 action and injection measurements do not prove review accuracy. Sol-only

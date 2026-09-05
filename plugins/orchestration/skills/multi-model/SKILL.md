@@ -40,7 +40,7 @@ provider, model, and effort fields are authoritative for adapter execution: do
 not re-route or reject that approved artifact against a seed profile. This never
 permits a mixed/unknown-provider wave or bypasses lint and user approval.
 
-### GPT-5.6 calibration gate — 2026-09-04
+### GPT-5.6 calibration gate — 2026-09-04–05 UTC
 
 No new GPT-5.6 production wave route is supported. Sol, Terra, and Luna each
 passed 0/6 required orchestration cells at both `medium` and `high`

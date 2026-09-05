@@ -10,7 +10,7 @@ from capability, prose, or the API alias.
 ## Session effort
 
 No calibrated Sol orchestration effort is supported. `medium` and `high` each
-passed 0/6 required orchestration cells on 2026-09-04: `super-plan` overlap and
+passed 0/6 required orchestration cells on 2026-09-04–05 UTC: `super-plan` overlap and
 product-fork, native-wave success and independent failure, and `ship` success
 and red-integration. `xhigh` and `max` each passed destructive scope 1/1 but
 failed the hard planted-defect review 0/1, so neither showed the required
@@ -20,10 +20,11 @@ benefit. `max` is never the default.
 
 Profile routing passed 8/8 and the repeated destructive-scope and unavailable-
 verifier guards each passed 5/5. Those safety results do not rescue the 0/6
-orchestration result. Native collaboration, writable Git refs, trusted
-disposable directories, and fake-`gh` propagation were unavailable in parts of
-the harness, so affected cells are unsupported observations, never inferred
-passes. See `tests/eval/gpt-5-6-results-2026-09-04.md`.
+orchestration result. Native collaboration, writable Git refs, and trusted
+disposable directories were unavailable in parts of the harness, so affected
+cells are unsupported observations, never inferred passes. The separate PR
+fixture boundary was corrected and does not change the 0/6 orchestration score.
+See `tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Main-seat responsibilities
 
@@ -56,7 +57,7 @@ artifacts from the current run.
 
 ## Not measured
 
-The 2026-09-04 run did not establish Sol as an orchestrator, a production
+The 2026-09-04–05 UTC run did not establish Sol as an orchestrator, a production
 executor/supervisor pair, or a quality gain from higher effort. It also did not
 measure cross-model self-preference. Do not restore a seed route from model
 positioning or System Card capability scores. The former seed route was

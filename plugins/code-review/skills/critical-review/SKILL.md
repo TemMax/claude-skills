@@ -32,7 +32,7 @@ The alias `gpt-5.6` selects Sol only after the runtime-context handler has
 normalized it to `gpt-5.6-sol`. An exact supplied effort may be used; otherwise
 effort is unknown and receives no effort-specific claim.
 
-### GPT-5.6 calibration gate — 2026-09-04
+### GPT-5.6 calibration gate — 2026-09-04–05 UTC
 
 No GPT-5.6 production consequential-review or supervisor route is supported.
 At `medium`, Sol, Terra, and Luna each passed clean-diff 0/5 and planted-logic-

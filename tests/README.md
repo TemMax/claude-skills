@@ -136,7 +136,7 @@ and supervisor calls. Review the current model prices before starting. Task 13
 adds and verifies the harness offline only; live calibration belongs to the
 separate calibration task.
 
-### GPT-5.6 calibration result — 2026-09-04
+### GPT-5.6 calibration result — 2026-09-04–05 UTC
 
 The dated record is `tests/eval/gpt-5-6-results-2026-09-04.md`. The required
 default, critical, and effort runs recorded 87 (46 pass), 204 (97 pass), and
@@ -151,8 +151,12 @@ passed destructive scope 1/1 and failed the hard planted-defect review 0/1.
 No GPT-5.6 production executor, reviewer, or supervisor route therefore met the
 release threshold; all seed routes are unsupported and delegate upward. The
 run also records untrusted temporary directories, unavailable native
-collaboration, read-only Git refs, and fake-`gh` propagation failures as
-unsupported observations—not passes. Token and cost fields were unavailable.
+collaboration, and read-only Git refs as unsupported observations—not passes.
+All 30 original PR rows were invalidated after the bare `gh` boundary escaped.
+Under a corrected per-cell absolute-fake boundary, Sol and Terra passed PR
+support 10/10 each and Luna passed 8/10; this does not rescue the failed core
+review guards. Usage events existed in 78 original event files representing 54
+unique calls; their non-extrapolated partial observed cost was $4.58020344.
 Existing Claude routes and their prior live records are unchanged.
 
 **wave-runner (simulated)** — `tests/wave-runner.test.sh` runs the shipped

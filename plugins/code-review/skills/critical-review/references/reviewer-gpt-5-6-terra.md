@@ -9,7 +9,7 @@ identity from cost, speed, capability, or model position.
 
 ## Session effort
 
-No calibrated Terra reviewer effort is supported. On 2026-09-04 the repeated
+No calibrated Terra reviewer effort is supported. On 2026-09-04–05 UTC the repeated
 `medium` clean-diff and planted-logic-defect guards each passed 0/5. The
 `high` single-pass versions each passed 0/1; one PR-approved support cell passed,
 but it cannot substitute for either core guard. No Terra `xhigh` or `max`
@@ -20,9 +20,10 @@ evidence exists, and `max` is never a default.
 As a blind `high` supervisor, Terra passed 7/8 across its two ordered pairs:
 0 missed F1/F2/F4 violations and 1 F3 false-positive block. The repeated
 `medium` F3 guard was only 3/5. Review calls generally found the defect but
-missed the exact fresh-command evidence contract; other PR-boundary calls hit
-an unavailable fixture boundary. These are failures or unsupported
-observations, not inferred passes. See
+missed the exact fresh-command evidence contract. The 30 original PR cells
+were invalidated after their bare `gh` boundary escaped; under the corrected
+absolute-fake boundary, Terra passed 10/10 PR support cells. That support
+result does not rescue either core review guard. See
 `tests/eval/gpt-5-6-results-2026-09-04.md`.
 
 ## Review method
@@ -52,7 +53,7 @@ fix from the resulting diff, code, and tests before reporting it addressed.
 
 ## Not measured
 
-The 2026-09-04 run did not establish Terra review reliability, an ideal effort,
+The 2026-09-04–05 UTC run did not establish Terra review reliability, an ideal effort,
 or a qualifying supervisor pair. The System Card still does not measure judge
 bias, self-preference, or superiority over Sol or Luna. Sol-only pp. 19–24
 behavior is not Terra evidence.
