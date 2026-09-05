@@ -156,7 +156,10 @@ All 30 original PR rows were invalidated after the bare `gh` boundary escaped.
 Under a corrected per-cell absolute-fake boundary, Sol and Terra passed PR
 support 10/10 each and Luna passed 8/10; this does not rescue the failed core
 review guards. Usage events existed in 78 original event files representing 54
-unique calls; their non-extrapolated partial observed cost was $4.58020344.
+unique calls. Their reproducible base-tier arithmetic is $4.58020344, while
+treating each turn aggregate as one request and applying long-context rates is
+$6.08355448. The JSONL lacks provider-request splits, so neither scenario is
+the exact actual original charge. Corrected PR cost remains exactly $1.15094620.
 Existing Claude routes and their prior live records are unchanged.
 
 **wave-runner (simulated)** — `tests/wave-runner.test.sh` runs the shipped
